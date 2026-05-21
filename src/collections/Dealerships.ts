@@ -10,20 +10,25 @@ export const Dealerships: CollectionConfig = {
     defaultColumns: ['displayName', 'city', 'phone', 'isActive'],
     listSearchableFields: ['brandName', 'displayName', 'city'],
   },
+  labels: {
+    singular: 'Agencia',
+    plural: 'Agencias',
+  },
   fields: [
-    { name: 'brandName', type: 'text', required: true },
-    { name: 'displayName', type: 'text', required: true },
-    { name: 'city', type: 'text', required: true },
-    { name: 'phone', type: 'text' },
-    { name: 'whatsapp', type: 'text' },
+    { name: 'brandName', type: 'text', required: true, label: 'Marca' },
+    { name: 'displayName', type: 'text', required: true, label: 'Nombre visible' },
+    { name: 'city', type: 'text', required: true, label: 'Ciudad' },
+    { name: 'phone', type: 'text', label: 'Telefono' },
+    { name: 'whatsapp', type: 'text', label: 'WhatsApp' },
     {
       name: 'coordinates',
       type: 'group',
+      label: 'Coordenadas',
       fields: [
-        { name: 'lat', type: 'number' },
-        { name: 'lng', type: 'number' },
+        { name: 'lat', type: 'number', label: 'Latitud' },
+        { name: 'lng', type: 'number', label: 'Longitud' },
       ],
     },
-    { name: 'isActive', type: 'checkbox', defaultValue: true },
+    { name: 'isActive', type: 'checkbox', defaultValue: true, label: 'Activa' },
   ],
 }

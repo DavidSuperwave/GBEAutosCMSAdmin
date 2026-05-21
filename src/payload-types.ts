@@ -72,6 +72,8 @@ export interface Config {
     vehicles: Vehicle;
     dealerships: Dealership;
     leads: Lead;
+    pages: Page;
+    'analytics-events': AnalyticsEvent;
     'payload-kv': PayloadKv;
     'payload-locked-documents': PayloadLockedDocument;
     'payload-preferences': PayloadPreference;
@@ -84,6 +86,8 @@ export interface Config {
     vehicles: VehiclesSelect<false> | VehiclesSelect<true>;
     dealerships: DealershipsSelect<false> | DealershipsSelect<true>;
     leads: LeadsSelect<false> | LeadsSelect<true>;
+    pages: PagesSelect<false> | PagesSelect<true>;
+    'analytics-events': AnalyticsEventsSelect<false> | AnalyticsEventsSelect<true>;
     'payload-kv': PayloadKvSelect<false> | PayloadKvSelect<true>;
     'payload-locked-documents': PayloadLockedDocumentsSelect<false> | PayloadLockedDocumentsSelect<true>;
     'payload-preferences': PayloadPreferencesSelect<false> | PayloadPreferencesSelect<true>;
@@ -94,15 +98,14 @@ export interface Config {
   };
   fallbackLocale: null;
   globals: {
-    home: Home;
     'site-config': SiteConfig;
   };
   globalsSelect: {
-    home: HomeSelect<false> | HomeSelect<true>;
     'site-config': SiteConfigSelect<false> | SiteConfigSelect<true>;
   };
   locale: null;
   widgets: {
+    'analytics-dashboard': AnalyticsDashboardWidget;
     collections: CollectionsWidget;
   };
   user: User;
@@ -179,13 +182,53 @@ export interface Media {
  */
 export interface Vehicle {
   id: number;
+  uuid?: string | null;
+  /**
+   * Se genera al guardar con marca, modelo, año y UUID del vehículo.
+   */
   slug: string;
   brand: string;
   model: string;
   year: number;
+  /**
+   * Referencia visible para ventas y WhatsApp. Si se deja vacio se usara el UUID corto.
+   */
+  stockId?: string | null;
+  condition: 'new' | 'used';
+  /**
+   * Define a que agencia pertenece esta unidad y a que WhatsApp se enviaran los leads.
+   */
+  dealership: number | Dealership;
+  /**
+   * Opcional. Si se deja vacia, la pagina usara la ciudad de la agencia seleccionada.
+   */
+  city?: string | null;
+  mileage?: number | null;
+  bodyType?: ('sedan' | 'suv' | 'pickup' | 'coupe' | 'hatchback' | 'van' | 'other') | null;
+  transmission?: ('automatic' | 'manual' | 'cvt') | null;
+  fuel?: ('gasoline' | 'diesel' | 'hybrid' | 'electric') | null;
+  /**
+   * Crea etiquetas como Un dueno, Garantia, Factura agencia, Promo o Recien llegado.
+   */
+  badges?:
+    | {
+        label: string;
+        id?: string | null;
+      }[]
+    | null;
+  /**
+   * Escribe un número o rango. Se guardará automáticamente como MXN.
+   */
   price: string;
-  status: 'available' | 'reserved' | 'sold';
+  inventoryStatus: 'available' | 'reserved' | 'sold';
   image?: (number | null) | Media;
+  gallery?:
+    | {
+        image: number | Media;
+        alt?: string | null;
+        id?: string | null;
+      }[]
+    | null;
   description?: string | null;
   features?:
     | {
@@ -194,12 +237,108 @@ export interface Vehicle {
       }[]
     | null;
   specs?: {
+    tipo?: string | null;
     motor?: string | null;
     potencia?: string | null;
     transmision?: string | null;
     combustible?: string | null;
     traccion?: string | null;
+    cylinders?: string | null;
+    seats?: string | null;
+    doors?: string | null;
+    lengthMm?: string | null;
+    widthMm?: string | null;
+    heightMm?: string | null;
+    wheelbaseMm?: string | null;
+    maxTrunkCapacityL?: string | null;
+    torqueNm?: string | null;
+    fuelTankCapacityL?: string | null;
   };
+  /**
+   * Datos tecnicos normalizados desde catalogo interno o RapidAPI.
+   */
+  sourceMeta?: {
+    specSource?: ('catalog' | 'rapidapi' | 'manual' | 'none') | null;
+    externalMakeId?: string | null;
+    externalModelId?: string | null;
+    externalGenerationId?: string | null;
+    externalTrimId?: string | null;
+    lastSpecSyncAt?: string | null;
+  };
+  /**
+   * Datos importados desde CSV que no pertenecen al esquema principal.
+   */
+  customFields?:
+    | {
+        name: string;
+        value: string;
+        id?: string | null;
+      }[]
+    | null;
+  /**
+   * Agrega secciones simples debajo de la pagina del vehiculo: imagen y texto, galerias, beneficios o CTA.
+   */
+  landing?:
+    | (
+        | {
+            eyebrow?: string | null;
+            heading: string;
+            body?: string | null;
+            image?: (number | null) | Media;
+            imagePosition?: ('left' | 'right') | null;
+            id?: string | null;
+            blockName?: string | null;
+            blockType: 'imageText';
+          }
+        | {
+            heading?: string | null;
+            images?:
+              | {
+                  image: number | Media;
+                  alt?: string | null;
+                  id?: string | null;
+                }[]
+              | null;
+            id?: string | null;
+            blockName?: string | null;
+            blockType: 'gallery';
+          }
+        | {
+            heading: string;
+            body?: string | null;
+            items?:
+              | {
+                  label: string;
+                  description?: string | null;
+                  id?: string | null;
+                }[]
+              | null;
+            id?: string | null;
+            blockName?: string | null;
+            blockType: 'highlightList';
+          }
+        | {
+            heading: string;
+            items?:
+              | {
+                  feature: string;
+                  id?: string | null;
+                }[]
+              | null;
+            id?: string | null;
+            blockName?: string | null;
+            blockType: 'featureGrid';
+          }
+        | {
+            heading: string;
+            body?: string | null;
+            buttonLabel?: string | null;
+            id?: string | null;
+            blockName?: string | null;
+            blockType: 'cta';
+          }
+      )[]
+    | null;
   updatedAt: string;
   createdAt: string;
 }
@@ -237,6 +376,158 @@ export interface Lead {
   message?: string | null;
   stage?: ('new' | 'contacted' | 'in_progress' | 'closed_won' | 'closed_lost') | null;
   notes?: string | null;
+  updatedAt: string;
+  createdAt: string;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "pages".
+ */
+export interface Page {
+  id: number;
+  title: string;
+  /**
+   * No uses rutas reservadas como cars, seminuevos, marcas o api.
+   */
+  slug: string;
+  isVisible?: boolean | null;
+  seo?: {
+    title?: string | null;
+    description?: string | null;
+    image?: (number | null) | Media;
+  };
+  sections: (
+    | {
+        eyebrow?: string | null;
+        heading: string;
+        body?: string | null;
+        media?: (number | null) | Media;
+        videoUrl?: string | null;
+        primaryLink: {
+          label: string;
+          href: string;
+        };
+        secondaryLink: {
+          label: string;
+          href: string;
+        };
+        id?: string | null;
+        blockName?: string | null;
+        blockType: 'hero';
+      }
+    | {
+        items?:
+          | {
+              image: number | Media;
+              alt?: string | null;
+              href?: string | null;
+              id?: string | null;
+            }[]
+          | null;
+        id?: string | null;
+        blockName?: string | null;
+        blockType: 'promoStrip';
+      }
+    | {
+        eyebrow?: string | null;
+        heading?: string | null;
+        body?: string | null;
+        limit?: number | null;
+        source?: ('latestUsed' | 'manual' | 'city' | 'brand' | 'bodyType') | null;
+        city?: string | null;
+        brand?: string | null;
+        bodyType?: ('sedan' | 'suv' | 'pickup' | 'coupe' | 'hatchback' | 'van' | 'other') | null;
+        display?: {
+          showPrice?: boolean | null;
+          showMileage?: boolean | null;
+          showCity?: boolean | null;
+          showSpecs?: boolean | null;
+        };
+        vehicles?: (number | Vehicle)[] | null;
+        id?: string | null;
+        blockName?: string | null;
+        blockType: 'featuredVehicles';
+      }
+    | {
+        eyebrow?: string | null;
+        heading?: string | null;
+        body?: string | null;
+        media?: (number | null) | Media;
+        limit?: number | null;
+        city?: string | null;
+        brand?: string | null;
+        bodyType?: ('' | 'sedan' | 'suv' | 'pickup' | 'coupe' | 'hatchback' | 'van' | 'other') | null;
+        id?: string | null;
+        blockName?: string | null;
+        blockType: 'inventorySearch';
+      }
+    | {
+        eyebrow?: string | null;
+        heading?: string | null;
+        body?: string | null;
+        id?: string | null;
+        blockName?: string | null;
+        blockType: 'brands';
+      }
+    | {
+        eyebrow?: string | null;
+        heading?: string | null;
+        body?: string | null;
+        showMap?: boolean | null;
+        id?: string | null;
+        blockName?: string | null;
+        blockType: 'agencies';
+      }
+    | {
+        eyebrow?: string | null;
+        heading: string;
+        body?: string | null;
+        media?: (number | null) | Media;
+        layout?: ('mediaLeft' | 'mediaRight') | null;
+        link: {
+          label: string;
+          href: string;
+        };
+        id?: string | null;
+        blockName?: string | null;
+        blockType: 'mediaText';
+      }
+    | {
+        heading: string;
+        body?: string | null;
+        primaryLink: {
+          label: string;
+          href: string;
+        };
+        secondaryLink: {
+          label: string;
+          href: string;
+        };
+        id?: string | null;
+        blockName?: string | null;
+        blockType: 'cta';
+      }
+  )[];
+  updatedAt: string;
+  createdAt: string;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "analytics-events".
+ */
+export interface AnalyticsEvent {
+  id: number;
+  eventType: 'page_view' | 'vehicle_view' | 'vehicle_click' | 'cta_click' | 'page_duration';
+  pagePath: string;
+  pageTitle?: string | null;
+  vehicle?: (number | null) | Vehicle;
+  vehicleLabel?: string | null;
+  targetLabel?: string | null;
+  durationSeconds?: number | null;
+  sessionId?: string | null;
+  visitorId?: string | null;
+  deviceType?: ('mobile' | 'tablet' | 'desktop') | null;
+  referrer?: string | null;
   updatedAt: string;
   createdAt: string;
 }
@@ -283,6 +574,14 @@ export interface PayloadLockedDocument {
     | ({
         relationTo: 'leads';
         value: number | Lead;
+      } | null)
+    | ({
+        relationTo: 'pages';
+        value: number | Page;
+      } | null)
+    | ({
+        relationTo: 'analytics-events';
+        value: number | AnalyticsEvent;
       } | null);
   globalSlug?: string | null;
   user: {
@@ -371,13 +670,35 @@ export interface MediaSelect<T extends boolean = true> {
  * via the `definition` "vehicles_select".
  */
 export interface VehiclesSelect<T extends boolean = true> {
+  uuid?: T;
   slug?: T;
   brand?: T;
   model?: T;
   year?: T;
+  stockId?: T;
+  condition?: T;
+  dealership?: T;
+  city?: T;
+  mileage?: T;
+  bodyType?: T;
+  transmission?: T;
+  fuel?: T;
+  badges?:
+    | T
+    | {
+        label?: T;
+        id?: T;
+      };
   price?: T;
-  status?: T;
+  inventoryStatus?: T;
   image?: T;
+  gallery?:
+    | T
+    | {
+        image?: T;
+        alt?: T;
+        id?: T;
+      };
   description?: T;
   features?:
     | T
@@ -388,11 +709,105 @@ export interface VehiclesSelect<T extends boolean = true> {
   specs?:
     | T
     | {
+        tipo?: T;
         motor?: T;
         potencia?: T;
         transmision?: T;
         combustible?: T;
         traccion?: T;
+        cylinders?: T;
+        seats?: T;
+        doors?: T;
+        lengthMm?: T;
+        widthMm?: T;
+        heightMm?: T;
+        wheelbaseMm?: T;
+        maxTrunkCapacityL?: T;
+        torqueNm?: T;
+        fuelTankCapacityL?: T;
+      };
+  sourceMeta?:
+    | T
+    | {
+        specSource?: T;
+        externalMakeId?: T;
+        externalModelId?: T;
+        externalGenerationId?: T;
+        externalTrimId?: T;
+        lastSpecSyncAt?: T;
+      };
+  customFields?:
+    | T
+    | {
+        name?: T;
+        value?: T;
+        id?: T;
+      };
+  landing?:
+    | T
+    | {
+        imageText?:
+          | T
+          | {
+              eyebrow?: T;
+              heading?: T;
+              body?: T;
+              image?: T;
+              imagePosition?: T;
+              id?: T;
+              blockName?: T;
+            };
+        gallery?:
+          | T
+          | {
+              heading?: T;
+              images?:
+                | T
+                | {
+                    image?: T;
+                    alt?: T;
+                    id?: T;
+                  };
+              id?: T;
+              blockName?: T;
+            };
+        highlightList?:
+          | T
+          | {
+              heading?: T;
+              body?: T;
+              items?:
+                | T
+                | {
+                    label?: T;
+                    description?: T;
+                    id?: T;
+                  };
+              id?: T;
+              blockName?: T;
+            };
+        featureGrid?:
+          | T
+          | {
+              heading?: T;
+              items?:
+                | T
+                | {
+                    feature?: T;
+                    id?: T;
+                  };
+              id?: T;
+              blockName?: T;
+            };
+        cta?:
+          | T
+          | {
+              heading?: T;
+              body?: T;
+              buttonLabel?: T;
+              id?: T;
+              blockName?: T;
+            };
       };
   updatedAt?: T;
   createdAt?: T;
@@ -431,6 +846,177 @@ export interface LeadsSelect<T extends boolean = true> {
   message?: T;
   stage?: T;
   notes?: T;
+  updatedAt?: T;
+  createdAt?: T;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "pages_select".
+ */
+export interface PagesSelect<T extends boolean = true> {
+  title?: T;
+  slug?: T;
+  isVisible?: T;
+  seo?:
+    | T
+    | {
+        title?: T;
+        description?: T;
+        image?: T;
+      };
+  sections?:
+    | T
+    | {
+        hero?:
+          | T
+          | {
+              eyebrow?: T;
+              heading?: T;
+              body?: T;
+              media?: T;
+              videoUrl?: T;
+              primaryLink?:
+                | T
+                | {
+                    label?: T;
+                    href?: T;
+                  };
+              secondaryLink?:
+                | T
+                | {
+                    label?: T;
+                    href?: T;
+                  };
+              id?: T;
+              blockName?: T;
+            };
+        promoStrip?:
+          | T
+          | {
+              items?:
+                | T
+                | {
+                    image?: T;
+                    alt?: T;
+                    href?: T;
+                    id?: T;
+                  };
+              id?: T;
+              blockName?: T;
+            };
+        featuredVehicles?:
+          | T
+          | {
+              eyebrow?: T;
+              heading?: T;
+              body?: T;
+              limit?: T;
+              source?: T;
+              city?: T;
+              brand?: T;
+              bodyType?: T;
+              display?:
+                | T
+                | {
+                    showPrice?: T;
+                    showMileage?: T;
+                    showCity?: T;
+                    showSpecs?: T;
+                  };
+              vehicles?: T;
+              id?: T;
+              blockName?: T;
+            };
+        inventorySearch?:
+          | T
+          | {
+              eyebrow?: T;
+              heading?: T;
+              body?: T;
+              media?: T;
+              limit?: T;
+              city?: T;
+              brand?: T;
+              bodyType?: T;
+              id?: T;
+              blockName?: T;
+            };
+        brands?:
+          | T
+          | {
+              eyebrow?: T;
+              heading?: T;
+              body?: T;
+              id?: T;
+              blockName?: T;
+            };
+        agencies?:
+          | T
+          | {
+              eyebrow?: T;
+              heading?: T;
+              body?: T;
+              showMap?: T;
+              id?: T;
+              blockName?: T;
+            };
+        mediaText?:
+          | T
+          | {
+              eyebrow?: T;
+              heading?: T;
+              body?: T;
+              media?: T;
+              layout?: T;
+              link?:
+                | T
+                | {
+                    label?: T;
+                    href?: T;
+                  };
+              id?: T;
+              blockName?: T;
+            };
+        cta?:
+          | T
+          | {
+              heading?: T;
+              body?: T;
+              primaryLink?:
+                | T
+                | {
+                    label?: T;
+                    href?: T;
+                  };
+              secondaryLink?:
+                | T
+                | {
+                    label?: T;
+                    href?: T;
+                  };
+              id?: T;
+              blockName?: T;
+            };
+      };
+  updatedAt?: T;
+  createdAt?: T;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "analytics-events_select".
+ */
+export interface AnalyticsEventsSelect<T extends boolean = true> {
+  eventType?: T;
+  pagePath?: T;
+  pageTitle?: T;
+  vehicle?: T;
+  vehicleLabel?: T;
+  targetLabel?: T;
+  durationSeconds?: T;
+  sessionId?: T;
+  visitorId?: T;
+  deviceType?: T;
+  referrer?: T;
   updatedAt?: T;
   createdAt?: T;
 }
@@ -476,135 +1062,395 @@ export interface PayloadMigrationsSelect<T extends boolean = true> {
 }
 /**
  * This interface was referenced by `Config`'s JSON-Schema
- * via the `definition` "home".
- */
-export interface Home {
-  id: number;
-  hero?: {
-    title?: string | null;
-    subtitle?: string | null;
-    ctaLabel?: string | null;
-    ctaHref?: string | null;
-    secondaryCtaLabel?: string | null;
-    secondaryCtaHref?: string | null;
-  };
-  stats?:
-    | {
-        value?: string | null;
-        label?: string | null;
-        id?: string | null;
-      }[]
-    | null;
-  financing?: {
-    heading?: string | null;
-    body?: string | null;
-    ctaLabel?: string | null;
-    ctaHref?: string | null;
-  };
-  testimonial?: {
-    heading?: string | null;
-    quote?: string | null;
-    author?: string | null;
-  };
-  brands?:
-    | {
-        name?: string | null;
-        id?: string | null;
-      }[]
-    | null;
-  updatedAt?: string | null;
-  createdAt?: string | null;
-}
-/**
- * This interface was referenced by `Config`'s JSON-Schema
  * via the `definition` "site-config".
  */
 export interface SiteConfig {
   id: number;
-  siteName?: string | null;
-  companyName?: string | null;
-  slogan?: string | null;
-  phone?: string | null;
-  whatsapp?: string | null;
-  email?: string | null;
-  address?: string | null;
-  socialLinks?: {
-    facebook?: string | null;
-    instagram?: string | null;
-    whatsappUrl?: string | null;
+  general?: {
+    siteName?: string | null;
+    companyName?: string | null;
+    slogan?: string | null;
+    logo?: (number | null) | Media;
+    phone?: string | null;
+    whatsapp?: string | null;
+    email?: string | null;
+    address?: string | null;
+    socialLinks?: {
+      facebook?: string | null;
+      instagram?: string | null;
+      whatsappUrl?: string | null;
+    };
+  };
+  navigation?: {
+    mainLinks?:
+      | {
+          label: string;
+          href: string;
+          children?:
+            | {
+                label: string;
+                href: string;
+                id?: string | null;
+              }[]
+            | null;
+          id?: string | null;
+        }[]
+      | null;
+    cta?: {
+      label?: string | null;
+      href?: string | null;
+    };
+  };
+  home?: {
+    sections?:
+      | (
+          | {
+              eyebrow?: string | null;
+              heading: string;
+              body?: string | null;
+              media?: (number | null) | Media;
+              videoUrl?: string | null;
+              primaryLink: {
+                label: string;
+                href: string;
+              };
+              secondaryLink: {
+                label: string;
+                href: string;
+              };
+              id?: string | null;
+              blockName?: string | null;
+              blockType: 'hero';
+            }
+          | {
+              items?:
+                | {
+                    image: number | Media;
+                    alt?: string | null;
+                    href?: string | null;
+                    id?: string | null;
+                  }[]
+                | null;
+              id?: string | null;
+              blockName?: string | null;
+              blockType: 'promoStrip';
+            }
+          | {
+              eyebrow?: string | null;
+              heading?: string | null;
+              body?: string | null;
+              limit?: number | null;
+              source?: ('latestUsed' | 'manual' | 'city' | 'brand' | 'bodyType') | null;
+              city?: string | null;
+              brand?: string | null;
+              bodyType?: ('sedan' | 'suv' | 'pickup' | 'coupe' | 'hatchback' | 'van' | 'other') | null;
+              display?: {
+                showPrice?: boolean | null;
+                showMileage?: boolean | null;
+                showCity?: boolean | null;
+                showSpecs?: boolean | null;
+              };
+              vehicles?: (number | Vehicle)[] | null;
+              id?: string | null;
+              blockName?: string | null;
+              blockType: 'featuredVehicles';
+            }
+          | {
+              eyebrow?: string | null;
+              heading?: string | null;
+              body?: string | null;
+              media?: (number | null) | Media;
+              limit?: number | null;
+              city?: string | null;
+              brand?: string | null;
+              bodyType?: ('' | 'sedan' | 'suv' | 'pickup' | 'coupe' | 'hatchback' | 'van' | 'other') | null;
+              id?: string | null;
+              blockName?: string | null;
+              blockType: 'inventorySearch';
+            }
+          | {
+              eyebrow?: string | null;
+              heading?: string | null;
+              body?: string | null;
+              id?: string | null;
+              blockName?: string | null;
+              blockType: 'brands';
+            }
+          | {
+              eyebrow?: string | null;
+              heading?: string | null;
+              body?: string | null;
+              showMap?: boolean | null;
+              id?: string | null;
+              blockName?: string | null;
+              blockType: 'agencies';
+            }
+          | {
+              eyebrow?: string | null;
+              heading: string;
+              body?: string | null;
+              media?: (number | null) | Media;
+              layout?: ('mediaLeft' | 'mediaRight') | null;
+              link: {
+                label: string;
+                href: string;
+              };
+              id?: string | null;
+              blockName?: string | null;
+              blockType: 'mediaText';
+            }
+          | {
+              heading: string;
+              body?: string | null;
+              primaryLink: {
+                label: string;
+                href: string;
+              };
+              secondaryLink: {
+                label: string;
+                href: string;
+              };
+              id?: string | null;
+              blockName?: string | null;
+              blockType: 'cta';
+            }
+        )[]
+      | null;
+  };
+  templates?: {
+    seminuevos?: {
+      title?: string | null;
+      intro?: string | null;
+      heroImage?: (number | null) | Media;
+      showLocationPrompt?: boolean | null;
+    };
+    vehicleDetail?: {
+      showSimilarVehicles?: boolean | null;
+      ctaHeading?: string | null;
+      ctaBody?: string | null;
+    };
   };
   updatedAt?: string | null;
   createdAt?: string | null;
-}
-/**
- * This interface was referenced by `Config`'s JSON-Schema
- * via the `definition` "home_select".
- */
-export interface HomeSelect<T extends boolean = true> {
-  hero?:
-    | T
-    | {
-        title?: T;
-        subtitle?: T;
-        ctaLabel?: T;
-        ctaHref?: T;
-        secondaryCtaLabel?: T;
-        secondaryCtaHref?: T;
-      };
-  stats?:
-    | T
-    | {
-        value?: T;
-        label?: T;
-        id?: T;
-      };
-  financing?:
-    | T
-    | {
-        heading?: T;
-        body?: T;
-        ctaLabel?: T;
-        ctaHref?: T;
-      };
-  testimonial?:
-    | T
-    | {
-        heading?: T;
-        quote?: T;
-        author?: T;
-      };
-  brands?:
-    | T
-    | {
-        name?: T;
-        id?: T;
-      };
-  updatedAt?: T;
-  createdAt?: T;
-  globalType?: T;
 }
 /**
  * This interface was referenced by `Config`'s JSON-Schema
  * via the `definition` "site-config_select".
  */
 export interface SiteConfigSelect<T extends boolean = true> {
-  siteName?: T;
-  companyName?: T;
-  slogan?: T;
-  phone?: T;
-  whatsapp?: T;
-  email?: T;
-  address?: T;
-  socialLinks?:
+  general?:
     | T
     | {
-        facebook?: T;
-        instagram?: T;
-        whatsappUrl?: T;
+        siteName?: T;
+        companyName?: T;
+        slogan?: T;
+        logo?: T;
+        phone?: T;
+        whatsapp?: T;
+        email?: T;
+        address?: T;
+        socialLinks?:
+          | T
+          | {
+              facebook?: T;
+              instagram?: T;
+              whatsappUrl?: T;
+            };
+      };
+  navigation?:
+    | T
+    | {
+        mainLinks?:
+          | T
+          | {
+              label?: T;
+              href?: T;
+              children?:
+                | T
+                | {
+                    label?: T;
+                    href?: T;
+                    id?: T;
+                  };
+              id?: T;
+            };
+        cta?:
+          | T
+          | {
+              label?: T;
+              href?: T;
+            };
+      };
+  home?:
+    | T
+    | {
+        sections?:
+          | T
+          | {
+              hero?:
+                | T
+                | {
+                    eyebrow?: T;
+                    heading?: T;
+                    body?: T;
+                    media?: T;
+                    videoUrl?: T;
+                    primaryLink?:
+                      | T
+                      | {
+                          label?: T;
+                          href?: T;
+                        };
+                    secondaryLink?:
+                      | T
+                      | {
+                          label?: T;
+                          href?: T;
+                        };
+                    id?: T;
+                    blockName?: T;
+                  };
+              promoStrip?:
+                | T
+                | {
+                    items?:
+                      | T
+                      | {
+                          image?: T;
+                          alt?: T;
+                          href?: T;
+                          id?: T;
+                        };
+                    id?: T;
+                    blockName?: T;
+                  };
+              featuredVehicles?:
+                | T
+                | {
+                    eyebrow?: T;
+                    heading?: T;
+                    body?: T;
+                    limit?: T;
+                    source?: T;
+                    city?: T;
+                    brand?: T;
+                    bodyType?: T;
+                    display?:
+                      | T
+                      | {
+                          showPrice?: T;
+                          showMileage?: T;
+                          showCity?: T;
+                          showSpecs?: T;
+                        };
+                    vehicles?: T;
+                    id?: T;
+                    blockName?: T;
+                  };
+              inventorySearch?:
+                | T
+                | {
+                    eyebrow?: T;
+                    heading?: T;
+                    body?: T;
+                    media?: T;
+                    limit?: T;
+                    city?: T;
+                    brand?: T;
+                    bodyType?: T;
+                    id?: T;
+                    blockName?: T;
+                  };
+              brands?:
+                | T
+                | {
+                    eyebrow?: T;
+                    heading?: T;
+                    body?: T;
+                    id?: T;
+                    blockName?: T;
+                  };
+              agencies?:
+                | T
+                | {
+                    eyebrow?: T;
+                    heading?: T;
+                    body?: T;
+                    showMap?: T;
+                    id?: T;
+                    blockName?: T;
+                  };
+              mediaText?:
+                | T
+                | {
+                    eyebrow?: T;
+                    heading?: T;
+                    body?: T;
+                    media?: T;
+                    layout?: T;
+                    link?:
+                      | T
+                      | {
+                          label?: T;
+                          href?: T;
+                        };
+                    id?: T;
+                    blockName?: T;
+                  };
+              cta?:
+                | T
+                | {
+                    heading?: T;
+                    body?: T;
+                    primaryLink?:
+                      | T
+                      | {
+                          label?: T;
+                          href?: T;
+                        };
+                    secondaryLink?:
+                      | T
+                      | {
+                          label?: T;
+                          href?: T;
+                        };
+                    id?: T;
+                    blockName?: T;
+                  };
+            };
+      };
+  templates?:
+    | T
+    | {
+        seminuevos?:
+          | T
+          | {
+              title?: T;
+              intro?: T;
+              heroImage?: T;
+              showLocationPrompt?: T;
+            };
+        vehicleDetail?:
+          | T
+          | {
+              showSimilarVehicles?: T;
+              ctaHeading?: T;
+              ctaBody?: T;
+            };
       };
   updatedAt?: T;
   createdAt?: T;
   globalType?: T;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "analytics-dashboard_widget".
+ */
+export interface AnalyticsDashboardWidget {
+  data?: {
+    [k: string]: unknown;
+  };
+  width: 'full';
 }
 /**
  * This interface was referenced by `Config`'s JSON-Schema

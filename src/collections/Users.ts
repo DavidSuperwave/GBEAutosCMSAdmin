@@ -6,6 +6,10 @@ export const Users: CollectionConfig = {
     useAsTitle: 'email',
   },
   auth: true,
+  labels: {
+    singular: 'Usuario',
+    plural: 'Usuarios',
+  },
   fields: [
     // Email added by default
     // Add more fields as needed

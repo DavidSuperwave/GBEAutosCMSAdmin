@@ -232,4 +232,8 @@ export const dealerships = [
   { brandName: 'stellantis', displayName: 'Stellantis', city: 'Ciudad Obregón', phone: '6442220568', whatsapp: '526442220568' },
   { brandName: 'jetour', displayName: 'Jetour', city: 'Culiacán', phone: '6671025850', whatsapp: '526671025850' },
   { brandName: 'jetour', displayName: 'Jetour', city: 'Ciudad Obregón', phone: '6442044858', whatsapp: '526442044858' },
+  { brandName: 'seminuevos', displayName: 'Seminuevos GB Culiacan', city: 'Culiacan', phone: '6442364338', whatsapp: '526442364338' },
+  { brandName: 'seminuevos', displayName: 'Seminuevos GB Mazatlan', city: 'Mazatlan', phone: '6442364338', whatsapp: '526442364338' },
+  { brandName: 'seminuevos', displayName: 'Seminuevos GB Guasave', city: 'Guasave', phone: '6442364338', whatsapp: '526442364338' },
+  { brandName: 'seminuevos', displayName: 'Seminuevos GB Los Mochis', city: 'Los Mochis', phone: '6442364338', whatsapp: '526442364338' },
 ]

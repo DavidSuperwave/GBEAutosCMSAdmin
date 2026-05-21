@@ -5,11 +5,16 @@ export const Media: CollectionConfig = {
   access: {
     read: () => true,
   },
+  labels: {
+    singular: 'Medio',
+    plural: 'Medios',
+  },
   fields: [
     {
       name: 'alt',
       type: 'text',
       required: true,
+      label: 'Texto alternativo',
     },
   ],
   upload: true,
