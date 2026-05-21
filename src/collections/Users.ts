@@ -4,6 +4,14 @@ export const Users: CollectionConfig = {
   slug: 'users',
   admin: {
     useAsTitle: 'email',
+    defaultColumns: ['email', 'updatedAt'],
+    components: {
+      beforeList: [
+        {
+          path: './components/UserInviteLink',
+        },
+      ],
+    },
   },
   auth: true,
   labels: {
@@ -11,7 +19,6 @@ export const Users: CollectionConfig = {
     plural: 'Usuarios',
   },
   fields: [
-    // Email added by default
-    // Add more fields as needed
+    // Email is added by default by Payload auth.
   ],
 }

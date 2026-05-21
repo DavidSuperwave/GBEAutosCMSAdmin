@@ -1,4 +1,5 @@
 import { postgresAdapter } from '@payloadcms/db-postgres'
+import { nodemailerAdapter } from '@payloadcms/email-nodemailer'
 import { lexicalEditor } from '@payloadcms/richtext-lexical'
 import path from 'path'
 import { buildConfig } from 'payload'
@@ -17,6 +18,14 @@ import { SiteConfig } from './globals/SiteConfig'
 
 const filename = fileURLToPath(import.meta.url)
 const dirname = path.dirname(filename)
+const smtpPort = Number(process.env.SMTP_PORT || 587)
+const hasSMTPConfig = Boolean(
+  process.env.SMTP_HOST &&
+    process.env.SMTP_FROM_EMAIL &&
+    process.env.SMTP_PASS &&
+    process.env.SMTP_USER &&
+    Number.isFinite(smtpPort),
+)
 
 export default buildConfig({
   admin: {
@@ -49,6 +58,21 @@ export default buildConfig({
     fallbackLanguage: 'es',
     supportedLanguages: { es },
   },
+  email: hasSMTPConfig
+    ? nodemailerAdapter({
+        defaultFromAddress: process.env.SMTP_FROM_EMAIL || '',
+        defaultFromName: process.env.SMTP_FROM_NAME || 'GBE Autos CMS',
+        transportOptions: {
+          host: process.env.SMTP_HOST,
+          port: smtpPort,
+          secure: process.env.SMTP_SECURE === 'true',
+          auth: {
+            user: process.env.SMTP_USER,
+            pass: process.env.SMTP_PASS,
+          },
+        },
+      })
+    : undefined,
   secret: process.env.PAYLOAD_SECRET || '',
   serverURL: process.env.NEXT_PUBLIC_SERVER_URL,
   typescript: {

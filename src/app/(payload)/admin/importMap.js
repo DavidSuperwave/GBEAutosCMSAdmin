@@ -1,3 +1,4 @@
+import { default as default_a2dba6a9d6d5d51a573945e83e0403ec } from '../../../components/UserInviteLink'
 import { default as default_e9c3a7b71ecc67978edc89e1aa8909b0 } from '../../../components/VehicleLookupField'
 import { default as default_81cf48bec2acdc2934fd8300b56d4a7a } from '../../../components/VehicleAdminLinks'
 import { default as default_3f9523b0ce6533c5834dc8af1c00f0f0 } from '../../../components/VehicleLandingPreview'
@@ -10,6 +11,7 @@ import { CollectionCards as CollectionCards_f9c02e79a4aed9a3924487c0cd4cafb1 } f
 
 /** @type import('payload').ImportMap */
 export const importMap = {
+  "./components/UserInviteLink#default": default_a2dba6a9d6d5d51a573945e83e0403ec,
   "./components/VehicleLookupField#default": default_e9c3a7b71ecc67978edc89e1aa8909b0,
   "./components/VehicleAdminLinks#default": default_81cf48bec2acdc2934fd8300b56d4a7a,
   "./components/VehicleLandingPreview#default": default_3f9523b0ce6533c5834dc8af1c00f0f0,
