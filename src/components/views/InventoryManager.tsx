@@ -1,0 +1,445 @@
+'use client'
+
+import React, { useCallback, useEffect, useMemo, useState } from 'react'
+
+import { ActionButton, AdminPageHeader, EmptyState, StatusBadge } from '../admin-ui/kit'
+import VehicleImportModal from '../admin-ui/VehicleImportModal'
+import {
+  IMAGE_STATUS_LABELS,
+  PUBLISH_STATUS_LABELS,
+  type ImageStatus,
+  type PublishStatus,
+} from '../../services/vehicleWorkflow'
+
+type Vehicle = {
+  id: string | number
+  brand?: string
+  model?: string
+  year?: number
+  price?: string
+  condition?: string
+  publishStatus?: PublishStatus
+  imageStatus?: ImageStatus
+  completenessScore?: number
+  inventoryStatus?: string
+  city?: string
+  exteriorColor?: string
+  image?: { url?: string; thumbnailURL?: string } | string | null
+}
+
+type TabKey =
+  | 'all'
+  | 'published'
+  | 'drafts'
+  | 'needs_review'
+  | 'missing_images'
+  | 'seminuevos'
+  | 'nuevos'
+
+const TABS: Array<{ key: TabKey; label: string; where: string }> = [
+  { key: 'all', label: 'Todos', where: '' },
+  { key: 'published', label: 'Publicados', where: 'where[publishStatus][equals]=published' },
+  { key: 'drafts', label: 'Borradores', where: 'where[publishStatus][equals]=draft' },
+  { key: 'needs_review', label: 'En revisión', where: 'where[publishStatus][equals]=needs_review' },
+  { key: 'missing_images', label: 'Sin imagen', where: 'where[imageStatus][equals]=missing' },
+  { key: 'seminuevos', label: 'Seminuevos', where: 'where[condition][equals]=used' },
+  { key: 'nuevos', label: 'Nuevos', where: 'where[condition][equals]=new' },
+]
+
+const PAGE_SIZE = 20
+
+const PUBLISH_TONE: Record<string, 'neutral' | 'success' | 'warning' | 'danger' | 'info'> = {
+  published: 'success',
+  needs_review: 'warning',
+  draft: 'neutral',
+  archived: 'danger',
+}
+
+function tabWhere(tab: TabKey): string {
+  return TABS.find((t) => t.key === tab)?.where || ''
+}
+
+function isTabKey(value: string | null): value is TabKey {
+  return TABS.some((t) => t.key === value)
+}
+
+function buildQuery(tab: TabKey, search: string, page: number, sort: string): string {
+  const parts: string[] = [`limit=${PAGE_SIZE}`, `page=${page}`, `depth=1`, `sort=${sort}`]
+  const base = tabWhere(tab)
+  const trimmed = search.trim()
+  if (base && trimmed) {
+    // tab filter AND (brand/model/city like search)
+    const tabField = base.replace(/^where\[/, 'where[and][0][').replace('=', '=')
+    parts.push(tabField)
+    const q = encodeURIComponent(trimmed)
+    parts.push(`where[and][1][or][0][brand][like]=${q}`)
+    parts.push(`where[and][1][or][1][model][like]=${q}`)
+    parts.push(`where[and][1][or][2][city][like]=${q}`)
+    parts.push(`where[and][1][or][3][exteriorColor][like]=${q}`)
+  } else if (base) {
+    parts.push(base)
+  } else if (trimmed) {
+    const q = encodeURIComponent(trimmed)
+    parts.push(`where[or][0][brand][like]=${q}`)
+    parts.push(`where[or][1][model][like]=${q}`)
+    parts.push(`where[or][2][city][like]=${q}`)
+    parts.push(`where[or][3][exteriorColor][like]=${q}`)
+  }
+  return parts.join('&')
+}
+
+function imageUrl(image: Vehicle['image']): string | undefined {
+  if (!image || typeof image === 'string') return undefined
+  return image.thumbnailURL || image.url
+}
+
+export default function InventoryManager() {
+  const [tab, setTab] = useState<TabKey>('all')
+  const [search, setSearch] = useState('')
+  const [appliedSearch, setAppliedSearch] = useState('')
+  const [sort, setSort] = useState('-updatedAt')
+  const [page, setPage] = useState(1)
+  const [docs, setDocs] = useState<Vehicle[]>([])
+  const [totalDocs, setTotalDocs] = useState(0)
+  const [totalPages, setTotalPages] = useState(1)
+  const [counts, setCounts] = useState<Record<string, number>>({})
+  const [selected, setSelected] = useState<Set<string>>(new Set())
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+  const [bulkBusy, setBulkBusy] = useState(false)
+  const [importOpen, setImportOpen] = useState(false)
+
+  // Deep links: /admin/inventory?tab=missing_images preselects a filter tab
+  // (used by the dashboard shortcuts). Applied after mount to avoid SSR
+  // hydration mismatches.
+  useEffect(() => {
+    const requested = new URLSearchParams(window.location.search).get('tab')
+    if (isTabKey(requested)) {
+      setTab(requested)
+      setPage(1)
+    }
+  }, [])
+
+  const fetchList = useCallback(async () => {
+    setLoading(true)
+    setError(null)
+    try {
+      const query = buildQuery(tab, appliedSearch, page, sort)
+      const res = await fetch(`/api/vehicles?${query}`, { credentials: 'include' })
+      if (!res.ok) throw new Error('No se pudo cargar el inventario.')
+      const data = (await res.json()) as {
+        docs: Vehicle[]
+        totalDocs: number
+        totalPages: number
+      }
+      setDocs(data.docs || [])
+      setTotalDocs(data.totalDocs || 0)
+      setTotalPages(data.totalPages || 1)
+      setSelected(new Set())
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Error al cargar.')
+    } finally {
+      setLoading(false)
+    }
+  }, [tab, appliedSearch, page, sort])
+
+  useEffect(() => {
+    void fetchList()
+  }, [fetchList])
+
+  const fetchCounts = useCallback(async () => {
+    const entries = await Promise.all(
+      TABS.map(async (t) => {
+        const q = [`limit=1`, `depth=0`, t.where].filter(Boolean).join('&')
+        try {
+          const res = await fetch(`/api/vehicles?${q}`, { credentials: 'include' })
+          if (!res.ok) return [t.key, 0] as const
+          const data = (await res.json()) as { totalDocs: number }
+          return [t.key, data.totalDocs || 0] as const
+        } catch {
+          return [t.key, 0] as const
+        }
+      }),
+    )
+    setCounts(Object.fromEntries(entries))
+  }, [])
+
+  useEffect(() => {
+    void fetchCounts()
+  }, [fetchCounts])
+
+  // Keep the page in range when filters/search shrink the result set.
+  useEffect(() => {
+    if (page > totalPages) setPage(totalPages)
+  }, [totalPages, page])
+
+  const toggleSelect = useCallback((id: string) => {
+    setSelected((prev) => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+  }, [])
+
+  const toggleSelectAll = useCallback(() => {
+    setSelected((prev) => {
+      if (prev.size === docs.length) return new Set()
+      return new Set(docs.map((d) => String(d.id)))
+    })
+  }, [docs])
+
+  const runBulk = useCallback(
+    async (patch: Record<string, unknown>, confirmMessage?: string) => {
+      if (selected.size === 0) return
+      if (confirmMessage && !window.confirm(confirmMessage)) return
+      setBulkBusy(true)
+      setError(null)
+      try {
+        await Promise.all(
+          Array.from(selected).map((id) =>
+            fetch(`/api/vehicles/${id}`, {
+              method: 'PATCH',
+              credentials: 'include',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(patch),
+            }),
+          ),
+        )
+        await Promise.all([fetchList(), fetchCounts()])
+      } catch (err) {
+        setError(err instanceof Error ? err.message : 'Error en la acción masiva.')
+      } finally {
+        setBulkBusy(false)
+      }
+    },
+    [selected, fetchList, fetchCounts],
+  )
+
+  const deleteBulk = useCallback(async () => {
+    if (selected.size === 0) return
+    if (!window.confirm(`¿Eliminar ${selected.size} vehículo(s)? Esta acción no se puede deshacer.`)) return
+    setBulkBusy(true)
+    try {
+      await Promise.all(
+        Array.from(selected).map((id) =>
+          fetch(`/api/vehicles/${id}`, { method: 'DELETE', credentials: 'include' }),
+        ),
+      )
+      await Promise.all([fetchList(), fetchCounts()])
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Error al eliminar.')
+    } finally {
+      setBulkBusy(false)
+    }
+  }, [selected, fetchList, fetchCounts])
+
+  const allSelected = selected.size > 0 && selected.size === docs.length
+
+  const header = useMemo(
+    () => (
+      <AdminPageHeader
+        title="Inventario"
+        subtitle="Gestiona, filtra y publica vehículos en lote."
+        actions={
+          <>
+            <ActionButton onClick={() => setImportOpen(true)} variant="primary">
+              Importar CSV/XLSX
+            </ActionButton>
+            <ActionButton href="/admin/collections/vehicles/create" variant="secondary">
+              + Nuevo vehículo
+            </ActionButton>
+            <ActionButton onClick={() => void fetchList()} variant="secondary" disabled={loading}>
+              Recargar
+            </ActionButton>
+          </>
+        }
+      />
+    ),
+    [fetchList, loading],
+  )
+
+  return (
+    <div className="admin-kit-shell inventory">
+      {header}
+
+      <VehicleImportModal
+        open={importOpen}
+        onClose={() => setImportOpen(false)}
+        onComplete={() => {
+          void fetchList()
+          void fetchCounts()
+        }}
+      />
+
+
+      <div className="inventory__tabs">
+        {TABS.map((t) => (
+          <button
+            key={t.key}
+            type="button"
+            className={`inventory__tab${tab === t.key ? ' inventory__tab--active' : ''}`}
+            onClick={() => {
+              setTab(t.key)
+              setPage(1)
+            }}
+          >
+            {t.label}
+            {typeof counts[t.key] === 'number' ? <span className="inventory__tab-count">{counts[t.key]}</span> : null}
+          </button>
+        ))}
+      </div>
+
+      <div className="inventory__toolbar">
+        <form
+          className="inventory__search"
+          onSubmit={(e) => {
+            e.preventDefault()
+            setPage(1)
+            setAppliedSearch(search)
+          }}
+        >
+          <input
+            type="search"
+            placeholder="Buscar por marca, modelo o ciudad…"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+          />
+          <button className="admin-kit-btn admin-kit-btn--secondary" type="submit">
+            Buscar
+          </button>
+        </form>
+        <select className="inventory__sort" value={sort} onChange={(e) => setSort(e.target.value)}>
+          <option value="-updatedAt">Recientes primero</option>
+          <option value="updatedAt">Antiguos primero</option>
+          <option value="brand">Marca (A-Z)</option>
+          <option value="-completenessScore">Más completos</option>
+          <option value="completenessScore">Menos completos</option>
+        </select>
+      </div>
+
+      {selected.size > 0 ? (
+        <div className="inventory__bulkbar">
+          <span>{selected.size} seleccionado(s)</span>
+          <ActionButton
+            variant="primary"
+            disabled={bulkBusy}
+            onClick={() => void runBulk({ publishStatus: 'published' }, '¿Publicar los vehículos seleccionados?')}
+          >
+            Publicar
+          </ActionButton>
+          <ActionButton variant="secondary" disabled={bulkBusy} onClick={() => void runBulk({ publishStatus: 'needs_review' })}>
+            Enviar a revisión
+          </ActionButton>
+          <ActionButton variant="secondary" disabled={bulkBusy} onClick={() => void runBulk({ publishStatus: 'draft' })}>
+            Mover a borrador
+          </ActionButton>
+          <ActionButton variant="secondary" disabled={bulkBusy} onClick={() => void runBulk({ publishStatus: 'archived' })}>
+            Archivar
+          </ActionButton>
+          <ActionButton variant="danger" disabled={bulkBusy} onClick={() => void deleteBulk()}>
+            Eliminar
+          </ActionButton>
+        </div>
+      ) : null}
+
+      {error ? <div className="builder__error">{error}</div> : null}
+
+      {loading ? (
+        <p className="builder__muted">Cargando inventario…</p>
+      ) : docs.length === 0 ? (
+        <EmptyState title="Sin resultados" message="No hay vehículos que coincidan con este filtro." />
+      ) : (
+        <table className="inventory__table">
+          <thead>
+            <tr>
+              <th>
+                <input type="checkbox" checked={allSelected} onChange={toggleSelectAll} aria-label="Seleccionar todos" />
+              </th>
+              <th>Vehículo</th>
+              <th>Precio</th>
+              <th>Condición</th>
+              <th>Publicación</th>
+              <th>Imagen</th>
+              <th>Completitud</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody>
+            {docs.map((vehicle) => {
+              const id = String(vehicle.id)
+              const url = imageUrl(vehicle.image)
+              return (
+                <tr key={id} className={selected.has(id) ? 'is-selected' : ''}>
+                  <td>
+                    <input type="checkbox" checked={selected.has(id)} onChange={() => toggleSelect(id)} />
+                  </td>
+                  <td>
+                    <div className="inventory__vehicle">
+                      {url ? <img src={url} alt="" /> : <div className="inventory__thumb-empty">—</div>}
+                      <div>
+                        <strong>
+                          {vehicle.brand || '—'} {vehicle.model || ''}
+                        </strong>
+                        {vehicle.exteriorColor ? <small>Color: {vehicle.exteriorColor}</small> : null}
+                        <small>
+                          {vehicle.year || 's/año'} · {vehicle.city || 'sin ciudad'}
+                        </small>
+                      </div>
+                    </div>
+                  </td>
+                  <td>{vehicle.price || '—'}</td>
+                  <td>{vehicle.condition === 'used' ? 'Seminuevo' : vehicle.condition === 'new' ? 'Nuevo' : '—'}</td>
+                  <td>
+                    <StatusBadge tone={PUBLISH_TONE[vehicle.publishStatus || 'draft'] || 'neutral'}>
+                      {PUBLISH_STATUS_LABELS[(vehicle.publishStatus as PublishStatus) || 'draft']}
+                    </StatusBadge>
+                  </td>
+                  <td>
+                    <StatusBadge tone={vehicle.imageStatus === 'missing' ? 'danger' : 'info'}>
+                      {IMAGE_STATUS_LABELS[(vehicle.imageStatus as ImageStatus) || 'missing']}
+                    </StatusBadge>
+                  </td>
+                  <td>
+                    <div className="inventory__progress" title={`${vehicle.completenessScore ?? 0}%`}>
+                      <span style={{ width: `${vehicle.completenessScore ?? 0}%` }} />
+                    </div>
+                  </td>
+                  <td className="inventory__row-actions">
+                    <a className="admin-kit-btn admin-kit-btn--secondary" href={`/admin/collections/vehicles/${id}/workspace`}>
+                      Abrir
+                    </a>
+                  </td>
+                </tr>
+              )
+            })}
+          </tbody>
+        </table>
+      )}
+
+      <div className="inventory__pagination">
+        <span>
+          {totalDocs} vehículo(s) · página {page} de {totalPages}
+        </span>
+        <div>
+          <button
+            type="button"
+            className="admin-kit-btn admin-kit-btn--secondary"
+            disabled={page <= 1 || loading}
+            onClick={() => setPage((p) => Math.max(1, p - 1))}
+          >
+            ← Anterior
+          </button>
+          <button
+            type="button"
+            className="admin-kit-btn admin-kit-btn--secondary"
+            disabled={page >= totalPages || loading}
+            onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+          >
+            Siguiente →
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}

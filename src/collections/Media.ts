@@ -1,9 +1,17 @@
 import type { CollectionConfig } from 'payload'
 
+import { canManageMedia } from '../access/roles'
+
 export const Media: CollectionConfig = {
   slug: 'media',
   access: {
     read: () => true,
+    create: canManageMedia,
+    update: canManageMedia,
+    delete: canManageMedia,
+  },
+  admin: {
+    group: 'Media Workshop',
   },
   labels: {
     singular: 'Medio',

@@ -1,6 +1,7 @@
 import type { CollectionConfig } from 'payload'
 
 import { siteSectionBlocks } from '../blocks/SiteSections'
+import { canManageContent } from '../access/roles'
 
 const FRONTEND_URL = process.env.NEXT_PUBLIC_FRONTEND_URL || 'http://localhost:3000'
 const protectedSlugs = ['api', 'cars', 'seminuevos', 'marcas', 'contacts', 'contact', 'contacto', 'admin']
@@ -19,8 +20,12 @@ export const Pages: CollectionConfig = {
   slug: 'pages',
   access: {
     read: () => true,
+    create: canManageContent,
+    update: canManageContent,
+    delete: canManageContent,
   },
   admin: {
+    group: 'Site Builder',
     useAsTitle: 'title',
     defaultColumns: ['title', 'slug', 'isVisible', 'updatedAt'],
     livePreview: {

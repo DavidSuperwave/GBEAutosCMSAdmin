@@ -11,6 +11,7 @@ export const SiteConfig: GlobalConfig = {
     read: () => true,
   },
   admin: {
+    group: 'Site Builder',
     livePreview: {
       breakpoints: [
         { label: 'Mobile', name: 'mobile', width: 390, height: 844 },

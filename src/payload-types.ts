@@ -67,13 +67,18 @@ export interface Config {
   };
   blocks: {};
   collections: {
-    users: User;
-    media: Media;
     vehicles: Vehicle;
-    dealerships: Dealership;
-    leads: Lead;
+    'import-jobs': ImportJob;
+    'vehicle-media-assets': VehicleMediaAsset;
+    'vehicle-image-searches': VehicleImageSearch;
+    'workshop-jobs': WorkshopJob;
+    'image-templates': ImageTemplate;
     pages: Page;
+    media: Media;
+    leads: Lead;
     'analytics-events': AnalyticsEvent;
+    dealerships: Dealership;
+    users: User;
     'payload-kv': PayloadKv;
     'payload-locked-documents': PayloadLockedDocument;
     'payload-preferences': PayloadPreference;
@@ -81,13 +86,18 @@ export interface Config {
   };
   collectionsJoins: {};
   collectionsSelect: {
-    users: UsersSelect<false> | UsersSelect<true>;
-    media: MediaSelect<false> | MediaSelect<true>;
     vehicles: VehiclesSelect<false> | VehiclesSelect<true>;
-    dealerships: DealershipsSelect<false> | DealershipsSelect<true>;
-    leads: LeadsSelect<false> | LeadsSelect<true>;
+    'import-jobs': ImportJobsSelect<false> | ImportJobsSelect<true>;
+    'vehicle-media-assets': VehicleMediaAssetsSelect<false> | VehicleMediaAssetsSelect<true>;
+    'vehicle-image-searches': VehicleImageSearchesSelect<false> | VehicleImageSearchesSelect<true>;
+    'workshop-jobs': WorkshopJobsSelect<false> | WorkshopJobsSelect<true>;
+    'image-templates': ImageTemplatesSelect<false> | ImageTemplatesSelect<true>;
     pages: PagesSelect<false> | PagesSelect<true>;
+    media: MediaSelect<false> | MediaSelect<true>;
+    leads: LeadsSelect<false> | LeadsSelect<true>;
     'analytics-events': AnalyticsEventsSelect<false> | AnalyticsEventsSelect<true>;
+    dealerships: DealershipsSelect<false> | DealershipsSelect<true>;
+    users: UsersSelect<false> | UsersSelect<true>;
     'payload-kv': PayloadKvSelect<false> | PayloadKvSelect<true>;
     'payload-locked-documents': PayloadLockedDocumentsSelect<false> | PayloadLockedDocumentsSelect<true>;
     'payload-preferences': PayloadPreferencesSelect<false> | PayloadPreferencesSelect<true>;
@@ -105,6 +115,7 @@ export interface Config {
   };
   locale: null;
   widgets: {
+    'operations-dashboard': OperationsDashboardWidget;
     'analytics-dashboard': AnalyticsDashboardWidget;
     collections: CollectionsWidget;
   };
@@ -134,50 +145,6 @@ export interface UserAuthOperations {
 }
 /**
  * This interface was referenced by `Config`'s JSON-Schema
- * via the `definition` "users".
- */
-export interface User {
-  id: number;
-  updatedAt: string;
-  createdAt: string;
-  email: string;
-  resetPasswordToken?: string | null;
-  resetPasswordExpiration?: string | null;
-  salt?: string | null;
-  hash?: string | null;
-  loginAttempts?: number | null;
-  lockUntil?: string | null;
-  sessions?:
-    | {
-        id: string;
-        createdAt?: string | null;
-        expiresAt: string;
-      }[]
-    | null;
-  password?: string | null;
-  collection: 'users';
-}
-/**
- * This interface was referenced by `Config`'s JSON-Schema
- * via the `definition` "media".
- */
-export interface Media {
-  id: number;
-  alt: string;
-  updatedAt: string;
-  createdAt: string;
-  url?: string | null;
-  thumbnailURL?: string | null;
-  filename?: string | null;
-  mimeType?: string | null;
-  filesize?: number | null;
-  width?: number | null;
-  height?: number | null;
-  focalX?: number | null;
-  focalY?: number | null;
-}
-/**
- * This interface was referenced by `Config`'s JSON-Schema
  * via the `definition` "vehicles".
  */
 export interface Vehicle {
@@ -188,8 +155,27 @@ export interface Vehicle {
    */
   slug: string;
   brand: string;
+  modelFamily?: string | null;
   model: string;
-  year: number;
+  trim?: string | null;
+  /**
+   * Requerido para publicar. Opcional al importar borradores.
+   */
+  year?: number | null;
+  exteriorColor?: string | null;
+  interiorColor?: string | null;
+  /**
+   * Mapeado desde DES_TIPO_VEHICULO en importaciones.
+   */
+  vehicleType?: string | null;
+  /**
+   * Mapeado desde DES_SEGMENTO en importaciones.
+   */
+  segment?: string | null;
+  /**
+   * Mapeado desde DES_TIPO_MOTOR en importaciones.
+   */
+  motorType?: string | null;
   /**
    * Referencia visible para ventas y WhatsApp. Si se deja vacio se usara el UUID corto.
    */
@@ -217,10 +203,34 @@ export interface Vehicle {
       }[]
     | null;
   /**
-   * Escribe un número o rango. Se guardará automáticamente como MXN.
+   * Requerido para publicar. Opcional al importar. Escribe un número o rango; se guardará como MXN.
    */
-  price: string;
+  price?: string | null;
   inventoryStatus: 'available' | 'reserved' | 'sold';
+  publishStatus?: ('draft' | 'needs_review' | 'published' | 'archived') | null;
+  /**
+   * Se calcula automáticamente salvo aprobaciones/rechazos manuales.
+   */
+  imageStatus?: ('missing' | 'candidate_found' | 'uploaded' | 'generated' | 'approved' | 'rejected') | null;
+  specStatus?: ('missing' | 'partial' | 'matched' | 'manual' | 'verified') | null;
+  /**
+   * Calculado automáticamente al guardar.
+   */
+  completenessScore?: number | null;
+  publishedAt?: string | null;
+  lastPublishedBy?: (number | null) | User;
+  lastReviewedAt?: string | null;
+  lastReviewedBy?: (number | null) | User;
+  reviewNotes?: string | null;
+  /**
+   * Identificador del inventario de origen para detectar duplicados.
+   */
+  sourceId?: string | null;
+  sourceImportId?: string | null;
+  /**
+   * Nombre de agencia tal como vino en el archivo importado.
+   */
+  sourceDealerName?: string | null;
   image?: (number | null) | Media;
   gallery?:
     | {
@@ -363,19 +373,281 @@ export interface Dealership {
 }
 /**
  * This interface was referenced by `Config`'s JSON-Schema
- * via the `definition` "leads".
+ * via the `definition` "users".
  */
-export interface Lead {
+export interface User {
   id: number;
-  firstName: string;
-  lastName?: string | null;
-  email?: string | null;
-  phone: string;
-  source?: ('website_form' | 'whatsapp' | 'phone' | 'walk_in') | null;
+  name?: string | null;
+  /**
+   * Define qué acciones puede realizar el usuario en el CMS.
+   */
+  role?: ('admin' | 'inventory_manager' | 'content_editor' | 'sales_manager' | 'media_editor' | 'viewer') | null;
+  updatedAt: string;
+  createdAt: string;
+  email: string;
+  resetPasswordToken?: string | null;
+  resetPasswordExpiration?: string | null;
+  salt?: string | null;
+  hash?: string | null;
+  loginAttempts?: number | null;
+  lockUntil?: string | null;
+  sessions?:
+    | {
+        id: string;
+        createdAt?: string | null;
+        expiresAt: string;
+      }[]
+    | null;
+  password?: string | null;
+  collection: 'users';
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "media".
+ */
+export interface Media {
+  id: number;
+  alt: string;
+  updatedAt: string;
+  createdAt: string;
+  url?: string | null;
+  thumbnailURL?: string | null;
+  filename?: string | null;
+  mimeType?: string | null;
+  filesize?: number | null;
+  width?: number | null;
+  height?: number | null;
+  focalX?: number | null;
+  focalY?: number | null;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "import-jobs".
+ */
+export interface ImportJob {
+  id: number;
+  fileName: string;
+  fileType?: ('csv' | 'xlsx') | null;
+  status?: ('pending' | 'validating' | 'ready' | 'importing' | 'completed' | 'rolled_back' | 'failed') | null;
+  rowCount?: number | null;
+  createdCount?: number | null;
+  updatedCount?: number | null;
+  skippedCount?: number | null;
+  reviewCount?: number | null;
+  errorCount?: number | null;
+  /**
+   * Mapa de columna de archivo -> campo del CMS.
+   */
+  mapping?:
+    | {
+        [k: string]: unknown;
+      }
+    | unknown[]
+    | string
+    | number
+    | boolean
+    | null;
+  summary?: string | null;
+  errors?:
+    | {
+        row?: number | null;
+        message?: string | null;
+        id?: string | null;
+      }[]
+    | null;
+  /**
+   * Usado para revisar o revertir esta importación.
+   */
+  createdVehicleIds?:
+    | {
+        [k: string]: unknown;
+      }
+    | unknown[]
+    | string
+    | number
+    | boolean
+    | null;
+  uploadedBy?: (number | null) | User;
+  updatedAt: string;
+  createdAt: string;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "vehicle-media-assets".
+ */
+export interface VehicleMediaAsset {
+  id: number;
+  /**
+   * Etiqueta interna para identificar la imagen.
+   */
+  title?: string | null;
   vehicle?: (number | null) | Vehicle;
-  message?: string | null;
-  stage?: ('new' | 'contacted' | 'in_progress' | 'closed_won' | 'closed_lost') | null;
+  media: number | Media;
+  sourceType?: ('uploaded' | 'dealer_photo' | 'api_candidate' | 'ai_generated' | 'ai_edited' | 'representative') | null;
+  sourceUrl?: string | null;
+  sourceProvider?: string | null;
+  /**
+   * brand + model + year + trim + exteriorColor normalizados.
+   */
+  matchKey?: string | null;
+  make?: string | null;
+  model?: string | null;
+  year?: number | null;
+  trim?: string | null;
+  exteriorColor?: string | null;
+  approvalStatus?: ('draft' | 'needs_review' | 'approved' | 'rejected') | null;
+  matchConfidence?:
+    | (
+        | 'exact_vehicle'
+        | 'same_trim_color'
+        | 'same_model_color'
+        | 'same_model'
+        | 'representative'
+        | 'generated'
+        | 'unknown'
+      )
+    | null;
+  exteriorColorMatched?: boolean | null;
+  rightsStatus?: ('owned' | 'licensed' | 'unknown') | null;
+  usage?: ('vehicle_hero' | 'vehicle_gallery' | 'homepage' | 'landing_page' | 'promo_banner' | 'social_ad') | null;
   notes?: string | null;
+  createdBy?: (number | null) | User;
+  approvedBy?: (number | null) | User;
+  approvedAt?: string | null;
+  updatedAt: string;
+  createdAt: string;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "vehicle-image-searches".
+ */
+export interface VehicleImageSearch {
+  id: number;
+  provider: string;
+  matchKey: string;
+  query?:
+    | {
+        [k: string]: unknown;
+      }
+    | unknown[]
+    | string
+    | number
+    | boolean
+    | null;
+  candidates?:
+    | {
+        [k: string]: unknown;
+      }
+    | unknown[]
+    | string
+    | number
+    | boolean
+    | null;
+  fetchedAt?: string | null;
+  expiresAt?: string | null;
+  lastError?: string | null;
+  updatedAt: string;
+  createdAt: string;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "workshop-jobs".
+ */
+export interface WorkshopJob {
+  id: number;
+  title?: string | null;
+  linkedVehicle?: (number | null) | Vehicle;
+  inputImages?:
+    | {
+        image: number | Media;
+        id?: string | null;
+      }[]
+    | null;
+  promptPreset?:
+    | (
+        | 'vehicle_hero'
+        | 'transparent_bg'
+        | 'clean_dealership_bg'
+        | 'logo_overlay'
+        | 'homepage_banner'
+        | 'social_ad'
+        | 'promo_banner'
+        | 'seminuevo_gallery_cover'
+        | 'new_car_representative'
+      )
+    | null;
+  prompt?: string | null;
+  styleTemplate?: (number | null) | ImageTemplate;
+  styleName?: string | null;
+  stylePrompt?: string | null;
+  messages?:
+    | {
+        role: 'user' | 'assistant' | 'system';
+        content: string;
+        createdAt?: string | null;
+        id?: string | null;
+      }[]
+    | null;
+  /**
+   * Se completa automáticamente desde el vehículo enlazado.
+   */
+  vehicleContext?: {
+    brand?: string | null;
+    model?: string | null;
+    year?: number | null;
+    color?: string | null;
+  };
+  styleReferenceUrl?: string | null;
+  outputs?:
+    | {
+        image?: (number | null) | Media;
+        url?: string | null;
+        selected?: boolean | null;
+        id?: string | null;
+      }[]
+    | null;
+  approvedOutput?: (number | null) | Media;
+  saveDestination?:
+    | (
+        | 'vehicle_hero'
+        | 'vehicle_gallery'
+        | 'vehicle_listing_section'
+        | 'homepage_section'
+        | 'landing_section'
+        | 'promo_banner'
+      )
+    | null;
+  status?: ('draft' | 'generating' | 'ready_for_review' | 'approved' | 'rejected' | 'failed') | null;
+  error?: string | null;
+  createdBy?: (number | null) | User;
+  completedAt?: string | null;
+  updatedAt: string;
+  createdAt: string;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "image-templates".
+ */
+export interface ImageTemplate {
+  id: number;
+  name: string;
+  preset?:
+    | (
+        | 'vehicle_hero'
+        | 'transparent_bg'
+        | 'clean_dealership_bg'
+        | 'logo_overlay'
+        | 'homepage_banner'
+        | 'social_ad'
+        | 'promo_banner'
+        | 'seminuevo_gallery_cover'
+        | 'new_car_representative'
+      )
+    | null;
+  prompt?: string | null;
+  referenceImage?: (number | null) | Media;
+  description?: string | null;
+  createdBy?: (number | null) | User;
   updatedAt: string;
   createdAt: string;
 }
@@ -513,6 +785,24 @@ export interface Page {
 }
 /**
  * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "leads".
+ */
+export interface Lead {
+  id: number;
+  firstName: string;
+  lastName?: string | null;
+  email?: string | null;
+  phone: string;
+  source?: ('website_form' | 'whatsapp' | 'phone' | 'walk_in') | null;
+  vehicle?: (number | null) | Vehicle;
+  message?: string | null;
+  stage?: ('new' | 'contacted' | 'in_progress' | 'closed_won' | 'closed_lost') | null;
+  notes?: string | null;
+  updatedAt: string;
+  createdAt: string;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
  * via the `definition` "analytics-events".
  */
 export interface AnalyticsEvent {
@@ -556,32 +846,52 @@ export interface PayloadLockedDocument {
   id: number;
   document?:
     | ({
-        relationTo: 'users';
-        value: number | User;
-      } | null)
-    | ({
-        relationTo: 'media';
-        value: number | Media;
-      } | null)
-    | ({
         relationTo: 'vehicles';
         value: number | Vehicle;
       } | null)
     | ({
-        relationTo: 'dealerships';
-        value: number | Dealership;
+        relationTo: 'import-jobs';
+        value: number | ImportJob;
       } | null)
     | ({
-        relationTo: 'leads';
-        value: number | Lead;
+        relationTo: 'vehicle-media-assets';
+        value: number | VehicleMediaAsset;
+      } | null)
+    | ({
+        relationTo: 'vehicle-image-searches';
+        value: number | VehicleImageSearch;
+      } | null)
+    | ({
+        relationTo: 'workshop-jobs';
+        value: number | WorkshopJob;
+      } | null)
+    | ({
+        relationTo: 'image-templates';
+        value: number | ImageTemplate;
       } | null)
     | ({
         relationTo: 'pages';
         value: number | Page;
       } | null)
     | ({
+        relationTo: 'media';
+        value: number | Media;
+      } | null)
+    | ({
+        relationTo: 'leads';
+        value: number | Lead;
+      } | null)
+    | ({
         relationTo: 'analytics-events';
         value: number | AnalyticsEvent;
+      } | null)
+    | ({
+        relationTo: 'dealerships';
+        value: number | Dealership;
+      } | null)
+    | ({
+        relationTo: 'users';
+        value: number | User;
       } | null);
   globalSlug?: string | null;
   user: {
@@ -627,54 +937,21 @@ export interface PayloadMigration {
 }
 /**
  * This interface was referenced by `Config`'s JSON-Schema
- * via the `definition` "users_select".
- */
-export interface UsersSelect<T extends boolean = true> {
-  updatedAt?: T;
-  createdAt?: T;
-  email?: T;
-  resetPasswordToken?: T;
-  resetPasswordExpiration?: T;
-  salt?: T;
-  hash?: T;
-  loginAttempts?: T;
-  lockUntil?: T;
-  sessions?:
-    | T
-    | {
-        id?: T;
-        createdAt?: T;
-        expiresAt?: T;
-      };
-}
-/**
- * This interface was referenced by `Config`'s JSON-Schema
- * via the `definition` "media_select".
- */
-export interface MediaSelect<T extends boolean = true> {
-  alt?: T;
-  updatedAt?: T;
-  createdAt?: T;
-  url?: T;
-  thumbnailURL?: T;
-  filename?: T;
-  mimeType?: T;
-  filesize?: T;
-  width?: T;
-  height?: T;
-  focalX?: T;
-  focalY?: T;
-}
-/**
- * This interface was referenced by `Config`'s JSON-Schema
  * via the `definition` "vehicles_select".
  */
 export interface VehiclesSelect<T extends boolean = true> {
   uuid?: T;
   slug?: T;
   brand?: T;
+  modelFamily?: T;
   model?: T;
+  trim?: T;
   year?: T;
+  exteriorColor?: T;
+  interiorColor?: T;
+  vehicleType?: T;
+  segment?: T;
+  motorType?: T;
   stockId?: T;
   condition?: T;
   dealership?: T;
@@ -691,6 +968,18 @@ export interface VehiclesSelect<T extends boolean = true> {
       };
   price?: T;
   inventoryStatus?: T;
+  publishStatus?: T;
+  imageStatus?: T;
+  specStatus?: T;
+  completenessScore?: T;
+  publishedAt?: T;
+  lastPublishedBy?: T;
+  lastReviewedAt?: T;
+  lastReviewedBy?: T;
+  reviewNotes?: T;
+  sourceId?: T;
+  sourceImportId?: T;
+  sourceDealerName?: T;
   image?: T;
   gallery?:
     | T
@@ -814,38 +1103,139 @@ export interface VehiclesSelect<T extends boolean = true> {
 }
 /**
  * This interface was referenced by `Config`'s JSON-Schema
- * via the `definition` "dealerships_select".
+ * via the `definition` "import-jobs_select".
  */
-export interface DealershipsSelect<T extends boolean = true> {
-  brandName?: T;
-  displayName?: T;
-  city?: T;
-  phone?: T;
-  whatsapp?: T;
-  coordinates?:
+export interface ImportJobsSelect<T extends boolean = true> {
+  fileName?: T;
+  fileType?: T;
+  status?: T;
+  rowCount?: T;
+  createdCount?: T;
+  updatedCount?: T;
+  skippedCount?: T;
+  reviewCount?: T;
+  errorCount?: T;
+  mapping?: T;
+  summary?: T;
+  errors?:
     | T
     | {
-        lat?: T;
-        lng?: T;
+        row?: T;
+        message?: T;
+        id?: T;
       };
-  isActive?: T;
+  createdVehicleIds?: T;
+  uploadedBy?: T;
   updatedAt?: T;
   createdAt?: T;
 }
 /**
  * This interface was referenced by `Config`'s JSON-Schema
- * via the `definition` "leads_select".
+ * via the `definition` "vehicle-media-assets_select".
  */
-export interface LeadsSelect<T extends boolean = true> {
-  firstName?: T;
-  lastName?: T;
-  email?: T;
-  phone?: T;
-  source?: T;
+export interface VehicleMediaAssetsSelect<T extends boolean = true> {
+  title?: T;
   vehicle?: T;
-  message?: T;
-  stage?: T;
+  media?: T;
+  sourceType?: T;
+  sourceUrl?: T;
+  sourceProvider?: T;
+  matchKey?: T;
+  make?: T;
+  model?: T;
+  year?: T;
+  trim?: T;
+  exteriorColor?: T;
+  approvalStatus?: T;
+  matchConfidence?: T;
+  exteriorColorMatched?: T;
+  rightsStatus?: T;
+  usage?: T;
   notes?: T;
+  createdBy?: T;
+  approvedBy?: T;
+  approvedAt?: T;
+  updatedAt?: T;
+  createdAt?: T;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "vehicle-image-searches_select".
+ */
+export interface VehicleImageSearchesSelect<T extends boolean = true> {
+  provider?: T;
+  matchKey?: T;
+  query?: T;
+  candidates?: T;
+  fetchedAt?: T;
+  expiresAt?: T;
+  lastError?: T;
+  updatedAt?: T;
+  createdAt?: T;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "workshop-jobs_select".
+ */
+export interface WorkshopJobsSelect<T extends boolean = true> {
+  title?: T;
+  linkedVehicle?: T;
+  inputImages?:
+    | T
+    | {
+        image?: T;
+        id?: T;
+      };
+  promptPreset?: T;
+  prompt?: T;
+  styleTemplate?: T;
+  styleName?: T;
+  stylePrompt?: T;
+  messages?:
+    | T
+    | {
+        role?: T;
+        content?: T;
+        createdAt?: T;
+        id?: T;
+      };
+  vehicleContext?:
+    | T
+    | {
+        brand?: T;
+        model?: T;
+        year?: T;
+        color?: T;
+      };
+  styleReferenceUrl?: T;
+  outputs?:
+    | T
+    | {
+        image?: T;
+        url?: T;
+        selected?: T;
+        id?: T;
+      };
+  approvedOutput?: T;
+  saveDestination?: T;
+  status?: T;
+  error?: T;
+  createdBy?: T;
+  completedAt?: T;
+  updatedAt?: T;
+  createdAt?: T;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "image-templates_select".
+ */
+export interface ImageTemplatesSelect<T extends boolean = true> {
+  name?: T;
+  preset?: T;
+  prompt?: T;
+  referenceImage?: T;
+  description?: T;
+  createdBy?: T;
   updatedAt?: T;
   createdAt?: T;
 }
@@ -1003,6 +1393,41 @@ export interface PagesSelect<T extends boolean = true> {
 }
 /**
  * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "media_select".
+ */
+export interface MediaSelect<T extends boolean = true> {
+  alt?: T;
+  updatedAt?: T;
+  createdAt?: T;
+  url?: T;
+  thumbnailURL?: T;
+  filename?: T;
+  mimeType?: T;
+  filesize?: T;
+  width?: T;
+  height?: T;
+  focalX?: T;
+  focalY?: T;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "leads_select".
+ */
+export interface LeadsSelect<T extends boolean = true> {
+  firstName?: T;
+  lastName?: T;
+  email?: T;
+  phone?: T;
+  source?: T;
+  vehicle?: T;
+  message?: T;
+  stage?: T;
+  notes?: T;
+  updatedAt?: T;
+  createdAt?: T;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
  * via the `definition` "analytics-events_select".
  */
 export interface AnalyticsEventsSelect<T extends boolean = true> {
@@ -1019,6 +1444,50 @@ export interface AnalyticsEventsSelect<T extends boolean = true> {
   referrer?: T;
   updatedAt?: T;
   createdAt?: T;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "dealerships_select".
+ */
+export interface DealershipsSelect<T extends boolean = true> {
+  brandName?: T;
+  displayName?: T;
+  city?: T;
+  phone?: T;
+  whatsapp?: T;
+  coordinates?:
+    | T
+    | {
+        lat?: T;
+        lng?: T;
+      };
+  isActive?: T;
+  updatedAt?: T;
+  createdAt?: T;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "users_select".
+ */
+export interface UsersSelect<T extends boolean = true> {
+  name?: T;
+  role?: T;
+  updatedAt?: T;
+  createdAt?: T;
+  email?: T;
+  resetPasswordToken?: T;
+  resetPasswordExpiration?: T;
+  salt?: T;
+  hash?: T;
+  loginAttempts?: T;
+  lockUntil?: T;
+  sessions?:
+    | T
+    | {
+        id?: T;
+        createdAt?: T;
+        expiresAt?: T;
+      };
 }
 /**
  * This interface was referenced by `Config`'s JSON-Schema
@@ -1441,6 +1910,16 @@ export interface SiteConfigSelect<T extends boolean = true> {
   updatedAt?: T;
   createdAt?: T;
   globalType?: T;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "operations-dashboard_widget".
+ */
+export interface OperationsDashboardWidget {
+  data?: {
+    [k: string]: unknown;
+  };
+  width: 'full';
 }
 /**
  * This interface was referenced by `Config`'s JSON-Schema

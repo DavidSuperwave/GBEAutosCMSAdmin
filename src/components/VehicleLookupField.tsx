@@ -54,7 +54,9 @@ type SpecsResponse = {
   lastSpecSyncAt?: string
 }
 
-const API_BASE = process.env.NEXT_PUBLIC_FRONTEND_URL || "http://localhost:3000"
+// Specs lookup is served by the admin project itself (Phase 4 migration), so
+// requests stay same-origin instead of depending on the public website.
+const API_BASE = ""
 
 export default function VehicleLookupField() {
   const brand = useField<string>({ path: "brand" })
@@ -97,7 +99,9 @@ export default function VehicleLookupField() {
   const [selectedGeneration, setSelectedGeneration] = useState("")
   const [selectedTrim, setSelectedTrim] = useState("")
   const [preview, setPreview] = useState<SpecsResponse | null>(null)
-  const [status, setStatus] = useState("Cargando marcas...")
+  const [status, setStatus] = useState("")
+  const [open, setOpen] = useState(false)
+  const [makesLoaded, setMakesLoaded] = useState(false)
 
   const selectedMakeName = useMemo(
     () => makes.find((make) => String(make.id) === selectedMake)?.name || "",
@@ -109,31 +113,31 @@ export default function VehicleLookupField() {
     [models, selectedModel],
   )
 
-  useEffect(() => {
-    const controller = new AbortController()
-
-    async function loadMakes() {
-      try {
-        setStatus("Cargando marcas...")
-        const data = await getJSON<{ makes?: Option[] }>(
-          "/api/cms/vehicle-specs?action=makes",
-          controller.signal,
-        )
-        const nextMakes = data.makes || []
-        setAllMakes(nextMakes)
-        setMakes(nextMakes)
-        setStatus(nextMakes.length ? "Busca o selecciona una marca." : "No se encontraron marcas.")
-      } catch (error) {
-        if (!controller.signal.aborted) setStatus(getErrorMessage(error))
-      }
+  // Makes are loaded lazily: the external specs API (RapidAPI) is only hit
+  // when the user explicitly opens the search. This keeps editing imported
+  // vehicles fast and error-free when no RAPIDAPI_KEY is configured — the API
+  // is only needed when a user wants to enrich a vehicle on demand.
+  async function loadMakes() {
+    try {
+      setStatus("Cargando marcas...")
+      const data = await getJSON<{ makes?: Option[] }>("/api/cms/vehicle-specs?action=makes")
+      const nextMakes = data.makes || []
+      setAllMakes(nextMakes)
+      setMakes(nextMakes)
+      setMakesLoaded(true)
+      setStatus(nextMakes.length ? "Busca o selecciona una marca." : "No se encontraron marcas.")
+    } catch (error) {
+      setStatus(getErrorMessage(error))
     }
+  }
 
-    loadMakes()
-
-    return () => {
-      controller.abort()
-    }
-  }, [])
+  function handleToggleSearch() {
+    setOpen((prev) => {
+      const next = !prev
+      if (next && !makesLoaded) void loadMakes()
+      return next
+    })
+  }
 
   useEffect(() => {
     const normalizedQuery = normalize(query)
@@ -287,12 +291,19 @@ export default function VehicleLookupField() {
 
   return (
     <div style={wrapperStyle}>
-      <h3 style={{ marginTop: 0 }}>Busqueda de vehiculo</h3>
-      <p style={{ color: "var(--theme-elevation-600)", marginTop: 0 }}>
-        Busca una marca, elige modelo, generacion y version. Primero veras una vista previa; al aplicar
+      <div style={{ alignItems: "center", display: "flex", gap: 12, justifyContent: "space-between" }}>
+        <h3 style={{ margin: 0 }}>Busqueda de vehiculo</h3>
+        <button type="button" onClick={handleToggleSearch} style={toggleButtonStyle}>
+          {open ? "Ocultar busqueda" : "Buscar especificaciones (opcional)"}
+        </button>
+      </div>
+      <p style={{ color: "var(--theme-elevation-600)", marginTop: 8 }}>
+        Opcional. Solo se usa al autocompletar especificaciones desde el catalogo/RapidAPI. Al aplicar
         solo se actualizan datos tecnicos y metadatos de origen.
       </p>
 
+      {open ? (
+        <>
       <div style={{ display: "grid", gap: 12, gridTemplateColumns: "repeat(2, minmax(0, 1fr))" }}>
         <label>
           <span>Buscar marca</span>
@@ -392,7 +403,9 @@ export default function VehicleLookupField() {
         </div>
       ) : null}
 
-      <p style={{ marginBottom: 0 }}>{status}</p>
+      {status ? <p style={{ marginBottom: 0 }}>{status}</p> : null}
+        </>
+      ) : null}
     </div>
   )
 }
@@ -517,4 +530,16 @@ const buttonStyle: React.CSSProperties = {
   fontWeight: 700,
   minHeight: 40,
   padding: "0 14px",
+}
+
+const toggleButtonStyle: React.CSSProperties = {
+  background: "var(--theme-elevation-100)",
+  border: "1px solid var(--theme-elevation-200)",
+  borderRadius: 6,
+  color: "var(--theme-text)",
+  cursor: "pointer",
+  fontWeight: 600,
+  minHeight: 34,
+  padding: "0 12px",
+  whiteSpace: "nowrap",
 }

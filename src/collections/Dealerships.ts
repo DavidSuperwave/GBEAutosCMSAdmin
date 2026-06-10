@@ -6,6 +6,7 @@ export const Dealerships: CollectionConfig = {
     read: () => true,
   },
   admin: {
+    group: 'Configuración',
     useAsTitle: 'displayName',
     defaultColumns: ['displayName', 'city', 'phone', 'isActive'],
     listSearchableFields: ['brandName', 'displayName', 'city'],

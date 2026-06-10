@@ -1,11 +1,17 @@
 import type { CollectionConfig } from 'payload'
 
+import { canManageLeads, isAdminAccess } from '../access/roles'
+
 export const Leads: CollectionConfig = {
   slug: 'leads',
   access: {
     create: () => true,
+    read: canManageLeads,
+    update: canManageLeads,
+    delete: isAdminAccess,
   },
   admin: {
+    group: 'Leads',
     useAsTitle: 'firstName',
     defaultColumns: ['firstName', 'lastName', 'phone', 'source', 'stage', 'createdAt'],
   },

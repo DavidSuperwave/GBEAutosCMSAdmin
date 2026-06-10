@@ -14,6 +14,11 @@ import { Dealerships } from './collections/Dealerships'
 import { Leads } from './collections/Leads'
 import { AnalyticsEvents } from './collections/AnalyticsEvents'
 import { Pages } from './collections/Pages'
+import { ImportJobs } from './collections/ImportJobs'
+import { VehicleMediaAssets } from './collections/VehicleMediaAssets'
+import { VehicleImageSearches } from './collections/VehicleImageSearches'
+import { WorkshopJobs } from './collections/WorkshopJobs'
+import { ImageTemplates } from './collections/ImageTemplates'
 import { SiteConfig } from './globals/SiteConfig'
 
 const filename = fileURLToPath(import.meta.url)
@@ -30,17 +35,48 @@ const hasSMTPConfig = Boolean(
 export default buildConfig({
   admin: {
     user: Users.slug,
+    theme: 'light',
     importMap: {
       baseDir: path.resolve(dirname),
     },
     components: {
+      actions: ['./components/ThemeToggle'],
       beforeNavLinks: ['./components/AdminHomeLink'],
+      afterNavLinks: ['./components/AdminBuilderNavLinks'],
       graphics: {
         Logo: './components/PrismaCMSLogo',
+      },
+      views: {
+        inventory: {
+          Component: './components/views/InventoryView',
+          path: '/inventory',
+        },
+        homeBuilder: {
+          Component: './components/views/HomeBuilderView',
+          path: '/builder/home',
+        },
+        landingBuilder: {
+          Component: './components/views/LandingBuilderView',
+          path: '/builder/landing',
+        },
+        vehicleTemplateBuilder: {
+          Component: './components/views/VehicleTemplateView',
+          path: '/builder/vehicle-template',
+        },
+        mediaWorkspace: {
+          Component: './components/views/MediaWorkspaceView',
+          path: '/media-workspace',
+        },
       },
     },
     dashboard: {
       widgets: [
+        {
+          slug: 'operations-dashboard',
+          label: 'Operaciones',
+          Component: './components/OperationsDashboard',
+          minWidth: 'full',
+        },
         {
           slug: 'analytics-dashboard',
           label: 'Analitica',
@@ -48,10 +84,26 @@ export default buildConfig({
           minWidth: 'full',
         },
       ],
-      defaultLayout: [{ widgetSlug: 'analytics-dashboard', width: 'full' }],
+      defaultLayout: [
+        { widgetSlug: 'operations-dashboard', width: 'full' },
+        { widgetSlug: 'analytics-dashboard', width: 'full' },
+      ],
     },
   },
-  collections: [Users, Media, Vehicles, Dealerships, Leads, Pages, AnalyticsEvents],
+  collections: [
+    Vehicles,
+    ImportJobs,
+    VehicleMediaAssets,
+    VehicleImageSearches,
+    WorkshopJobs,
+    ImageTemplates,
+    Pages,
+    Media,
+    Leads,
+    AnalyticsEvents,
+    Dealerships,
+    Users,
+  ],
   globals: [SiteConfig],
   editor: lexicalEditor(),
   i18n: {

@@ -9,6 +9,9 @@ export const AnalyticsEvents: CollectionConfig = {
     delete: ({ req }) => Boolean(req.user),
   },
   admin: {
+    // Raw event log (collected automatically, summarized on the Analítica
+    // dashboard). Hidden from nav to keep the sidebar clean.
+    hidden: true,
     group: 'Analitica',
     useAsTitle: 'pageTitle',
     defaultColumns: ['eventType', 'pagePath', 'vehicle', 'durationSeconds', 'createdAt'],

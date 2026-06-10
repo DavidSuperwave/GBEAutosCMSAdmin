@@ -1,5 +1,13 @@
 import type { Block, CollectionConfig, Payload } from 'payload'
 
+import {
+  calculateVehicleCompleteness,
+  deriveImageStatus,
+  deriveSpecStatus,
+  type VehicleLike,
+} from '../services/vehicleWorkflow'
+import { canManageInventory } from '../access/roles'
+
 const FRONTEND_URL = process.env.NEXT_PUBLIC_FRONTEND_URL || 'http://localhost:3000'
 
 function slugify(value: string | number | null | undefined) {
@@ -199,14 +207,31 @@ export const Vehicles: CollectionConfig = {
   slug: 'vehicles',
   access: {
     read: () => true,
+    create: canManageInventory,
+    update: canManageInventory,
+    delete: canManageInventory,
   },
   hooks: {
     beforeChange: [
-      ({ data, operation, originalDoc }) => {
-        if (operation !== 'update' || !originalDoc) return data
+      ({ data, operation, originalDoc, req }) => {
+        if (operation === 'update' && originalDoc) {
+          data.uuid = originalDoc.uuid
+          data.slug = originalDoc.slug
+        }
 
-        data.uuid = originalDoc.uuid
-        data.slug = originalDoc.slug
+        // Track publish lifecycle transitions.
+        const previousStatus = originalDoc?.publishStatus
+        const nextStatus = data.publishStatus
+
+        if (nextStatus === 'published' && previousStatus !== 'published') {
+          data.publishedAt = new Date().toISOString()
+          if (req?.user?.id) data.lastPublishedBy = req.user.id
+        }
+
+        if (nextStatus === 'needs_review' && previousStatus !== 'needs_review') {
+          data.lastReviewedAt = new Date().toISOString()
+          if (req?.user?.id) data.lastReviewedBy = req.user.id
+        }
 
         return data
       },
@@ -217,6 +242,10 @@ export const Vehicles: CollectionConfig = {
 
         if (!data.inventoryStatus && data.status) {
           data.inventoryStatus = data.status
+        }
+
+        if (!data.publishStatus) {
+          data.publishStatus = 'draft'
         }
 
         const uuid = data.uuid || crypto.randomUUID()
@@ -242,14 +271,33 @@ export const Vehicles: CollectionConfig = {
           }
         }
 
+        // Derive completeness and lifecycle statuses from the assembled data.
+        const vehicleLike = data as VehicleLike
+        data.imageStatus = deriveImageStatus(vehicleLike)
+        data.specStatus = deriveSpecStatus(vehicleLike)
+        data.completenessScore = calculateVehicleCompleteness(vehicleLike)
+
         return data
       },
     ],
   },
   admin: {
+    // Hidden from the sidebar nav: the custom Inventario manager at
+    // /admin/inventory is the primary inventory UI. Routes stay accessible.
+    group: false,
     useAsTitle: 'model',
-    defaultColumns: ['brand', 'model', 'year', 'price', 'condition', 'city', 'inventoryStatus'],
-    listSearchableFields: ['slug', 'brand', 'model', 'city'],
+    defaultColumns: [
+      'brand',
+      'model',
+      'year',
+      'price',
+      'condition',
+      'publishStatus',
+      'imageStatus',
+      'completenessScore',
+      'inventoryStatus',
+    ],
+    listSearchableFields: ['slug', 'brand', 'model', 'city', 'stockId', 'sourceId'],
     livePreview: {
       breakpoints: [
         { label: 'Mobile', name: 'mobile', width: 390, height: 844 },
@@ -259,11 +307,24 @@ export const Vehicles: CollectionConfig = {
     },
     preview: (doc) => `${FRONTEND_URL}/cars/${typeof doc?.slug === 'string' ? doc.slug : ''}`,
     components: {
-      beforeList: [
-        {
-          path: './components/VehicleImportLink',
+      views: {
+        // The default list view is replaced by a redirect to the custom
+        // Inventario manager so stale links/bookmarks land in the right place.
+        list: {
+          Component: './components/views/VehiclesListRedirect',
         },
-      ],
+        edit: {
+          workspace: {
+            Component: './components/views/VehicleWorkspaceView',
+            path: '/workspace',
+            tab: {
+              label: 'Espacio de trabajo',
+              href: '/workspace',
+              order: 100,
+            },
+          },
+        },
+      },
     },
   },
   labels: {
@@ -327,8 +388,43 @@ export const Vehicles: CollectionConfig = {
       },
     },
     { name: 'brand', type: 'text', required: true, label: 'Marca' },
+    { name: 'modelFamily', type: 'text', label: 'Familia de modelo' },
     { name: 'model', type: 'text', required: true, label: 'Modelo' },
-    { name: 'year', type: 'number', required: true, label: 'Año' },
+    { name: 'trim', type: 'text', label: 'Versión / Trim' },
+    {
+      name: 'year',
+      type: 'number',
+      label: 'Año',
+      admin: { description: 'Requerido para publicar. Opcional al importar borradores.' },
+    },
+    {
+      name: 'exteriorColor',
+      type: 'text',
+      label: 'Color exterior',
+    },
+    {
+      name: 'interiorColor',
+      type: 'text',
+      label: 'Color interior',
+    },
+    {
+      name: 'vehicleType',
+      type: 'text',
+      label: 'Tipo de vehículo',
+      admin: { description: 'Mapeado desde DES_TIPO_VEHICULO en importaciones.' },
+    },
+    {
+      name: 'segment',
+      type: 'text',
+      label: 'Segmento',
+      admin: { description: 'Mapeado desde DES_SEGMENTO en importaciones.' },
+    },
+    {
+      name: 'motorType',
+      type: 'text',
+      label: 'Tipo de motor',
+      admin: { description: 'Mapeado desde DES_TIPO_MOTOR en importaciones.' },
+    },
     {
       name: 'stockId',
       type: 'text',
@@ -418,10 +514,9 @@ export const Vehicles: CollectionConfig = {
     {
       name: 'price',
       type: 'text',
-      required: true,
       label: 'Precio',
       admin: {
-        description: 'Escribe un número o rango. Se guardará automáticamente como MXN.',
+        description: 'Requerido para publicar. Opcional al importar. Escribe un número o rango; se guardará como MXN.',
         placeholder: '398900 or 599000 - 798500',
         components: {
           afterInput: [
@@ -443,6 +538,112 @@ export const Vehicles: CollectionConfig = {
         { label: 'Apartado', value: 'reserved' },
         { label: 'Vendido', value: 'sold' },
       ],
+    },
+    {
+      name: 'publishStatus',
+      type: 'select',
+      label: 'Estado de publicación',
+      defaultValue: 'draft',
+      admin: { position: 'sidebar' },
+      options: [
+        { label: 'Borrador', value: 'draft' },
+        { label: 'En revisión', value: 'needs_review' },
+        { label: 'Publicado', value: 'published' },
+        { label: 'Archivado', value: 'archived' },
+      ],
+    },
+    {
+      name: 'imageStatus',
+      type: 'select',
+      label: 'Estado de imagen',
+      defaultValue: 'missing',
+      admin: {
+        position: 'sidebar',
+        description: 'Se calcula automáticamente salvo aprobaciones/rechazos manuales.',
+      },
+      options: [
+        { label: 'Sin imagen', value: 'missing' },
+        { label: 'Candidata encontrada', value: 'candidate_found' },
+        { label: 'Subida', value: 'uploaded' },
+        { label: 'Generada con IA', value: 'generated' },
+        { label: 'Aprobada', value: 'approved' },
+        { label: 'Rechazada', value: 'rejected' },
+      ],
+    },
+    {
+      name: 'specStatus',
+      type: 'select',
+      label: 'Estado de especificaciones',
+      defaultValue: 'missing',
+      admin: { position: 'sidebar' },
+      options: [
+        { label: 'Sin especificaciones', value: 'missing' },
+        { label: 'Parciales', value: 'partial' },
+        { label: 'Coincidencia automática', value: 'matched' },
+        { label: 'Manual', value: 'manual' },
+        { label: 'Verificadas', value: 'verified' },
+      ],
+    },
+    {
+      name: 'completenessScore',
+      type: 'number',
+      label: 'Completitud (%)',
+      defaultValue: 0,
+      admin: {
+        position: 'sidebar',
+        readOnly: true,
+        description: 'Calculado automáticamente al guardar.',
+      },
+    },
+    {
+      name: 'publishedAt',
+      type: 'date',
+      label: 'Publicado el',
+      admin: { position: 'sidebar', readOnly: true },
+    },
+    {
+      name: 'lastPublishedBy',
+      type: 'relationship',
+      relationTo: 'users',
+      label: 'Publicado por',
+      admin: { position: 'sidebar', readOnly: true },
+    },
+    {
+      name: 'lastReviewedAt',
+      type: 'date',
+      label: 'Revisado el',
+      admin: { position: 'sidebar', readOnly: true },
+    },
+    {
+      name: 'lastReviewedBy',
+      type: 'relationship',
+      relationTo: 'users',
+      label: 'Revisado por',
+      admin: { position: 'sidebar', readOnly: true },
+    },
+    {
+      name: 'reviewNotes',
+      type: 'textarea',
+      label: 'Notas de revisión',
+      admin: { position: 'sidebar' },
+    },
+    {
+      name: 'sourceId',
+      type: 'text',
+      label: 'ID de origen (IDV)',
+      admin: { description: 'Identificador del inventario de origen para detectar duplicados.' },
+    },
+    {
+      name: 'sourceImportId',
+      type: 'text',
+      label: 'ID del trabajo de importación',
+      admin: { hidden: true },
+    },
+    {
+      name: 'sourceDealerName',
+      type: 'text',
+      label: 'Agencia de origen (texto)',
+      admin: { description: 'Nombre de agencia tal como vino en el archivo importado.' },
     },
     {
       name: 'image',
