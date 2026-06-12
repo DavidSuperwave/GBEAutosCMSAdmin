@@ -1,0 +1,11 @@
+Use case: precise-object-edit
+Asset type: vehicle inventory listing photo / AI generation wizard test
+Primary request: Keep the exact SUV from the input photo, but replace the outdoor road and trees with a clean indoor dealership turntable studio.
+Input images: Image 1 is the only vehicle reference and edit target. Preserve this exact blue Hyundai SUV: same make/model appearance, grille shape, headlight shape, wheel design, body contours, roofline, paint color, camera angle, and proportions.
+Scene/backdrop: bright neutral gray/white curved cyclorama wall, glossy light gray circular turntable floor, subtle dark circular outline on the floor, clean dealership photo bay.
+Subject: the same blue Hyundai SUV from Image 1, stationary, front three-quarter angle, full vehicle visible.
+Style/medium: photorealistic automotive inventory photography, realistic reflections, crisp edges, natural lens perspective.
+Composition/framing: wide 16:9 frame, low eye-level camera, vehicle centered with comfortable margins.
+Lighting/mood: soft overhead studio light, realistic soft shadow under tires, mild floor reflection, polished but not CGI.
+Constraints: do not change the vehicle brand, grille, headlights, body, wheels, trim, stance, or color. Do not add Audi rings or any new badge. Change only background, ground plane, and lighting context.
+Avoid: outdoor road, trees, sky, road markings, copied reference cars, Audi styling, text, watermarks, extra vehicles, distorted wheels.

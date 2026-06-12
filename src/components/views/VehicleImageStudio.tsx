@@ -63,15 +63,6 @@ type Template = {
   referenceImage?: MediaRef
 }
 
-type Output = { image?: MediaRef; url?: string }
-
-type Job = {
-  id: number | string
-  outputs?: Output[]
-  status?: string
-  error?: string
-}
-
 type Candidate = {
   link: string
   thumbnail: string
@@ -87,6 +78,10 @@ type PreviewImage = {
   label: string
 }
 
+type CropTarget = PreviewImage & {
+  source?: string
+}
+
 /** Strip a leading brand from the model ("Mazda CX-50" -> "CX-50"). */
 function normalizeModel(brand: string, model: string): string {
   const m = (model || '').trim()
@@ -94,18 +89,6 @@ function normalizeModel(brand: string, model: string): string {
   if (b && m.toLowerCase().startsWith(`${b.toLowerCase()} `)) return m.slice(b.length).trim()
   return m
 }
-
-const PRESETS: Array<{ value: string; label: string }> = [
-  { value: 'vehicle_hero', label: 'Hero de listado' },
-  { value: 'clean_dealership_bg', label: 'Fondo de agencia limpio' },
-  { value: 'transparent_bg', label: 'Fondo transparente' },
-  { value: 'logo_overlay', label: 'Logo sobrepuesto' },
-  { value: 'homepage_banner', label: 'Banner de homepage' },
-  { value: 'social_ad', label: 'Anuncio para redes' },
-  { value: 'promo_banner', label: 'Promo banner' },
-  { value: 'seminuevo_gallery_cover', label: 'Portada galería seminuevo' },
-  { value: 'new_car_representative', label: 'Imagen representativa auto nuevo' },
-]
 
 const KNOWN_VEHICLE_MAKES = [
   'acura',
@@ -180,22 +163,13 @@ export default function VehicleImageStudio({
 }) {
   const vehicleId = vehicle.id
   const fileInputRef = useRef<HTMLInputElement>(null)
-  const refInputRef = useRef<HTMLInputElement>(null)
 
   const [assets, setAssets] = useState<Asset[]>([])
   const [templates, setTemplates] = useState<Template[]>([])
-  const [aiOpen] = useState(false)
-  const [aiUnavailable, setAiUnavailable] = useState(false)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
   const [notice, setNotice] = useState('')
   const [aiWizardOpen, setAiWizardOpen] = useState(false)
-
-  // Wizard state
-  const [preset, setPreset] = useState('vehicle_hero')
-  const [prompt, setPrompt] = useState('')
-  const [reference, setReference] = useState<{ id: number | string; url?: string } | null>(null)
-  const [job, setJob] = useState<Job | null>(null)
   const [uploadTarget, setUploadTarget] = useState<'hero' | 'gallery'>('hero')
 
   // Photo search (CarsXE) state
@@ -212,17 +186,12 @@ export default function VehicleImageStudio({
   const [searchUnavailable, setSearchUnavailable] = useState(false)
   const [importingUrl, setImportingUrl] = useState<string | null>(null)
   const [previewImage, setPreviewImage] = useState<PreviewImage | null>(null)
+  const [galleryItems, setGalleryItems] = useState(() => vehicle.gallery || [])
+  const [cropTarget, setCropTarget] = useState<CropTarget | null>(null)
 
-  const vehicleContext = useMemo(
-    () => ({
-      brand: vehicle.brand,
-      model: vehicle.model,
-      year: vehicle.year,
-      trim: vehicle.trim,
-      color: vehicle.exteriorColor,
-    }),
-    [vehicle.brand, vehicle.model, vehicle.year, vehicle.trim, vehicle.exteriorColor],
-  )
+  useEffect(() => {
+    setGalleryItems(vehicle.gallery || [])
+  }, [vehicle.gallery])
 
   const vehicleMatchKey = useMemo(
     () =>
@@ -316,19 +285,21 @@ export default function VehicleImageStudio({
 
   const addToGallery = useCallback(
     async (media: number | string) => {
-      const existing = (vehicle.gallery || [])
+      const existing = galleryItems
         .map((g) => mediaId(g.image))
         .filter((x): x is number | string => x != null)
         .map((image) => ({ image }))
+      const nextGallery = [...existing, { image: media }]
       const res = await fetch(`/api/vehicles/${vehicleId}`, {
         method: 'PATCH',
         credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ gallery: [...existing, { image: media }] }),
+        body: JSON.stringify({ gallery: nextGallery }),
       })
       if (!res.ok) throw new Error((await res.text()).slice(0, 160))
+      setGalleryItems(nextGallery)
     },
-    [vehicleId, vehicle.gallery],
+    [galleryItems, vehicleId],
   )
 
   const withBusy = useCallback(async (fn: () => Promise<void>, okMessage?: string) => {
@@ -348,7 +319,7 @@ export default function VehicleImageStudio({
   const removeFromGallery = useCallback(
     async (media: number | string) => {
       await withBusy(async () => {
-        const gallery = (vehicle.gallery || [])
+        const gallery = galleryItems
           .filter((g) => String(mediaId(g.image)) !== String(media))
           .map((g) => {
             const image = mediaId(g.image)
@@ -362,11 +333,12 @@ export default function VehicleImageStudio({
           body: JSON.stringify({ gallery }),
         })
         if (!res.ok) throw new Error((await res.text()).slice(0, 160))
+        setGalleryItems(gallery)
         if (String(previewImage?.id) === String(media)) setPreviewImage(null)
         onChanged()
       }, 'Imagen eliminada de la galeria.')
     },
-    [onChanged, previewImage?.id, vehicle.gallery, vehicleId, withBusy],
+    [galleryItems, onChanged, previewImage?.id, vehicleId, withBusy],
   )
 
   // ---- Upload actions ----------------------------------------------------
@@ -386,116 +358,6 @@ export default function VehicleImageStudio({
       if (fileInputRef.current) fileInputRef.current.value = ''
     },
     [withBusy, uploadMedia, uploadTarget, setHero, addToGallery, recordAsset, loadAssets, onChanged],
-  )
-
-  const handleReferenceUpload = useCallback(
-    async (event: React.ChangeEvent<HTMLInputElement>) => {
-      const file = event.target.files?.[0]
-      if (file) {
-        await withBusy(async () => {
-          const media = await uploadMedia(file)
-          await recordAsset(media.id, 'uploaded')
-          setReference({ id: media.id, url: media.url })
-          await loadAssets()
-        }, 'Referencia adjuntada.')
-      }
-      if (refInputRef.current) refInputRef.current.value = ''
-    },
-    [withBusy, uploadMedia, recordAsset, loadAssets],
-  )
-
-  // ---- AI wizard ---------------------------------------------------------
-  const ensureJob = useCallback(async (): Promise<Job> => {
-    const body = {
-      title: `${vehicle.brand || ''} ${vehicle.model || ''} ${vehicle.year || ''}`.trim() || 'Imagen IA',
-      linkedVehicle: vehicleId,
-      vehicleContext,
-      promptPreset: preset,
-      prompt,
-      saveDestination: 'vehicle_hero',
-      inputImages: reference ? [{ image: reference.id }] : [],
-    }
-    if (job?.id) {
-      const res = await fetch(`/api/workshop-jobs/${job.id}`, {
-        method: 'PATCH',
-        credentials: 'include',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body),
-      })
-      if (!res.ok) throw new Error((await res.text()).slice(0, 160))
-      return (await res.json()).doc as Job
-    }
-    const res = await fetch('/api/workshop-jobs', {
-      method: 'POST',
-      credentials: 'include',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(body),
-    })
-    if (!res.ok) throw new Error((await res.text()).slice(0, 160))
-    const created = (await res.json()).doc as Job
-    setJob(created)
-    return created
-  }, [job, vehicleId, vehicle.brand, vehicle.model, vehicle.year, vehicleContext, preset, prompt, reference])
-
-  const generate = useCallback(async () => {
-    await withBusy(async () => {
-      setAiUnavailable(false)
-      const ensured = await ensureJob()
-      const res = await fetch('/api/cms/workshop/generate', {
-        method: 'POST',
-        credentials: 'include',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ jobId: ensured.id }),
-      })
-      const data = (await res.json().catch(() => ({}))) as { ok?: boolean; configured?: boolean; error?: string }
-      if (res.status === 501 || data.configured === false) {
-        setAiUnavailable(true)
-      } else if (!res.ok || !data.ok) {
-        throw new Error(data.error || 'Falló la generación.')
-      }
-      const fresh = await fetch(`/api/workshop-jobs/${ensured.id}?depth=2`, { credentials: 'include' })
-      if (fresh.ok) setJob((await fresh.json()) as Job)
-    })
-  }, [withBusy, ensureJob])
-
-  const pickTemplate = useCallback((t: Template) => {
-    if (t.preset) setPreset(t.preset)
-    setPrompt(t.prompt || '')
-    const url = mediaUrl(t.referenceImage)
-    const refId = mediaId(t.referenceImage)
-    setReference(refId != null ? { id: refId, url } : null)
-  }, [])
-
-  const saveTemplate = useCallback(async () => {
-    const name = window.prompt('Nombre de la plantilla:')
-    if (!name) return
-    await withBusy(async () => {
-      await fetch('/api/image-templates', {
-        method: 'POST',
-        credentials: 'include',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name, preset, prompt, referenceImage: reference?.id }),
-      })
-      await loadTemplates()
-    }, 'Plantilla guardada.')
-  }, [withBusy, preset, prompt, reference, loadTemplates])
-
-  const saveOutput = useCallback(
-    async (output: Output, target: 'hero' | 'gallery') => {
-      const id = mediaId(output.image)
-      if (id == null) {
-        setError('Este resultado es solo una URL temporal. Configura el proveedor de IA para guardar el archivo.')
-        return
-      }
-      await withBusy(async () => {
-        if (target === 'hero') await setHero(id)
-        else await addToGallery(id)
-        await recordAsset(id, 'ai_generated', target === 'hero' ? 'vehicle_hero' : 'vehicle_gallery')
-        await loadAssets()
-        onChanged()
-      }, target === 'hero' ? 'Imagen principal actualizada.' : 'Imagen agregada a la galería.')
-    },
-    [withBusy, setHero, addToGallery, recordAsset, loadAssets, onChanged],
   )
 
   // ---- Photo search (CarsXE) --------------------------------------------
@@ -578,10 +440,6 @@ export default function VehicleImageStudio({
         }
         if (then === 'hero') await setHero(data.mediaId)
         else if (then === 'gallery') await addToGallery(data.mediaId)
-        else if (then === 'reference') {
-          setReference({ id: data.mediaId, url: data.mediaUrl })
-          window.location.href = `/admin/media-workspace?vehicleId=${encodeURIComponent(String(vehicleId))}&referenceId=${encodeURIComponent(String(data.mediaId))}`
-        }
         await loadAssets()
         onChanged()
         setNotice(
@@ -590,7 +448,7 @@ export default function VehicleImageStudio({
             : then === 'gallery'
               ? 'Imagen agregada a la galería.'
               : then === 'reference'
-                ? 'Imagen lista como referencia para el asistente IA.'
+                ? 'Imagen guardada en la biblioteca del vehículo.'
                 : 'Imagen guardada en la biblioteca del vehículo.',
         )
       } catch (e) {
@@ -605,13 +463,12 @@ export default function VehicleImageStudio({
   const useLocalAsset = useCallback(
     async (asset: Asset, then: 'hero' | 'gallery' | 'reference') => {
       const id = mediaId(asset.media)
-      const url = mediaUrl(asset.media)
       if (id == null) return
       await withBusy(async () => {
         if (then === 'hero') await setHero(id)
         else if (then === 'gallery') await addToGallery(id)
         else {
-          window.location.href = `/admin/media-workspace?vehicleId=${encodeURIComponent(String(vehicleId))}&referenceId=${encodeURIComponent(String(id))}`
+          setNotice('La referencia IA estará disponible más adelante.')
           return
         }
         await recordAsset(id, 'representative', then === 'hero' ? 'vehicle_hero' : 'vehicle_gallery', {
@@ -622,15 +479,47 @@ export default function VehicleImageStudio({
         await loadAssets()
         onChanged()
       }, then === 'hero' ? 'Imagen principal actualizada.' : then === 'gallery' ? 'Imagen agregada a la galería.' : undefined)
-      if (then === 'reference' && url) setReference({ id, url })
     },
     [vehicleId, withBusy, setHero, addToGallery, recordAsset, loadAssets, onChanged],
+  )
+
+  const saveCroppedImage = useCallback(
+    async (blob: Blob, destination: 'hero' | 'gallery') => {
+      if (!cropTarget) return
+      await withBusy(async () => {
+        const file = new File([blob], `crop-${vehicleId}-${Date.now()}.jpg`, { type: 'image/jpeg' })
+        const media = await uploadMedia(file)
+        if (destination === 'hero') await setHero(media.id)
+        else await addToGallery(media.id)
+        await recordAsset(media.id, 'ai_edited', destination === 'hero' ? 'vehicle_hero' : 'vehicle_gallery', {
+          sourceProvider: 'browser_crop',
+          sourceUrl: cropTarget.url,
+          approvalStatus: 'approved',
+          rightsStatus: 'owned',
+          notes: `Crop from media ${cropTarget.id}`,
+        })
+        await loadAssets()
+        onChanged()
+        setCropTarget(null)
+      }, destination === 'hero' ? 'Recorte aplicado como imagen principal.' : 'Recorte agregado a la galeria.')
+    },
+    [
+      addToGallery,
+      cropTarget,
+      loadAssets,
+      onChanged,
+      recordAsset,
+      setHero,
+      uploadMedia,
+      vehicleId,
+      withBusy,
+    ],
   )
 
   const heroUrl = mediaUrl(vehicle.image)
   const galleryImages = useMemo(
     () =>
-      (vehicle.gallery || [])
+      galleryItems
         .map((g, index) => {
           const url = mediaUrl(g.image)
           const id = mediaId(g.image)
@@ -638,11 +527,11 @@ export default function VehicleImageStudio({
           return { id, url, label: g.alt || `Galeria ${index + 1}` }
         })
         .filter((item): item is PreviewImage => item !== null),
-    [vehicle.gallery],
+    [galleryItems],
   )
-  const displayImage = previewImage || (heroUrl ? { url: heroUrl, label: 'Imagen principal' } : null)
-  const outputs = job?.outputs || []
-
+  const heroId = mediaId(vehicle.image)
+  const displayImage =
+    previewImage || (heroUrl && heroId != null ? { id: heroId, url: heroUrl, label: 'Imagen principal' } : null)
   useEffect(() => {
     if (!previewImage?.id) return
     if (!galleryImages.some((image) => String(image.id) === String(previewImage.id))) {
@@ -653,7 +542,6 @@ export default function VehicleImageStudio({
   return (
     <div className="studio">
       <input ref={fileInputRef} type="file" accept="image/*" hidden onChange={handleUpload} />
-      <input ref={refInputRef} type="file" accept="image/*" hidden onChange={handleReferenceUpload} />
 
       {error ? <div className="builder__error">{error}</div> : null}
       {notice ? <div className="workspace__notice">{notice}</div> : null}
@@ -664,6 +552,14 @@ export default function VehicleImageStudio({
           <div className="studio__hero-frame">
             <img className="studio__hero" src={displayImage.url} alt={displayImage.label} />
             <span>{displayImage.label}</span>
+            <button
+              className="studio__crop-button"
+              disabled={busy}
+              onClick={() => setCropTarget({ ...displayImage, source: 'current' })}
+              type="button"
+            >
+              Recortar
+            </button>
           </div>
         ) : (
           <EmptyState title="Sin imagen principal" message="Sube una imagen o créala con IA." />
@@ -734,6 +630,15 @@ export default function VehicleImageStudio({
                 type="button"
               >
                 Eliminar
+              </button>
+              <button
+                aria-label={`Recortar ${image.label}`}
+                className="studio__gallery-crop"
+                disabled={busy}
+                onClick={() => setCropTarget({ ...image, source: 'gallery' })}
+                type="button"
+              >
+                Recortar
               </button>
             </figure>
           ))}
@@ -830,7 +735,8 @@ export default function VehicleImageStudio({
               <div className="studio__grid">
                 {localMatches.map((asset) => {
                   const url = mediaUrl(asset.media)
-                  if (!url) return null
+                  const assetMediaId = mediaId(asset.media)
+                  if (!url || assetMediaId == null) return null
                   return (
                     <div key={asset.id} className="studio__output">
                       <img src={url} alt={asset.title || ''} />
@@ -844,8 +750,19 @@ export default function VehicleImageStudio({
                         <button type="button" disabled={busy} onClick={() => void useLocalAsset(asset, 'gallery')}>
                           Galería
                         </button>
-                        <button type="button" disabled={busy} onClick={() => void useLocalAsset(asset, 'reference')}>
-                          Usar en IA
+                        <button
+                          type="button"
+                          disabled={busy}
+                          onClick={() =>
+                            setCropTarget({
+                              id: assetMediaId,
+                              url,
+                              label: asset.title || 'Imagen',
+                              source: 'local',
+                            })
+                          }
+                        >
+                          Recortar
                         </button>
                       </div>
                     </div>
@@ -878,9 +795,6 @@ export default function VehicleImageStudio({
                       <button type="button" disabled={busy || importing} onClick={() => void importCandidate(candidate, 'gallery')}>
                         Galería
                       </button>
-                      <button type="button" disabled={busy || importing} onClick={() => void importCandidate(candidate, 'reference')}>
-                        Usar en IA
-                      </button>
                       <button type="button" disabled={busy || importing} onClick={() => void importCandidate(candidate)}>
                         Guardar
                       </button>
@@ -892,106 +806,6 @@ export default function VehicleImageStudio({
           ) : null}
             </div>
           </section>
-        </div>
-      ) : null}
-
-      {/* AI wizard */}
-      {aiOpen ? (
-        <div className="studio__wizard">
-          <div className="studio__wizard-head">
-            <h4>Asistente de imagen con IA</h4>
-            <span className="builder__muted">
-              {vehicleContext.brand} {vehicleContext.model} {vehicleContext.year}
-              {vehicleContext.color ? ` · ${vehicleContext.color}` : ''}
-            </span>
-          </div>
-
-          {aiUnavailable ? (
-            <div className="workshop-editor__banner">
-              La generación con IA no está configurada. Define <code>AI_IMAGE_API_KEY</code> en el servidor para
-              habilitarla. Puedes preparar el trabajo, adjuntar una referencia y guardar plantillas mientras tanto.
-            </div>
-          ) : null}
-
-          <label className="builder__field">
-            <span>¿Qué tipo de imagen quieres crear?</span>
-            <select className="builder__select" value={preset} onChange={(e) => setPreset(e.target.value)}>
-              {PRESETS.map((p) => (
-                <option key={p.value} value={p.value}>
-                  {p.label}
-                </option>
-              ))}
-            </select>
-          </label>
-
-          {templates.length ? (
-            <div className="studio__templates">
-              <span className="builder__muted">Plantillas guardadas:</span>
-              <div className="studio__chips">
-                {templates.map((t) => (
-                  <button key={t.id} type="button" className="studio__chip" onClick={() => pickTemplate(t)}>
-                    {t.name || 'Plantilla'}
-                  </button>
-                ))}
-              </div>
-            </div>
-          ) : null}
-
-          <label className="builder__field">
-            <span>Prompt / instrucciones</span>
-            <textarea
-              rows={3}
-              value={prompt}
-              onChange={(e) => setPrompt(e.target.value)}
-              placeholder="Ej. Sedán plateado en estudio, fondo blanco, ángulo 3/4 frontal…"
-            />
-          </label>
-
-          <div className="studio__reference">
-            {reference?.url ? <img src={reference.url} alt="Referencia" /> : null}
-            <ActionButton variant="secondary" disabled={busy} onClick={() => refInputRef.current?.click()}>
-              {reference ? 'Cambiar referencia / plantilla' : 'Subir referencia / plantilla'}
-            </ActionButton>
-            {reference ? (
-              <ActionButton variant="secondary" disabled={busy} onClick={() => setReference(null)}>
-                Quitar referencia
-              </ActionButton>
-            ) : null}
-          </div>
-
-          <div className="studio__actions">
-            <ActionButton variant="primary" disabled={busy} onClick={() => void generate()}>
-              {busy ? 'Procesando…' : 'Generar'}
-            </ActionButton>
-            <ActionButton variant="secondary" disabled={busy} onClick={() => void saveTemplate()}>
-              Guardar como plantilla
-            </ActionButton>
-          </div>
-
-          {outputs.length ? (
-            <div className="studio__outputs">
-              <span className="builder__muted">Resultados</span>
-              <div className="studio__grid">
-                {outputs.map((output, i) => {
-                  const url = mediaUrl(output.image) || output.url
-                  if (!url) return null
-                  return (
-                    <div key={i} className="studio__output">
-                      <img src={url} alt={`Resultado ${i + 1}`} />
-                      <div className="studio__output-actions">
-                        <button type="button" disabled={busy} onClick={() => void saveOutput(output, 'hero')}>
-                          Usar como principal
-                        </button>
-                        <button type="button" disabled={busy} onClick={() => void saveOutput(output, 'gallery')}>
-                          A galería
-                        </button>
-                      </div>
-                    </div>
-                  )
-                })}
-              </div>
-            </div>
-          ) : null}
         </div>
       ) : null}
 
@@ -1027,8 +841,12 @@ export default function VehicleImageStudio({
                     >
                       A galería
                     </button>
-                    <button type="button" disabled={busy} onClick={() => setReference({ id, url })}>
-                      Como referencia
+                    <button
+                      type="button"
+                      disabled={busy}
+                      onClick={() => setCropTarget({ id, url, label: asset.title || 'Imagen', source: 'library' })}
+                    >
+                      Recortar
                     </button>
                   </div>
                 </div>
@@ -1037,6 +855,156 @@ export default function VehicleImageStudio({
           </div>
         </div>
       ) : null}
+
+      {cropTarget ? (
+        <CropImageModal
+          busy={busy}
+          image={cropTarget}
+          onClose={() => setCropTarget(null)}
+          onSave={(blob, destination) => void saveCroppedImage(blob, destination)}
+        />
+      ) : null}
+    </div>
+  )
+}
+
+function CropImageModal({
+  busy,
+  image,
+  onClose,
+  onSave,
+}: {
+  busy: boolean
+  image: CropTarget
+  onClose: () => void
+  onSave: (blob: Blob, destination: 'hero' | 'gallery') => void
+}) {
+  const canvasRef = useRef<HTMLCanvasElement>(null)
+  const [zoom, setZoom] = useState(1)
+  const [offsetX, setOffsetX] = useState(0)
+  const [offsetY, setOffsetY] = useState(0)
+  const [error, setError] = useState('')
+
+  const draw = useCallback(async () => {
+    const canvas = canvasRef.current
+    if (!canvas) return
+    const ctx = canvas.getContext('2d')
+    if (!ctx) return
+
+    await new Promise<void>((resolve, reject) => {
+      const img = new Image()
+      img.crossOrigin = 'anonymous'
+      img.onload = () => {
+        const canvasRatio = canvas.width / canvas.height
+        const imageRatio = img.naturalWidth / img.naturalHeight
+        const baseWidth = imageRatio > canvasRatio ? canvas.height * imageRatio : canvas.width
+        const baseHeight = imageRatio > canvasRatio ? canvas.height : canvas.width / imageRatio
+        const drawWidth = baseWidth * zoom
+        const drawHeight = baseHeight * zoom
+        const maxShiftX = Math.max(0, (drawWidth - canvas.width) / 2)
+        const maxShiftY = Math.max(0, (drawHeight - canvas.height) / 2)
+        const x = (canvas.width - drawWidth) / 2 + (offsetX / 100) * maxShiftX
+        const y = (canvas.height - drawHeight) / 2 + (offsetY / 100) * maxShiftY
+
+        ctx.fillStyle = '#f3f5f7'
+        ctx.fillRect(0, 0, canvas.width, canvas.height)
+        ctx.drawImage(img, x, y, drawWidth, drawHeight)
+        resolve()
+      }
+      img.onerror = () => reject(new Error('No se pudo cargar la imagen para recortar.'))
+      img.src = image.url
+    })
+  }, [image.url, offsetX, offsetY, zoom])
+
+  useEffect(() => {
+    setError('')
+    void draw().catch((err) => setError(err instanceof Error ? err.message : 'Error al preparar recorte.'))
+  }, [draw])
+
+  const save = useCallback(
+    async (destination: 'hero' | 'gallery') => {
+      const canvas = canvasRef.current
+      if (!canvas) return
+      try {
+        await draw()
+        const blob = await new Promise<Blob>((resolve, reject) => {
+          canvas.toBlob((nextBlob) => {
+            if (!nextBlob) reject(new Error('No se pudo generar el recorte.'))
+            else resolve(nextBlob)
+          }, 'image/jpeg', 0.92)
+        })
+        onSave(blob, destination)
+      } catch (err) {
+        setError(err instanceof Error ? err.message : 'No se pudo guardar el recorte.')
+      }
+    },
+    [draw, onSave],
+  )
+
+  return (
+    <div className="studio-crop" role="dialog" aria-modal="true" aria-label="Recortar imagen">
+      <button className="studio-crop__backdrop" onClick={onClose} type="button" />
+      <section className="studio-crop__panel">
+        <header className="studio-crop__header">
+          <div>
+            <p>Editar imagen</p>
+            <h3>{image.label}</h3>
+          </div>
+          <button aria-label="Cerrar recorte" onClick={onClose} type="button">
+            x
+          </button>
+        </header>
+        <div className="studio-crop__body">
+          <canvas ref={canvasRef} width={1200} height={900} />
+          <div className="studio-crop__controls">
+            <label className="builder__field">
+              <span>Zoom</span>
+              <input
+                max="2.5"
+                min="1"
+                onChange={(event) => setZoom(Number(event.target.value))}
+                step="0.05"
+                type="range"
+                value={zoom}
+              />
+            </label>
+            <label className="builder__field">
+              <span>Horizontal</span>
+              <input
+                max="100"
+                min="-100"
+                onChange={(event) => setOffsetX(Number(event.target.value))}
+                step="1"
+                type="range"
+                value={offsetX}
+              />
+            </label>
+            <label className="builder__field">
+              <span>Vertical</span>
+              <input
+                max="100"
+                min="-100"
+                onChange={(event) => setOffsetY(Number(event.target.value))}
+                step="1"
+                type="range"
+                value={offsetY}
+              />
+            </label>
+          </div>
+        </div>
+        {error ? <div className="builder__error">{error}</div> : null}
+        <footer className="studio-crop__footer">
+          <ActionButton variant="secondary" disabled={busy} onClick={onClose}>
+            Cancelar
+          </ActionButton>
+          <ActionButton variant="secondary" disabled={busy} onClick={() => void save('gallery')}>
+            Guardar en galeria
+          </ActionButton>
+          <ActionButton variant="primary" disabled={busy} onClick={() => void save('hero')}>
+            Usar como principal
+          </ActionButton>
+        </footer>
+      </section>
     </div>
   )
 }

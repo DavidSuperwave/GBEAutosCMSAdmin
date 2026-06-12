@@ -2,7 +2,15 @@
 
 import React, { useCallback, useEffect, useMemo, useState } from 'react'
 
-import { ActionButton, AdminPageHeader, EmptyState, StatusBadge } from '../admin-ui/kit'
+import {
+  ActionButton,
+  AdminPageHeader,
+  AdminPageShell,
+  AdminTable,
+  AdminTabs,
+  EmptyState,
+  StatusBadge,
+} from '../admin-ui/kit'
 import VehicleImportModal from '../admin-ui/VehicleImportModal'
 import {
   IMAGE_STATUS_LABELS,
@@ -24,6 +32,7 @@ type Vehicle = {
   inventoryStatus?: string
   city?: string
   exteriorColor?: string
+  dealership?: { name?: string; displayName?: string; city?: string } | string | number | null
   image?: { url?: string; thumbnailURL?: string } | string | null
 }
 
@@ -33,17 +42,70 @@ type TabKey =
   | 'drafts'
   | 'needs_review'
   | 'missing_images'
-  | 'seminuevos'
+  | 'missing_agency'
   | 'nuevos'
+  | 'seminuevos'
+  | 'reserved'
+  | 'sold'
+  | 'archived'
 
-const TABS: Array<{ key: TabKey; label: string; where: string }> = [
-  { key: 'all', label: 'Todos', where: '' },
-  { key: 'published', label: 'Publicados', where: 'where[publishStatus][equals]=published' },
-  { key: 'drafts', label: 'Borradores', where: 'where[publishStatus][equals]=draft' },
-  { key: 'needs_review', label: 'En revisión', where: 'where[publishStatus][equals]=needs_review' },
-  { key: 'missing_images', label: 'Sin imagen', where: 'where[imageStatus][equals]=missing' },
-  { key: 'seminuevos', label: 'Seminuevos', where: 'where[condition][equals]=used' },
-  { key: 'nuevos', label: 'Nuevos', where: 'where[condition][equals]=new' },
+type TabDefinition = {
+  key: TabKey
+  label: string
+  where: (scope: string) => string[]
+}
+
+const equalsFilter = (scope: string, field: string, value: string) =>
+  `${scope}[${field}][equals]=${encodeURIComponent(value)}`
+
+const TABS: TabDefinition[] = [
+  { key: 'all', label: 'Todos', where: () => [] },
+  {
+    key: 'published',
+    label: 'Publicados',
+    where: (scope) => [equalsFilter(scope, 'publishStatus', 'published')],
+  },
+  {
+    key: 'drafts',
+    label: 'Borradores',
+    where: (scope) => [equalsFilter(scope, 'publishStatus', 'draft')],
+  },
+  {
+    key: 'needs_review',
+    label: 'En revisión',
+    where: (scope) => [equalsFilter(scope, 'publishStatus', 'needs_review')],
+  },
+  {
+    key: 'missing_images',
+    label: 'Sin imagen',
+    where: (scope) => [equalsFilter(scope, 'imageStatus', 'missing')],
+  },
+  {
+    key: 'missing_agency',
+    label: 'Sin agencia',
+    where: (scope) => [`${scope}[dealership][exists]=false`],
+  },
+  { key: 'nuevos', label: 'Nuevos', where: (scope) => [equalsFilter(scope, 'condition', 'new')] },
+  {
+    key: 'seminuevos',
+    label: 'Seminuevos',
+    where: (scope) => [equalsFilter(scope, 'condition', 'used')],
+  },
+  {
+    key: 'reserved',
+    label: 'Apartados',
+    where: (scope) => [equalsFilter(scope, 'inventoryStatus', 'reserved')],
+  },
+  {
+    key: 'sold',
+    label: 'Vendidos',
+    where: (scope) => [equalsFilter(scope, 'inventoryStatus', 'sold')],
+  },
+  {
+    key: 'archived',
+    label: 'Archivados',
+    where: (scope) => [equalsFilter(scope, 'publishStatus', 'archived')],
+  },
 ]
 
 const PAGE_SIZE = 20
@@ -55,8 +117,20 @@ const PUBLISH_TONE: Record<string, 'neutral' | 'success' | 'warning' | 'danger' 
   archived: 'danger',
 }
 
-function tabWhere(tab: TabKey): string {
-  return TABS.find((t) => t.key === tab)?.where || ''
+const INVENTORY_STATUS_LABELS: Record<string, string> = {
+  available: 'Disponible',
+  reserved: 'Apartado',
+  sold: 'Vendido',
+}
+
+const INVENTORY_TONE: Record<string, 'neutral' | 'success' | 'warning' | 'danger' | 'info'> = {
+  available: 'success',
+  reserved: 'warning',
+  sold: 'neutral',
+}
+
+function tabDefinition(tab: TabKey): TabDefinition {
+  return TABS.find((t) => t.key === tab) || TABS[0]
 }
 
 function isTabKey(value: string | null): value is TabKey {
@@ -65,19 +139,17 @@ function isTabKey(value: string | null): value is TabKey {
 
 function buildQuery(tab: TabKey, search: string, page: number, sort: string): string {
   const parts: string[] = [`limit=${PAGE_SIZE}`, `page=${page}`, `depth=1`, `sort=${sort}`]
-  const base = tabWhere(tab)
   const trimmed = search.trim()
-  if (base && trimmed) {
-    // tab filter AND (brand/model/city like search)
-    const tabField = base.replace(/^where\[/, 'where[and][0][').replace('=', '=')
-    parts.push(tabField)
+  const base = tabDefinition(tab).where(trimmed ? 'where[and][0]' : 'where')
+  if (base.length > 0 && trimmed) {
+    parts.push(...base)
     const q = encodeURIComponent(trimmed)
     parts.push(`where[and][1][or][0][brand][like]=${q}`)
     parts.push(`where[and][1][or][1][model][like]=${q}`)
     parts.push(`where[and][1][or][2][city][like]=${q}`)
     parts.push(`where[and][1][or][3][exteriorColor][like]=${q}`)
-  } else if (base) {
-    parts.push(base)
+  } else if (base.length > 0) {
+    parts.push(...base)
   } else if (trimmed) {
     const q = encodeURIComponent(trimmed)
     parts.push(`where[or][0][brand][like]=${q}`)
@@ -91,6 +163,19 @@ function buildQuery(tab: TabKey, search: string, page: number, sort: string): st
 function imageUrl(image: Vehicle['image']): string | undefined {
   if (!image || typeof image === 'string') return undefined
   return image.thumbnailURL || image.url
+}
+
+function dealershipLabel(vehicle: Vehicle): string {
+  if (vehicle.dealership && typeof vehicle.dealership === 'object') {
+    return vehicle.dealership.displayName || vehicle.dealership.name || 'Agencia asignada'
+  }
+  return vehicle.dealership ? 'Agencia asignada' : 'Sin agencia'
+}
+
+function conditionLabel(condition?: string) {
+  if (condition === 'used') return 'Seminuevo'
+  if (condition === 'new') return 'Nuevo'
+  return '—'
 }
 
 export default function InventoryManager() {
@@ -108,6 +193,12 @@ export default function InventoryManager() {
   const [error, setError] = useState<string | null>(null)
   const [bulkBusy, setBulkBusy] = useState(false)
   const [importOpen, setImportOpen] = useState(false)
+
+  useEffect(() => {
+    if (window.location.pathname.endsWith('/admin/collections/vehicles/create')) {
+      window.location.replace('/admin/inventory/new')
+    }
+  }, [])
 
   // Deep links: /admin/inventory?tab=missing_images preselects a filter tab
   // (used by the dashboard shortcuts). Applied after mount to avoid SSR
@@ -150,7 +241,7 @@ export default function InventoryManager() {
   const fetchCounts = useCallback(async () => {
     const entries = await Promise.all(
       TABS.map(async (t) => {
-        const q = [`limit=1`, `depth=0`, t.where].filter(Boolean).join('&')
+        const q = [`limit=1`, `depth=0`, ...t.where('where')].join('&')
         try {
           const res = await fetch(`/api/vehicles?${q}`, { credentials: 'include' })
           if (!res.ok) return [t.key, 0] as const
@@ -218,7 +309,10 @@ export default function InventoryManager() {
 
   const deleteBulk = useCallback(async () => {
     if (selected.size === 0) return
-    if (!window.confirm(`¿Eliminar ${selected.size} vehículo(s)? Esta acción no se puede deshacer.`)) return
+    if (
+      !window.confirm(`¿Eliminar ${selected.size} vehículo(s)? Esta acción no se puede deshacer.`)
+    )
+      return
     setBulkBusy(true)
     try {
       await Promise.all(
@@ -246,7 +340,7 @@ export default function InventoryManager() {
             <ActionButton onClick={() => setImportOpen(true)} variant="primary">
               Importar CSV/XLSX
             </ActionButton>
-            <ActionButton href="/admin/collections/vehicles/create" variant="secondary">
+            <ActionButton href="/admin/inventory/new" variant="secondary">
               + Nuevo vehículo
             </ActionButton>
             <ActionButton onClick={() => void fetchList()} variant="secondary" disabled={loading}>
@@ -260,7 +354,7 @@ export default function InventoryManager() {
   )
 
   return (
-    <div className="admin-kit-shell inventory">
+    <AdminPageShell className="inventory">
       {header}
 
       <VehicleImportModal
@@ -272,23 +366,20 @@ export default function InventoryManager() {
         }}
       />
 
-
-      <div className="inventory__tabs">
-        {TABS.map((t) => (
-          <button
-            key={t.key}
-            type="button"
-            className={`inventory__tab${tab === t.key ? ' inventory__tab--active' : ''}`}
-            onClick={() => {
-              setTab(t.key)
-              setPage(1)
-            }}
-          >
-            {t.label}
-            {typeof counts[t.key] === 'number' ? <span className="inventory__tab-count">{counts[t.key]}</span> : null}
-          </button>
-        ))}
-      </div>
+      <AdminTabs
+        active={tab}
+        ariaLabel="Filtros de inventario"
+        className="inventory__tabs"
+        items={TABS.map((t) => ({
+          key: t.key,
+          label: t.label,
+          badge: typeof counts[t.key] === 'number' ? counts[t.key] : undefined,
+        }))}
+        onChange={(key) => {
+          setTab(key)
+          setPage(1)
+        }}
+      />
 
       <div className="inventory__toolbar">
         <form
@@ -324,18 +415,53 @@ export default function InventoryManager() {
           <ActionButton
             variant="primary"
             disabled={bulkBusy}
-            onClick={() => void runBulk({ publishStatus: 'published' }, '¿Publicar los vehículos seleccionados?')}
+            onClick={() =>
+              void runBulk({ publishStatus: 'published' }, '¿Publicar los vehículos seleccionados?')
+            }
           >
             Publicar
           </ActionButton>
-          <ActionButton variant="secondary" disabled={bulkBusy} onClick={() => void runBulk({ publishStatus: 'needs_review' })}>
+          <ActionButton
+            variant="secondary"
+            disabled={bulkBusy}
+            onClick={() => void runBulk({ publishStatus: 'needs_review' })}
+          >
             Enviar a revisión
           </ActionButton>
-          <ActionButton variant="secondary" disabled={bulkBusy} onClick={() => void runBulk({ publishStatus: 'draft' })}>
+          <ActionButton
+            variant="secondary"
+            disabled={bulkBusy}
+            onClick={() => void runBulk({ publishStatus: 'draft' })}
+          >
             Mover a borrador
           </ActionButton>
-          <ActionButton variant="secondary" disabled={bulkBusy} onClick={() => void runBulk({ publishStatus: 'archived' })}>
+          <ActionButton
+            variant="secondary"
+            disabled={bulkBusy}
+            onClick={() => void runBulk({ publishStatus: 'archived' })}
+          >
             Archivar
+          </ActionButton>
+          <ActionButton
+            variant="secondary"
+            disabled={bulkBusy}
+            onClick={() => void runBulk({ inventoryStatus: 'available' })}
+          >
+            Disponible
+          </ActionButton>
+          <ActionButton
+            variant="secondary"
+            disabled={bulkBusy}
+            onClick={() => void runBulk({ inventoryStatus: 'reserved' })}
+          >
+            Apartar
+          </ActionButton>
+          <ActionButton
+            variant="secondary"
+            disabled={bulkBusy}
+            onClick={() => void runBulk({ inventoryStatus: 'sold' })}
+          >
+            Vendido
           </ActionButton>
           <ActionButton variant="danger" disabled={bulkBusy} onClick={() => void deleteBulk()}>
             Eliminar
@@ -348,73 +474,191 @@ export default function InventoryManager() {
       {loading ? (
         <p className="builder__muted">Cargando inventario…</p>
       ) : docs.length === 0 ? (
-        <EmptyState title="Sin resultados" message="No hay vehículos que coincidan con este filtro." />
+        <EmptyState
+          title="Sin resultados"
+          message="No hay vehículos que coincidan con este filtro."
+        />
       ) : (
-        <table className="inventory__table">
-          <thead>
-            <tr>
-              <th>
-                <input type="checkbox" checked={allSelected} onChange={toggleSelectAll} aria-label="Seleccionar todos" />
-              </th>
-              <th>Vehículo</th>
-              <th>Precio</th>
-              <th>Condición</th>
-              <th>Publicación</th>
-              <th>Imagen</th>
-              <th>Completitud</th>
-              <th></th>
-            </tr>
-          </thead>
-          <tbody>
+        <>
+          <AdminTable tableClassName="inventory__table">
+            <thead>
+              <tr>
+                <th>
+                  <input
+                    type="checkbox"
+                    checked={allSelected}
+                    onChange={toggleSelectAll}
+                    aria-label="Seleccionar todos"
+                  />
+                </th>
+                <th>Vehículo</th>
+                <th>Precio</th>
+                <th>Condición</th>
+                <th>Inventario</th>
+                <th>Publicación</th>
+                <th>Imagen</th>
+                <th>Completitud</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody>
+              {docs.map((vehicle) => {
+                const id = String(vehicle.id)
+                const url = imageUrl(vehicle.image)
+                return (
+                  <tr key={id} className={selected.has(id) ? 'is-selected' : ''}>
+                    <td>
+                      <input
+                        type="checkbox"
+                        checked={selected.has(id)}
+                        onChange={() => toggleSelect(id)}
+                      />
+                    </td>
+                    <td>
+                      <div className="inventory__vehicle">
+                        {url ? (
+                          <img src={url} alt="" />
+                        ) : (
+                          <div className="inventory__thumb-empty">—</div>
+                        )}
+                        <div>
+                          <strong>
+                            {vehicle.brand || '—'} {vehicle.model || ''}
+                          </strong>
+                          {vehicle.exteriorColor ? (
+                            <small>Color: {vehicle.exteriorColor}</small>
+                          ) : null}
+                          <small>
+                            {vehicle.year || 's/año'} · {vehicle.city || 'sin ciudad'}
+                          </small>
+                          <small>{dealershipLabel(vehicle)}</small>
+                        </div>
+                      </div>
+                    </td>
+                    <td>{vehicle.price || '—'}</td>
+                    <td>{conditionLabel(vehicle.condition)}</td>
+                    <td>
+                      <StatusBadge
+                        tone={INVENTORY_TONE[vehicle.inventoryStatus || ''] || 'neutral'}
+                      >
+                        {INVENTORY_STATUS_LABELS[vehicle.inventoryStatus || ''] || 'Sin estatus'}
+                      </StatusBadge>
+                    </td>
+                    <td>
+                      <StatusBadge
+                        tone={PUBLISH_TONE[vehicle.publishStatus || 'draft'] || 'neutral'}
+                      >
+                        {PUBLISH_STATUS_LABELS[(vehicle.publishStatus as PublishStatus) || 'draft']}
+                      </StatusBadge>
+                    </td>
+                    <td>
+                      <StatusBadge tone={vehicle.imageStatus === 'missing' ? 'danger' : 'info'}>
+                        {IMAGE_STATUS_LABELS[(vehicle.imageStatus as ImageStatus) || 'missing']}
+                      </StatusBadge>
+                    </td>
+                    <td>
+                      <div
+                        className="inventory__progress"
+                        title={`${vehicle.completenessScore ?? 0}%`}
+                      >
+                        <span style={{ width: `${vehicle.completenessScore ?? 0}%` }} />
+                      </div>
+                    </td>
+                    <td className="inventory__row-actions">
+                      <ActionButton
+                        href={`/admin/collections/vehicles/${id}/workspace`}
+                        size="sm"
+                        variant="secondary"
+                      >
+                        Abrir
+                      </ActionButton>
+                    </td>
+                  </tr>
+                )
+              })}
+            </tbody>
+          </AdminTable>
+
+          <div className="inventory__cards" aria-label="Inventario en tarjetas">
             {docs.map((vehicle) => {
               const id = String(vehicle.id)
               const url = imageUrl(vehicle.image)
               return (
-                <tr key={id} className={selected.has(id) ? 'is-selected' : ''}>
-                  <td>
-                    <input type="checkbox" checked={selected.has(id)} onChange={() => toggleSelect(id)} />
-                  </td>
-                  <td>
-                    <div className="inventory__vehicle">
-                      {url ? <img src={url} alt="" /> : <div className="inventory__thumb-empty">—</div>}
-                      <div>
-                        <strong>
-                          {vehicle.brand || '—'} {vehicle.model || ''}
-                        </strong>
-                        {vehicle.exteriorColor ? <small>Color: {vehicle.exteriorColor}</small> : null}
-                        <small>
-                          {vehicle.year || 's/año'} · {vehicle.city || 'sin ciudad'}
-                        </small>
-                      </div>
+                <article
+                  key={id}
+                  className={`inventory-card${selected.has(id) ? ' is-selected' : ''}`}
+                >
+                  <div className="inventory-card__top">
+                    <label className="inventory-card__select">
+                      <input
+                        type="checkbox"
+                        checked={selected.has(id)}
+                        onChange={() => toggleSelect(id)}
+                      />
+                      <span>Seleccionar</span>
+                    </label>
+                    <ActionButton
+                      href={`/admin/collections/vehicles/${id}/workspace`}
+                      size="sm"
+                      variant="secondary"
+                    >
+                      Abrir
+                    </ActionButton>
+                  </div>
+                  <div className="inventory-card__vehicle">
+                    {url ? (
+                      <img src={url} alt="" />
+                    ) : (
+                      <div className="inventory__thumb-empty">—</div>
+                    )}
+                    <div>
+                      <strong>
+                        {vehicle.brand || '—'} {vehicle.model || ''}
+                      </strong>
+                      <small>
+                        {vehicle.year || 's/año'} · {vehicle.city || 'sin ciudad'}
+                      </small>
+                      <small>{dealershipLabel(vehicle)}</small>
                     </div>
-                  </td>
-                  <td>{vehicle.price || '—'}</td>
-                  <td>{vehicle.condition === 'used' ? 'Seminuevo' : vehicle.condition === 'new' ? 'Nuevo' : '—'}</td>
-                  <td>
+                  </div>
+                  <dl className="inventory-card__facts">
+                    <div>
+                      <dt>Precio</dt>
+                      <dd>{vehicle.price || '—'}</dd>
+                    </div>
+                    <div>
+                      <dt>Condición</dt>
+                      <dd>{conditionLabel(vehicle.condition)}</dd>
+                    </div>
+                    {vehicle.exteriorColor ? (
+                      <div>
+                        <dt>Color</dt>
+                        <dd>{vehicle.exteriorColor}</dd>
+                      </div>
+                    ) : null}
+                  </dl>
+                  <div className="inventory-card__badges">
+                    <StatusBadge tone={INVENTORY_TONE[vehicle.inventoryStatus || ''] || 'neutral'}>
+                      {INVENTORY_STATUS_LABELS[vehicle.inventoryStatus || ''] || 'Sin estatus'}
+                    </StatusBadge>
                     <StatusBadge tone={PUBLISH_TONE[vehicle.publishStatus || 'draft'] || 'neutral'}>
                       {PUBLISH_STATUS_LABELS[(vehicle.publishStatus as PublishStatus) || 'draft']}
                     </StatusBadge>
-                  </td>
-                  <td>
                     <StatusBadge tone={vehicle.imageStatus === 'missing' ? 'danger' : 'info'}>
                       {IMAGE_STATUS_LABELS[(vehicle.imageStatus as ImageStatus) || 'missing']}
                     </StatusBadge>
-                  </td>
-                  <td>
-                    <div className="inventory__progress" title={`${vehicle.completenessScore ?? 0}%`}>
+                  </div>
+                  <div className="inventory-card__completeness">
+                    <span>Completitud {vehicle.completenessScore ?? 0}%</span>
+                    <div className="inventory__progress">
                       <span style={{ width: `${vehicle.completenessScore ?? 0}%` }} />
                     </div>
-                  </td>
-                  <td className="inventory__row-actions">
-                    <a className="admin-kit-btn admin-kit-btn--secondary" href={`/admin/collections/vehicles/${id}/workspace`}>
-                      Abrir
-                    </a>
-                  </td>
-                </tr>
+                  </div>
+                </article>
               )
             })}
-          </tbody>
-        </table>
+          </div>
+        </>
       )}
 
       <div className="inventory__pagination">
@@ -422,24 +666,24 @@ export default function InventoryManager() {
           {totalDocs} vehículo(s) · página {page} de {totalPages}
         </span>
         <div>
-          <button
-            type="button"
-            className="admin-kit-btn admin-kit-btn--secondary"
+          <ActionButton
             disabled={page <= 1 || loading}
             onClick={() => setPage((p) => Math.max(1, p - 1))}
+            size="sm"
+            variant="secondary"
           >
             ← Anterior
-          </button>
-          <button
-            type="button"
-            className="admin-kit-btn admin-kit-btn--secondary"
+          </ActionButton>
+          <ActionButton
             disabled={page >= totalPages || loading}
             onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+            size="sm"
+            variant="secondary"
           >
             Siguiente →
-          </button>
+          </ActionButton>
         </div>
       </div>
-    </div>
+    </AdminPageShell>
   )
 }

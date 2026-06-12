@@ -19,6 +19,8 @@ import { VehicleMediaAssets } from './collections/VehicleMediaAssets'
 import { VehicleImageSearches } from './collections/VehicleImageSearches'
 import { WorkshopJobs } from './collections/WorkshopJobs'
 import { ImageTemplates } from './collections/ImageTemplates'
+import { VehicleTags } from './collections/VehicleTags'
+import { VehicleCollections } from './collections/VehicleCollections'
 import { SiteConfig } from './globals/SiteConfig'
 
 const filename = fileURLToPath(import.meta.url)
@@ -47,6 +49,10 @@ export default buildConfig({
         Logo: './components/PrismaCMSLogo',
       },
       views: {
+        vehicleCreate: {
+          Component: './components/views/VehicleCreateView',
+          path: '/inventory/new',
+        },
         inventory: {
           Component: './components/views/InventoryView',
           path: '/inventory',
@@ -59,13 +65,13 @@ export default buildConfig({
           Component: './components/views/LandingBuilderView',
           path: '/builder/landing',
         },
+        pagesBuilder: {
+          Component: './components/views/LandingBuilderView',
+          path: '/pages-builder',
+        },
         vehicleTemplateBuilder: {
           Component: './components/views/VehicleTemplateView',
           path: '/builder/vehicle-template',
-        },
-        mediaWorkspace: {
-          Component: './components/views/MediaWorkspaceView',
-          path: '/media-workspace',
         },
       },
     },
@@ -92,6 +98,8 @@ export default buildConfig({
   },
   collections: [
     Vehicles,
+    VehicleTags,
+    VehicleCollections,
     ImportJobs,
     VehicleMediaAssets,
     VehicleImageSearches,

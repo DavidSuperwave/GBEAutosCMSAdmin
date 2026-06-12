@@ -30,6 +30,16 @@ export const WorkshopJobs: CollectionConfig = {
   fields: [
     { name: 'title', type: 'text', label: 'Título del trabajo' },
     {
+      name: 'jobType',
+      type: 'select',
+      label: 'Tipo de trabajo',
+      defaultValue: 'vehicle_image',
+      options: [
+        { label: 'Imagen de vehículo', value: 'vehicle_image' },
+        { label: 'Asset de marketing', value: 'marketing_asset' },
+      ],
+    },
+    {
       name: 'linkedVehicle',
       type: 'relationship',
       relationTo: 'vehicles',
@@ -58,6 +68,18 @@ export const WorkshopJobs: CollectionConfig = {
         { label: 'Imagen representativa auto nuevo', value: 'new_car_representative' },
       ],
     },
+    {
+      name: 'aspectRatio',
+      type: 'select',
+      label: 'Proporción',
+      defaultValue: '16:9',
+      options: [
+        { label: 'Horizontal 16:9', value: '16:9' },
+        { label: 'Cuadrado 1:1', value: '1:1' },
+        { label: 'Vertical 9:16', value: '9:16' },
+        { label: 'Clásico 4:3', value: '4:3' },
+      ],
+    },
     { name: 'prompt', type: 'textarea', label: 'Prompt' },
     {
       name: 'styleTemplate',
@@ -84,6 +106,7 @@ export const WorkshopJobs: CollectionConfig = {
           ],
         },
         { name: 'content', type: 'textarea', required: true, label: 'Contenido' },
+        { name: 'turnId', type: 'text', label: 'ID de turno' },
         { name: 'createdAt', type: 'date', label: 'Creado el' },
       ],
     },
@@ -112,6 +135,7 @@ export const WorkshopJobs: CollectionConfig = {
       fields: [
         { name: 'image', type: 'upload', relationTo: 'media', label: 'Imagen' },
         { name: 'url', type: 'text', label: 'URL temporal' },
+        { name: 'turnId', type: 'text', label: 'ID de turno' },
         {
           name: 'selected',
           type: 'checkbox',
@@ -130,6 +154,7 @@ export const WorkshopJobs: CollectionConfig = {
       type: 'select',
       label: 'Destino al guardar',
       options: [
+        { label: 'Biblioteca multimedia', value: 'media_library' },
         { label: 'Hero del vehículo', value: 'vehicle_hero' },
         { label: 'Galería del vehículo', value: 'vehicle_gallery' },
         { label: 'Sección de listado', value: 'vehicle_listing_section' },

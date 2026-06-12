@@ -51,7 +51,7 @@ qué pantalla nueva reemplazará a qué flujo anterior.
   - Completar datos por sección y ver el checklist de completitud.
   - Revisar y publicar; ver el historial de actividad.
 
-## 4. Taller de IA — dentro de la pestaña **Imágenes** del vehículo  ← **el "editor de IA"**
+## 4. Taller de IA — dentro de la pestaña **Imágenes** del vehículo ← **el "editor de IA"**
 
 - **Propósito**: subir o **generar con IA** imágenes para un vehículo y guardarlas
   como **imagen principal** (hero) o en la **galería**. Ya no es una pantalla
@@ -105,14 +105,14 @@ qué pantalla nueva reemplazará a qué flujo anterior.
 Las pantallas nuevas conviven con las anteriores por ahora (no se eliminó nada).
 A futuro, la intención es:
 
-| Pantalla nueva | Reemplazará a (flujo anterior) |
-| --- | --- |
-| **Taller de IA** (pestaña Imágenes del vehículo) | Pantalla independiente `/admin/workshop` (eliminada) y la lista cruda `workshop-jobs` |
-| **Inventario (gestión)** (`/admin/inventory`) | Lista por defecto de la colección `vehicles` para tareas de inventario |
-| **Espacio de trabajo del vehículo** (pestaña) | Formulario por defecto de edición de `vehicles` para la operación diaria |
+| Pantalla nueva                                   | Reemplazará a (flujo anterior)                                                             |
+| ------------------------------------------------ | ------------------------------------------------------------------------------------------ |
+| **Taller de IA** (pestaña Imágenes del vehículo) | Pantalla independiente `/admin/workshop` (eliminada) y la lista cruda `workshop-jobs`      |
+| **Inventario (gestión)** (`/admin/inventory`)    | Lista por defecto de la colección `vehicles` para tareas de inventario                     |
+| **Espacio de trabajo del vehículo** (pestaña)    | Formulario por defecto de edición de `vehicles` para la operación diaria                   |
 | **Constructor de portada / Landing / Plantilla** | Edición manual de los globals/relaciones de secciones (`/admin/globals/site-config`, etc.) |
 
 Componentes anteriores que **se mantienen** (no quitar todavía):
-`VehicleImportLink`, el formulario por defecto de vehículos, la lista por defecto
-de colecciones y la edición directa de globals. Sirven de respaldo mientras se
-validan las pantallas nuevas.
+el formulario por defecto de vehículos, la lista por defecto de colecciones y la
+edición directa de globals. Sirven de respaldo mientras se validan las pantallas
+nuevas.

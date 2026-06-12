@@ -85,6 +85,29 @@ async function resolveDealershipId(payload: Payload, brand?: string, city?: stri
   return result.docs[0]?.id
 }
 
+async function resolveDealershipCity(payload: Payload, dealership: unknown) {
+  if (!dealership) return undefined
+
+  if (typeof dealership === 'object' && dealership !== null && 'city' in dealership) {
+    const city = (dealership as { city?: unknown }).city
+    return typeof city === 'string' && city.trim() ? city.trim() : undefined
+  }
+
+  const id = typeof dealership === 'string' || typeof dealership === 'number' ? dealership : undefined
+  if (!id) return undefined
+
+  try {
+    const doc = await payload.findByID({
+      collection: 'dealerships',
+      id,
+      depth: 0,
+    })
+    return typeof doc?.city === 'string' && doc.city.trim() ? doc.city.trim() : undefined
+  } catch {
+    return undefined
+  }
+}
+
 function formatMXN(value: unknown) {
   const text = String(value ?? '').trim()
   if (!text) return text
@@ -203,6 +226,12 @@ const vehicleLandingBlocks = [
   VehicleCtaBlock,
 ]
 
+const templateOverrideOptions = [
+  { label: 'Usar plantilla global', value: 'inherit' },
+  { label: 'Mostrar', value: 'show' },
+  { label: 'Ocultar', value: 'hide' },
+]
+
 export const Vehicles: CollectionConfig = {
   slug: 'vehicles',
   access: {
@@ -271,6 +300,20 @@ export const Vehicles: CollectionConfig = {
           }
         }
 
+        if (!data.city && data.dealership) {
+          const dealershipCity = await resolveDealershipCity(req.payload, data.dealership)
+          if (dealershipCity) data.city = dealershipCity
+        }
+
+        if (data.publishStatus === 'published') {
+          const hasRoutingPath = Boolean(data.dealership || data.city || data.allowFallbackRouting)
+          if (!hasRoutingPath) {
+            throw new Error(
+              'Asigna una agencia/ciudad o activa el fallback WhatsApp antes de publicar el vehiculo.',
+            )
+          }
+        }
+
         // Derive completeness and lifecycle statuses from the assembled data.
         const vehicleLike = data as VehicleLike
         data.imageStatus = deriveImageStatus(vehicleLike)
@@ -314,6 +357,12 @@ export const Vehicles: CollectionConfig = {
           Component: './components/views/VehiclesListRedirect',
         },
         edit: {
+          default: {
+            Component: './components/views/VehicleWorkspaceRedirect',
+            tab: {
+              condition: () => false,
+            },
+          },
           workspace: {
             Component: './components/views/VehicleWorkspaceView',
             path: '/workspace',
@@ -332,17 +381,6 @@ export const Vehicles: CollectionConfig = {
     plural: 'Vehículos',
   },
   fields: [
-    {
-      name: 'vehicleLookup',
-      type: 'ui',
-      admin: {
-        components: {
-          Field: {
-            path: './components/VehicleLookupField',
-          },
-        },
-      },
-    },
     {
       name: 'vehicleLinks',
       type: 'ui',
@@ -448,10 +486,10 @@ export const Vehicles: CollectionConfig = {
       name: 'dealership',
       type: 'relationship',
       relationTo: 'dealerships',
-      required: true,
       label: 'Agencia responsable',
       admin: {
-        description: 'Define a que agencia pertenece esta unidad y a que WhatsApp se enviaran los leads.',
+        description:
+          'Define a que agencia pertenece esta unidad y a que WhatsApp se enviaran los leads. Requerida para publicar salvo fallback explicito.',
       },
     },
     {
@@ -512,6 +550,25 @@ export const Vehicles: CollectionConfig = {
       fields: [{ name: 'label', type: 'text', required: true, label: 'Tag' }],
     },
     {
+      name: 'tags',
+      type: 'relationship',
+      relationTo: 'vehicle-tags',
+      hasMany: true,
+      label: 'Tags de catalogo',
+      admin: {
+        description: 'Etiquetas reutilizables para colecciones, filtros y tarjetas publicas.',
+      },
+    },
+    {
+      name: 'featured',
+      type: 'checkbox',
+      defaultValue: false,
+      label: 'Destacado',
+      admin: {
+        description: 'Marca esta unidad para bloques editoriales o colecciones inteligentes.',
+      },
+    },
+    {
       name: 'price',
       type: 'text',
       label: 'Precio',
@@ -551,6 +608,17 @@ export const Vehicles: CollectionConfig = {
         { label: 'Publicado', value: 'published' },
         { label: 'Archivado', value: 'archived' },
       ],
+    },
+    {
+      name: 'allowFallbackRouting',
+      type: 'checkbox',
+      label: 'Permitir fallback WhatsApp',
+      defaultValue: false,
+      admin: {
+        position: 'sidebar',
+        description:
+          'Permite publicar usando el WhatsApp global si todavia no hay agencia exacta. Usar solo como excepcion operativa.',
+      },
     },
     {
       name: 'imageStatus',
@@ -748,6 +816,23 @@ export const Vehicles: CollectionConfig = {
           'Agrega secciones simples debajo de la pagina del vehiculo: imagen y texto, galerias, beneficios o CTA.',
       },
       blocks: vehicleLandingBlocks,
+    },
+    {
+      name: 'templateOverrides',
+      type: 'group',
+      label: 'Visibilidad de plantilla',
+      admin: {
+        description: 'Controla secciones fijas de la pagina de detalle para este vehiculo.',
+      },
+      fields: [
+        { name: 'gallery', type: 'select', defaultValue: 'inherit', options: templateOverrideOptions },
+        { name: 'purchaseCard', type: 'select', defaultValue: 'inherit', options: templateOverrideOptions },
+        { name: 'quickSpecs', type: 'select', defaultValue: 'inherit', options: templateOverrideOptions },
+        { name: 'description', type: 'select', defaultValue: 'inherit', options: templateOverrideOptions },
+        { name: 'features', type: 'select', defaultValue: 'inherit', options: templateOverrideOptions },
+        { name: 'similarVehicles', type: 'select', defaultValue: 'inherit', options: templateOverrideOptions },
+        { name: 'mobileCta', type: 'select', defaultValue: 'inherit', options: templateOverrideOptions },
+      ],
     },
   ],
 }

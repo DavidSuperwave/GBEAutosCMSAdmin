@@ -11,13 +11,25 @@ function fmt(value: number) {
 }
 
 async function countVehicles(req: PayloadRequest, where: Where = {}) {
-  const result = await req.payload.find({
-    collection: 'vehicles',
-    depth: 0,
-    limit: 1,
-    where,
-  })
-  return result.totalDocs
+  try {
+    const result = await req.payload.find({
+      collection: 'vehicles',
+      depth: 0,
+      limit: 1,
+      where,
+    })
+    return result.totalDocs
+  } catch {
+    return null
+  }
+}
+
+function fmtMetric(value: number | null) {
+  return value === null ? '—' : fmt(value)
+}
+
+function metricDescription(value: number | null, suffix: string) {
+  return value === null ? 'No disponible temporalmente.' : `${fmt(value)} ${suffix}`
 }
 
 export default async function OperationsDashboard({ req }: Props) {
@@ -61,13 +73,13 @@ export default async function OperationsDashboard({ req }: Props) {
     {
       href: '/admin/inventory?tab=missing_images',
       title: 'Faltan imágenes',
-      desc: `${fmt(missingImages)} vehículos sin imagen.`,
+      desc: metricDescription(missingImages, 'vehículos sin imagen.'),
       accent: '#d97706',
     },
     {
       href: '/admin/inventory?tab=needs_review',
       title: 'Pendientes de revisión',
-      desc: `${fmt(needsReview)} esperando publicación.`,
+      desc: metricDescription(needsReview, 'esperando publicación.'),
       accent: '#7c3aed',
     },
     {
@@ -84,7 +96,7 @@ export default async function OperationsDashboard({ req }: Props) {
     },
   ]
 
-  const metrics: Array<{ label: string; value: number; hint?: string }> = [
+  const metrics: Array<{ label: string; value: number | null; hint?: string }> = [
     { label: 'Total de vehículos', value: total },
     { label: 'Publicados', value: published },
     { label: 'Borradores', value: drafts },
@@ -128,7 +140,7 @@ export default async function OperationsDashboard({ req }: Props) {
         {metrics.map((metric) => (
           <article key={metric.label}>
             <span>{metric.label}</span>
-            <strong>{fmt(metric.value)}</strong>
+            <strong>{fmtMetric(metric.value)}</strong>
             {metric.hint ? <small>{metric.hint}</small> : null}
           </article>
         ))}
@@ -138,12 +150,12 @@ export default async function OperationsDashboard({ req }: Props) {
         <div className="ops-dashboard__imports">
           <div className="ops-dashboard__panel-header">
             <h2>Importaciones recientes</h2>
-            <a href="/admin/collections/import-jobs">Ver todas</a>
+            <a href="/admin/inventory">Ir a inventario</a>
           </div>
           <ul>
             {imports.map((job) => (
               <li key={job.id}>
-                <a href={`/admin/collections/import-jobs/${job.id}`}>
+                <a href="/admin/inventory">
                   <strong>{job.fileName || 'Importación'}</strong>
                   <span>
                     {job.status || 'pendiente'} · {fmt(job.createdCount || 0)} creados

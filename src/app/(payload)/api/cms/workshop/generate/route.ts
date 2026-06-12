@@ -31,6 +31,18 @@ const PRESET_PROMPTS: Record<string, string> = {
   new_car_representative: 'Representative image for a new vehicle.',
 }
 
+const MARKETING_PRESET_PROMPTS: Record<string, string> = {
+  vehicle_hero: 'Marketing hero creative for an automotive campaign.',
+  transparent_bg: 'Clean product cutout or composited graphic with transparent/isolated feel.',
+  clean_dealership_bg: 'Clean dealership-branded marketing visual with polished lighting.',
+  logo_overlay: 'Brand-ready creative with room for dealership logo placement.',
+  homepage_banner: 'Wide homepage banner with strong composition, room for headline and CTA.',
+  social_ad: 'Social media ad creative with bold focal point and readable negative space.',
+  promo_banner: 'Promotional banner with premium automotive mood and room for offer copy.',
+  seminuevo_gallery_cover: 'Used-vehicle promotional cover graphic.',
+  new_car_representative: 'Representative new-car marketing creative.',
+}
+
 type MediaLike = {
   id?: number | string
   url?: string
@@ -41,16 +53,20 @@ type JobOutput = {
   image?: MediaLike | number | string | null
   url?: string
   selected?: boolean
+  turnId?: string
 }
 
 type JobLike = {
   id: number | string
+  aspectRatio?: string
+  jobType?: 'vehicle_image' | 'marketing_asset'
   title?: string
   prompt?: string
   promptPreset?: string
   styleName?: string
   stylePrompt?: string
   inputImages?: Array<{ image?: MediaLike | number | string | null }> | null
+  messages?: Array<{ role?: string; content?: string; turnId?: string }> | null
   outputs?: JobOutput[] | null
   styleReferenceUrl?: string
   vehicleContext?: {
@@ -119,7 +135,7 @@ async function mediaToDataUrl(media: MediaLike | number | string | null | undefi
   return `data:${mime};base64,${buffer.toString('base64')}`
 }
 
-function buildPrompt(job: JobLike): string {
+function buildVehiclePrompt(job: JobLike): string {
   const vehicle = job.vehicleContext || {}
   const vehicleTitle = [vehicle.year, vehicle.brand, vehicle.model].filter(Boolean).join(' ')
   const presetPrompt = PRESET_PROMPTS[job.promptPreset || 'clean_dealership_bg'] || PRESET_PROMPTS.clean_dealership_bg
@@ -147,7 +163,45 @@ function buildPrompt(job: JobLike): string {
     .join('\n')
 }
 
-async function callImageProvider(prompt: string, inputImages: string[]): Promise<ProviderImage[]> {
+function buildMarketingPrompt(job: JobLike): string {
+  const vehicle = job.vehicleContext || {}
+  const vehicleTitle = [vehicle.year, vehicle.brand, vehicle.model].filter(Boolean).join(' ')
+  const presetPrompt =
+    MARKETING_PRESET_PROMPTS[job.promptPreset || 'homepage_banner'] || MARKETING_PRESET_PROMPTS.homepage_banner
+  const userPrompt = valueToString(job.prompt)
+  const styleName = valueToString(job.styleName)
+  const stylePrompt = valueToString(job.stylePrompt)
+  const hasInputImages = Boolean(job.inputImages?.length)
+
+  return [
+    'Use case: general-marketing-creative',
+    'Asset type: automotive marketing image, banner, promotion, social ad, or web content.',
+    `Primary request: ${userPrompt || 'Create a polished automotive marketing creative.'}`,
+    vehicleTitle ? `Optional vehicle context: ${vehicleTitle}${vehicle.color ? `, exterior color ${vehicle.color}` : ''}.` : '',
+    `Preset: ${presetPrompt}`,
+    styleName ? `Selected style: ${styleName}.` : '',
+    stylePrompt ? `Embedded style instructions: ${stylePrompt}` : '',
+    hasInputImages
+      ? 'Input images are optional visual references. Use them for product identity, layout, color, lighting, background, or mood only as requested by the user.'
+      : 'No input image is required. Create the image from the prompt and marketing context.',
+    'Composition: polished commercial quality, clear focal point, useful negative space for dealership copy, offers, logo, or CTA when appropriate.',
+    'Brand safety: no readable license plate text, no watermarks, no fake badges, no random text, no invented logos unless the user explicitly requests placeholder graphic text.',
+    'Avoid: cluttered layouts, distorted vehicles, unreadable copy, low-quality stock-photo look, watermarks, extra nonsensical objects, and random text artifacts.',
+  ]
+    .filter(Boolean)
+    .join('\n')
+}
+
+function buildPrompt(job: JobLike): string {
+  return job.jobType === 'marketing_asset' ? buildMarketingPrompt(job) : buildVehiclePrompt(job)
+}
+
+function normalizeAspectRatio(value: unknown): string {
+  const text = valueToString(value)
+  return ['16:9', '1:1', '9:16', '4:3'].includes(text) ? text : '16:9'
+}
+
+async function callImageProvider(prompt: string, inputImages: string[], aspectRatio = '16:9'): Promise<ProviderImage[]> {
   const requestBody = {
     model: OPENROUTER_MODEL,
     messages: [
@@ -161,7 +215,7 @@ async function callImageProvider(prompt: string, inputImages: string[]): Promise
     ],
     modalities: ['image'],
     image_config: {
-      aspect_ratio: '16:9',
+      aspect_ratio: normalizeAspectRatio(aspectRatio),
       image_size: '1K',
     },
     stream: false,
@@ -204,20 +258,25 @@ function outputToData(output: JobOutput) {
     image: toPayloadMediaId(output.image),
     url: output.url,
     selected: Boolean(output.selected),
+    turnId: output.turnId,
   }
 }
 
 export async function POST(request: Request) {
   let jobId = ''
+  let jobData: Record<string, unknown> | undefined
   try {
-    const body = (await request.json()) as { jobId?: unknown }
+    const body = (await request.json()) as { jobId?: unknown; jobData?: unknown }
     jobId = valueToString(body.jobId)
+    if (body.jobData && typeof body.jobData === 'object' && !Array.isArray(body.jobData)) {
+      jobData = body.jobData as Record<string, unknown>
+    }
   } catch {
     return NextResponse.json({ error: 'Invalid request.' }, { status: 400 })
   }
 
-  if (!jobId) {
-    return NextResponse.json({ error: 'jobId is required.' }, { status: 400 })
+  if (!jobId && !jobData) {
+    return NextResponse.json({ error: 'jobId or jobData is required.' }, { status: 400 })
   }
 
   const payload = await getPayload({ config })
@@ -231,6 +290,40 @@ export async function POST(request: Request) {
   }
 
   const reqContext = { headers: request.headers, user: authResult.user }
+  if (jobData) {
+    try {
+      if (jobId) {
+        await payload.update({
+          collection: 'workshop-jobs',
+          id: jobId,
+          data: jobData,
+          overrideAccess: true,
+          req: reqContext,
+        })
+      } else {
+        const created = await payload.create({
+          collection: 'workshop-jobs',
+          data: jobData,
+          overrideAccess: true,
+          req: reqContext,
+        })
+        jobId = valueToString(created.id)
+      }
+    } catch (error) {
+      const cause = error && typeof error === 'object' && 'cause' in error ? (error as { cause?: unknown }).cause : undefined
+      const causeMessage = cause instanceof Error ? cause.message : ''
+      const causeCode = cause && typeof cause === 'object' && 'code' in cause ? String((cause as { code?: unknown }).code) : ''
+      const message = [
+        error instanceof Error ? error.message : 'Could not save the workshop job.',
+        causeCode ? `code: ${causeCode}` : '',
+        causeMessage,
+      ]
+        .filter(Boolean)
+        .join('\n')
+      return NextResponse.json({ ok: false, error: message, phase: 'save_job' }, { status: 422 })
+    }
+  }
+
   const job = (await payload.findByID({ collection: 'workshop-jobs', id: jobId, depth: 2 }).catch(() => null)) as
     | JobLike
     | null
@@ -256,30 +349,25 @@ export async function POST(request: Request) {
       overrideAccess: true,
       req: reqContext,
     })
-    return NextResponse.json({ ok: false, configured: false, error: message }, { status: 501 })
+    return NextResponse.json({ ok: false, configured: false, error: message, jobId }, { status: 501 })
   }
 
   try {
     const prompt = buildPrompt(job)
     const inputImages = await Promise.all((job.inputImages || []).map((item) => mediaToDataUrl(item.image)))
-    const styleUrl = valueToString(job.styleReferenceUrl)
-    const styleInput = styleUrl
-      ? await mediaToDataUrl({ url: styleUrl.startsWith('http') ? styleUrl : `${styleUrl.startsWith('/') ? '' : '/'}${styleUrl}` }).catch(
-          () => '',
-        )
-      : ''
-    const cleanInputs = [...inputImages, styleInput].filter(Boolean)
+    const cleanInputs = inputImages.filter(Boolean)
 
-    if (cleanInputs.length === 0) {
+    if (job.jobType !== 'marketing_asset' && cleanInputs.length === 0) {
       throw new Error('Select at least one vehicle reference image.')
     }
 
-    const results = await callImageProvider(prompt, cleanInputs)
+    const results = await callImageProvider(prompt, cleanInputs, job.aspectRatio)
     if (!results.length) {
       throw new Error('The image provider did not return any images.')
     }
 
     const existingOutputs = (job.outputs || []).map(outputToData)
+    const currentTurnId = [...(job.messages || [])].reverse().find((message) => message.role === 'user')?.turnId
     const newOutputs = []
 
     for (const [index, result] of results.entries()) {
@@ -291,13 +379,13 @@ export async function POST(request: Request) {
         file: {
           data: result.buffer,
           mimetype: result.mime,
-          name: `grok-vehicle-${jobId}-${Date.now()}-${index + 1}.${result.extension}`,
+          name: `grok-${job.jobType === 'marketing_asset' ? 'marketing' : 'vehicle'}-${jobId}-${Date.now()}-${index + 1}.${result.extension}`,
           size: result.buffer.length,
         },
         overrideAccess: true,
         req: reqContext,
       })
-      newOutputs.push({ image: media.id, selected: false })
+      newOutputs.push({ image: media.id, selected: false, turnId: currentTurnId })
     }
 
     await payload.update({
@@ -313,7 +401,7 @@ export async function POST(request: Request) {
       req: reqContext,
     })
 
-    return NextResponse.json({ ok: true, configured: true, outputs: newOutputs })
+    return NextResponse.json({ ok: true, configured: true, jobId, outputs: newOutputs })
   } catch (error) {
     const message = error instanceof Error ? error.message : 'The image provider did not return results.'
     await payload.update({
@@ -323,6 +411,6 @@ export async function POST(request: Request) {
       overrideAccess: true,
       req: reqContext,
     })
-    return NextResponse.json({ ok: false, error: message }, { status: 502 })
+    return NextResponse.json({ ok: false, error: message, jobId }, { status: 502 })
   }
 }

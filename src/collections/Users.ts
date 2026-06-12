@@ -18,7 +18,7 @@ export const Users: CollectionConfig = {
     delete: ({ req }) => isAdmin(req.user),
   },
   admin: {
-    group: 'Configuración',
+    group: false,
     useAsTitle: 'email',
     defaultColumns: ['email', 'role', 'updatedAt'],
     components: {

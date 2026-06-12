@@ -68,6 +68,8 @@ export interface Config {
   blocks: {};
   collections: {
     vehicles: Vehicle;
+    'vehicle-tags': VehicleTag;
+    'vehicle-collections': VehicleCollection;
     'import-jobs': ImportJob;
     'vehicle-media-assets': VehicleMediaAsset;
     'vehicle-image-searches': VehicleImageSearch;
@@ -87,6 +89,8 @@ export interface Config {
   collectionsJoins: {};
   collectionsSelect: {
     vehicles: VehiclesSelect<false> | VehiclesSelect<true>;
+    'vehicle-tags': VehicleTagsSelect<false> | VehicleTagsSelect<true>;
+    'vehicle-collections': VehicleCollectionsSelect<false> | VehicleCollectionsSelect<true>;
     'import-jobs': ImportJobsSelect<false> | ImportJobsSelect<true>;
     'vehicle-media-assets': VehicleMediaAssetsSelect<false> | VehicleMediaAssetsSelect<true>;
     'vehicle-image-searches': VehicleImageSearchesSelect<false> | VehicleImageSearchesSelect<true>;
@@ -182,9 +186,9 @@ export interface Vehicle {
   stockId?: string | null;
   condition: 'new' | 'used';
   /**
-   * Define a que agencia pertenece esta unidad y a que WhatsApp se enviaran los leads.
+   * Define a que agencia pertenece esta unidad y a que WhatsApp se enviaran los leads. Requerida para publicar salvo fallback explicito.
    */
-  dealership: number | Dealership;
+  dealership?: (number | null) | Dealership;
   /**
    * Opcional. Si se deja vacia, la pagina usara la ciudad de la agencia seleccionada.
    */
@@ -203,11 +207,23 @@ export interface Vehicle {
       }[]
     | null;
   /**
+   * Etiquetas reutilizables para colecciones, filtros y tarjetas publicas.
+   */
+  tags?: (number | VehicleTag)[] | null;
+  /**
+   * Marca esta unidad para bloques editoriales o colecciones inteligentes.
+   */
+  featured?: boolean | null;
+  /**
    * Requerido para publicar. Opcional al importar. Escribe un número o rango; se guardará como MXN.
    */
   price?: string | null;
   inventoryStatus: 'available' | 'reserved' | 'sold';
   publishStatus?: ('draft' | 'needs_review' | 'published' | 'archived') | null;
+  /**
+   * Permite publicar usando el WhatsApp global si todavia no hay agencia exacta. Usar solo como excepcion operativa.
+   */
+  allowFallbackRouting?: boolean | null;
   /**
    * Se calcula automáticamente salvo aprobaciones/rechazos manuales.
    */
@@ -349,6 +365,18 @@ export interface Vehicle {
           }
       )[]
     | null;
+  /**
+   * Controla secciones fijas de la pagina de detalle para este vehiculo.
+   */
+  templateOverrides?: {
+    gallery?: ('inherit' | 'show' | 'hide') | null;
+    purchaseCard?: ('inherit' | 'show' | 'hide') | null;
+    quickSpecs?: ('inherit' | 'show' | 'hide') | null;
+    description?: ('inherit' | 'show' | 'hide') | null;
+    features?: ('inherit' | 'show' | 'hide') | null;
+    similarVehicles?: ('inherit' | 'show' | 'hide') | null;
+    mobileCta?: ('inherit' | 'show' | 'hide') | null;
+  };
   updatedAt: string;
   createdAt: string;
 }
@@ -358,16 +386,46 @@ export interface Vehicle {
  */
 export interface Dealership {
   id: number;
+  /**
+   * Usa el grupo comercial para enrutar WhatsApp: ford, mazda, lincoln, stellantis, dongfeng o jetour.
+   */
   brandName: string;
   displayName: string;
   city: string;
+  state?: string | null;
+  address?: string | null;
   phone?: string | null;
   whatsapp?: string | null;
+  email?: string | null;
+  hours?: string | null;
   coordinates?: {
     lat?: number | null;
     lng?: number | null;
   };
+  /**
+   * Se usa si no hay una agencia exacta para la marca seleccionada.
+   */
+  defaultForCity?: boolean | null;
+  salesRepName?: string | null;
+  internalNotes?: string | null;
   isActive?: boolean | null;
+  updatedAt: string;
+  createdAt: string;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "vehicle-tags".
+ */
+export interface VehicleTag {
+  id: number;
+  name: string;
+  slug: string;
+  label?: string | null;
+  description?: string | null;
+  type?: ('manual' | 'automatic' | 'system') | null;
+  color?: string | null;
+  isVisible?: boolean | null;
+  sortOrder?: number | null;
   updatedAt: string;
   createdAt: string;
 }
@@ -419,6 +477,45 @@ export interface Media {
   height?: number | null;
   focalX?: number | null;
   focalY?: number | null;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "vehicle-collections".
+ */
+export interface VehicleCollection {
+  id: number;
+  name: string;
+  slug: string;
+  description?: string | null;
+  image?: (number | null) | Media;
+  collectionType: 'manual' | 'smart';
+  manualVehicles?: (number | Vehicle)[] | null;
+  rules?: {
+    condition?: ('new' | 'used') | null;
+    brand?: string | null;
+    city?: string | null;
+    dealership?: (number | null) | Dealership;
+    bodyType?: ('sedan' | 'suv' | 'pickup' | 'coupe' | 'hatchback' | 'van' | 'other') | null;
+    segment?: string | null;
+    vehicleType?: string | null;
+    fuel?: ('gasoline' | 'diesel' | 'hybrid' | 'electric') | null;
+    transmission?: ('automatic' | 'manual' | 'cvt') | null;
+    tags?: (number | VehicleTag)[] | null;
+    inventoryStatus?: ('available' | 'reserved' | 'sold') | null;
+    publishStatus?: ('draft' | 'needs_review' | 'published' | 'archived') | null;
+  };
+  sort?:
+    | ('newest' | 'mostViewed' | 'mostClicked' | 'mostLeads' | 'priceAsc' | 'priceDesc' | 'mileageAsc' | 'yearDesc')
+    | null;
+  limit?: number | null;
+  isVisible?: boolean | null;
+  seo?: {
+    title?: string | null;
+    description?: string | null;
+    image?: (number | null) | Media;
+  };
+  updatedAt: string;
+  createdAt: string;
 }
 /**
  * This interface was referenced by `Config`'s JSON-Schema
@@ -556,6 +653,7 @@ export interface VehicleImageSearch {
 export interface WorkshopJob {
   id: number;
   title?: string | null;
+  jobType?: ('vehicle_image' | 'marketing_asset') | null;
   linkedVehicle?: (number | null) | Vehicle;
   inputImages?:
     | {
@@ -576,6 +674,7 @@ export interface WorkshopJob {
         | 'new_car_representative'
       )
     | null;
+  aspectRatio?: ('16:9' | '1:1' | '9:16' | '4:3') | null;
   prompt?: string | null;
   styleTemplate?: (number | null) | ImageTemplate;
   styleName?: string | null;
@@ -584,6 +683,7 @@ export interface WorkshopJob {
     | {
         role: 'user' | 'assistant' | 'system';
         content: string;
+        turnId?: string | null;
         createdAt?: string | null;
         id?: string | null;
       }[]
@@ -602,6 +702,7 @@ export interface WorkshopJob {
     | {
         image?: (number | null) | Media;
         url?: string | null;
+        turnId?: string | null;
         selected?: boolean | null;
         id?: string | null;
       }[]
@@ -609,6 +710,7 @@ export interface WorkshopJob {
   approvedOutput?: (number | null) | Media;
   saveDestination?:
     | (
+        | 'media_library'
         | 'vehicle_hero'
         | 'vehicle_gallery'
         | 'vehicle_listing_section'
@@ -662,7 +764,11 @@ export interface Page {
    * No uses rutas reservadas como cars, seminuevos, marcas o api.
    */
   slug: string;
+  status?: ('draft' | 'published' | 'archived') | null;
   isVisible?: boolean | null;
+  showInNavigation?: boolean | null;
+  navLabel?: string | null;
+  navParent?: string | null;
   seo?: {
     title?: string | null;
     description?: string | null;
@@ -721,6 +827,24 @@ export interface Page {
         blockType: 'featuredVehicles';
       }
     | {
+        collection: number | VehicleCollection;
+        heading?: string | null;
+        body?: string | null;
+        layout?: ('grid' | 'carousel' | 'featuredSplit') | null;
+        limit?: number | null;
+        display?: {
+          showPrice?: boolean | null;
+          showMileage?: boolean | null;
+          showCity?: boolean | null;
+          showTags?: boolean | null;
+        };
+        ctaLabel?: string | null;
+        ctaHref?: string | null;
+        id?: string | null;
+        blockName?: string | null;
+        blockType: 'inventoryCollection';
+      }
+    | {
         eyebrow?: string | null;
         heading?: string | null;
         body?: string | null;
@@ -732,6 +856,103 @@ export interface Page {
         id?: string | null;
         blockName?: string | null;
         blockType: 'inventorySearch';
+      }
+    | {
+        eyebrow?: string | null;
+        heading?: string | null;
+        body?: string | null;
+        layout?: ('cards' | 'compact' | 'map') | null;
+        limit?: number | null;
+        cities?:
+          | {
+              city?: string | null;
+              label?: string | null;
+              href?: string | null;
+              image?: (number | null) | Media;
+              id?: string | null;
+            }[]
+          | null;
+        ctaLabel?: string | null;
+        ctaHref?: string | null;
+        id?: string | null;
+        blockName?: string | null;
+        blockType: 'cityInventory';
+      }
+    | {
+        eyebrow?: string | null;
+        heading?: string | null;
+        body?: string | null;
+        image?: (number | null) | Media;
+        mobileImage?: (number | null) | Media;
+        imageAlt?: string | null;
+        variant?: ('image' | 'split' | 'compact') | null;
+        theme?: ('brand' | 'light' | 'dark') | null;
+        href?: string | null;
+        ctaLabel?: string | null;
+        ctaHref?: string | null;
+        id?: string | null;
+        blockName?: string | null;
+        blockType: 'promoBanner';
+      }
+    | {
+        eyebrow?: string | null;
+        heading?: string | null;
+        body?: string | null;
+        layout?: ('steps' | 'cards') | null;
+        steps?:
+          | {
+              icon?: ('search' | 'inspection' | 'financing' | 'delivery' | 'shield') | null;
+              label?: string | null;
+              description?: string | null;
+              id?: string | null;
+            }[]
+          | null;
+        id?: string | null;
+        blockName?: string | null;
+        blockType: 'trustSteps';
+      }
+    | {
+        eyebrow?: string | null;
+        heading?: string | null;
+        body?: string | null;
+        layout?: ('carousel' | 'grid') | null;
+        items?:
+          | {
+              quote?: string | null;
+              author?: string | null;
+              role?: string | null;
+              city?: string | null;
+              rating?: number | null;
+              image?: (number | null) | Media;
+              id?: string | null;
+            }[]
+          | null;
+        ctaLabel?: string | null;
+        ctaHref?: string | null;
+        id?: string | null;
+        blockName?: string | null;
+        blockType: 'testimonials';
+      }
+    | {
+        eyebrow?: string | null;
+        heading?: string | null;
+        body?: string | null;
+        layout?: ('featured' | 'grid') | null;
+        videos?:
+          | {
+              title?: string | null;
+              description?: string | null;
+              videoUrl?: string | null;
+              thumbnail?: (number | null) | Media;
+              duration?: string | null;
+              id?: string | null;
+            }[]
+          | null;
+        ctaLabel?: string | null;
+        ctaHref?: string | null;
+        id?: string | null;
+        blockName?: string | null;
+        blockType: 'videoTips';
       }
     | {
         eyebrow?: string | null;
@@ -792,11 +1013,26 @@ export interface Lead {
   firstName: string;
   lastName?: string | null;
   email?: string | null;
-  phone: string;
-  source?: ('website_form' | 'whatsapp' | 'phone' | 'walk_in') | null;
+  phone?: string | null;
+  city?: string | null;
+  agency?: (number | null) | Dealership;
+  vehicleLabel?: string | null;
+  whatsappNumber?: string | null;
+  whatsappOpenedAt?: string | null;
+  sourcePage?: string | null;
+  sourceSection?: string | null;
+  leadSource?: ('whatsapp_vehicle_form' | 'contact_form' | 'phone_click') | null;
+  source?:
+    | ('website_form' | 'whatsapp' | 'whatsapp_vehicle_form' | 'contact_form' | 'phone_click' | 'phone' | 'walk_in')
+    | null;
   vehicle?: (number | null) | Vehicle;
   message?: string | null;
-  stage?: ('new' | 'contacted' | 'in_progress' | 'closed_won' | 'closed_lost') | null;
+  stage?:
+    | ('new' | 'whatsapp_opened' | 'contacted' | 'appointment_set' | 'in_progress' | 'closed_won' | 'closed_lost')
+    | null;
+  assignedTo?: (number | null) | User;
+  contactedBy?: (number | null) | User;
+  contactedAt?: string | null;
   notes?: string | null;
   updatedAt: string;
   createdAt: string;
@@ -807,12 +1043,29 @@ export interface Lead {
  */
 export interface AnalyticsEvent {
   id: number;
-  eventType: 'page_view' | 'vehicle_view' | 'vehicle_click' | 'cta_click' | 'page_duration';
+  eventType:
+    | 'page_view'
+    | 'vehicle_view'
+    | 'vehicle_click'
+    | 'whatsapp_form_open'
+    | 'whatsapp_form_submit'
+    | 'whatsapp_open'
+    | 'collection_view'
+    | 'filter_used'
+    | 'cta_click'
+    | 'page_duration';
   pagePath: string;
   pageTitle?: string | null;
   vehicle?: (number | null) | Vehicle;
   vehicleLabel?: string | null;
   targetLabel?: string | null;
+  agency?: (number | null) | Dealership;
+  city?: string | null;
+  brand?: string | null;
+  condition?: string | null;
+  collectionId?: (number | null) | VehicleCollection;
+  leadId?: (number | null) | Lead;
+  sourceSection?: string | null;
   durationSeconds?: number | null;
   sessionId?: string | null;
   visitorId?: string | null;
@@ -848,6 +1101,14 @@ export interface PayloadLockedDocument {
     | ({
         relationTo: 'vehicles';
         value: number | Vehicle;
+      } | null)
+    | ({
+        relationTo: 'vehicle-tags';
+        value: number | VehicleTag;
+      } | null)
+    | ({
+        relationTo: 'vehicle-collections';
+        value: number | VehicleCollection;
       } | null)
     | ({
         relationTo: 'import-jobs';
@@ -966,9 +1227,12 @@ export interface VehiclesSelect<T extends boolean = true> {
         label?: T;
         id?: T;
       };
+  tags?: T;
+  featured?: T;
   price?: T;
   inventoryStatus?: T;
   publishStatus?: T;
+  allowFallbackRouting?: T;
   imageStatus?: T;
   specStatus?: T;
   completenessScore?: T;
@@ -1098,6 +1362,73 @@ export interface VehiclesSelect<T extends boolean = true> {
               blockName?: T;
             };
       };
+  templateOverrides?:
+    | T
+    | {
+        gallery?: T;
+        purchaseCard?: T;
+        quickSpecs?: T;
+        description?: T;
+        features?: T;
+        similarVehicles?: T;
+        mobileCta?: T;
+      };
+  updatedAt?: T;
+  createdAt?: T;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "vehicle-tags_select".
+ */
+export interface VehicleTagsSelect<T extends boolean = true> {
+  name?: T;
+  slug?: T;
+  label?: T;
+  description?: T;
+  type?: T;
+  color?: T;
+  isVisible?: T;
+  sortOrder?: T;
+  updatedAt?: T;
+  createdAt?: T;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "vehicle-collections_select".
+ */
+export interface VehicleCollectionsSelect<T extends boolean = true> {
+  name?: T;
+  slug?: T;
+  description?: T;
+  image?: T;
+  collectionType?: T;
+  manualVehicles?: T;
+  rules?:
+    | T
+    | {
+        condition?: T;
+        brand?: T;
+        city?: T;
+        dealership?: T;
+        bodyType?: T;
+        segment?: T;
+        vehicleType?: T;
+        fuel?: T;
+        transmission?: T;
+        tags?: T;
+        inventoryStatus?: T;
+        publishStatus?: T;
+      };
+  sort?: T;
+  limit?: T;
+  isVisible?: T;
+  seo?:
+    | T
+    | {
+        title?: T;
+        description?: T;
+        image?: T;
+      };
   updatedAt?: T;
   createdAt?: T;
 }
@@ -1179,6 +1510,7 @@ export interface VehicleImageSearchesSelect<T extends boolean = true> {
  */
 export interface WorkshopJobsSelect<T extends boolean = true> {
   title?: T;
+  jobType?: T;
   linkedVehicle?: T;
   inputImages?:
     | T
@@ -1187,6 +1519,7 @@ export interface WorkshopJobsSelect<T extends boolean = true> {
         id?: T;
       };
   promptPreset?: T;
+  aspectRatio?: T;
   prompt?: T;
   styleTemplate?: T;
   styleName?: T;
@@ -1196,6 +1529,7 @@ export interface WorkshopJobsSelect<T extends boolean = true> {
     | {
         role?: T;
         content?: T;
+        turnId?: T;
         createdAt?: T;
         id?: T;
       };
@@ -1213,6 +1547,7 @@ export interface WorkshopJobsSelect<T extends boolean = true> {
     | {
         image?: T;
         url?: T;
+        turnId?: T;
         selected?: T;
         id?: T;
       };
@@ -1246,7 +1581,11 @@ export interface ImageTemplatesSelect<T extends boolean = true> {
 export interface PagesSelect<T extends boolean = true> {
   title?: T;
   slug?: T;
+  status?: T;
   isVisible?: T;
+  showInNavigation?: T;
+  navLabel?: T;
+  navParent?: T;
   seo?:
     | T
     | {
@@ -1317,6 +1656,27 @@ export interface PagesSelect<T extends boolean = true> {
               id?: T;
               blockName?: T;
             };
+        inventoryCollection?:
+          | T
+          | {
+              collection?: T;
+              heading?: T;
+              body?: T;
+              layout?: T;
+              limit?: T;
+              display?:
+                | T
+                | {
+                    showPrice?: T;
+                    showMileage?: T;
+                    showCity?: T;
+                    showTags?: T;
+                  };
+              ctaLabel?: T;
+              ctaHref?: T;
+              id?: T;
+              blockName?: T;
+            };
         inventorySearch?:
           | T
           | {
@@ -1328,6 +1688,108 @@ export interface PagesSelect<T extends boolean = true> {
               city?: T;
               brand?: T;
               bodyType?: T;
+              id?: T;
+              blockName?: T;
+            };
+        cityInventory?:
+          | T
+          | {
+              eyebrow?: T;
+              heading?: T;
+              body?: T;
+              layout?: T;
+              limit?: T;
+              cities?:
+                | T
+                | {
+                    city?: T;
+                    label?: T;
+                    href?: T;
+                    image?: T;
+                    id?: T;
+                  };
+              ctaLabel?: T;
+              ctaHref?: T;
+              id?: T;
+              blockName?: T;
+            };
+        promoBanner?:
+          | T
+          | {
+              eyebrow?: T;
+              heading?: T;
+              body?: T;
+              image?: T;
+              mobileImage?: T;
+              imageAlt?: T;
+              variant?: T;
+              theme?: T;
+              href?: T;
+              ctaLabel?: T;
+              ctaHref?: T;
+              id?: T;
+              blockName?: T;
+            };
+        trustSteps?:
+          | T
+          | {
+              eyebrow?: T;
+              heading?: T;
+              body?: T;
+              layout?: T;
+              steps?:
+                | T
+                | {
+                    icon?: T;
+                    label?: T;
+                    description?: T;
+                    id?: T;
+                  };
+              id?: T;
+              blockName?: T;
+            };
+        testimonials?:
+          | T
+          | {
+              eyebrow?: T;
+              heading?: T;
+              body?: T;
+              layout?: T;
+              items?:
+                | T
+                | {
+                    quote?: T;
+                    author?: T;
+                    role?: T;
+                    city?: T;
+                    rating?: T;
+                    image?: T;
+                    id?: T;
+                  };
+              ctaLabel?: T;
+              ctaHref?: T;
+              id?: T;
+              blockName?: T;
+            };
+        videoTips?:
+          | T
+          | {
+              eyebrow?: T;
+              heading?: T;
+              body?: T;
+              layout?: T;
+              videos?:
+                | T
+                | {
+                    title?: T;
+                    description?: T;
+                    videoUrl?: T;
+                    thumbnail?: T;
+                    duration?: T;
+                    id?: T;
+                  };
+              ctaLabel?: T;
+              ctaHref?: T;
               id?: T;
               blockName?: T;
             };
@@ -1418,10 +1880,21 @@ export interface LeadsSelect<T extends boolean = true> {
   lastName?: T;
   email?: T;
   phone?: T;
+  city?: T;
+  agency?: T;
+  vehicleLabel?: T;
+  whatsappNumber?: T;
+  whatsappOpenedAt?: T;
+  sourcePage?: T;
+  sourceSection?: T;
+  leadSource?: T;
   source?: T;
   vehicle?: T;
   message?: T;
   stage?: T;
+  assignedTo?: T;
+  contactedBy?: T;
+  contactedAt?: T;
   notes?: T;
   updatedAt?: T;
   createdAt?: T;
@@ -1437,6 +1910,13 @@ export interface AnalyticsEventsSelect<T extends boolean = true> {
   vehicle?: T;
   vehicleLabel?: T;
   targetLabel?: T;
+  agency?: T;
+  city?: T;
+  brand?: T;
+  condition?: T;
+  collectionId?: T;
+  leadId?: T;
+  sourceSection?: T;
   durationSeconds?: T;
   sessionId?: T;
   visitorId?: T;
@@ -1453,14 +1933,21 @@ export interface DealershipsSelect<T extends boolean = true> {
   brandName?: T;
   displayName?: T;
   city?: T;
+  state?: T;
+  address?: T;
   phone?: T;
   whatsapp?: T;
+  email?: T;
+  hours?: T;
   coordinates?:
     | T
     | {
         lat?: T;
         lng?: T;
       };
+  defaultForCity?: T;
+  salesRepName?: T;
+  internalNotes?: T;
   isActive?: T;
   updatedAt?: T;
   createdAt?: T;
@@ -1553,6 +2040,7 @@ export interface SiteConfig {
   navigation?: {
     mainLinks?:
       | {
+          type?: ('page' | 'collection' | 'brand' | 'inventory' | 'custom') | null;
           label: string;
           href: string;
           children?:
@@ -1562,6 +2050,20 @@ export interface SiteConfig {
                 id?: string | null;
               }[]
             | null;
+          id?: string | null;
+        }[]
+      | null;
+    footerLinks?:
+      | {
+          label: string;
+          href: string;
+          id?: string | null;
+        }[]
+      | null;
+    legalLinks?:
+      | {
+          label: string;
+          href: string;
           id?: string | null;
         }[]
       | null;
@@ -1625,6 +2127,24 @@ export interface SiteConfig {
               blockType: 'featuredVehicles';
             }
           | {
+              collection: number | VehicleCollection;
+              heading?: string | null;
+              body?: string | null;
+              layout?: ('grid' | 'carousel' | 'featuredSplit') | null;
+              limit?: number | null;
+              display?: {
+                showPrice?: boolean | null;
+                showMileage?: boolean | null;
+                showCity?: boolean | null;
+                showTags?: boolean | null;
+              };
+              ctaLabel?: string | null;
+              ctaHref?: string | null;
+              id?: string | null;
+              blockName?: string | null;
+              blockType: 'inventoryCollection';
+            }
+          | {
               eyebrow?: string | null;
               heading?: string | null;
               body?: string | null;
@@ -1636,6 +2156,103 @@ export interface SiteConfig {
               id?: string | null;
               blockName?: string | null;
               blockType: 'inventorySearch';
+            }
+          | {
+              eyebrow?: string | null;
+              heading?: string | null;
+              body?: string | null;
+              layout?: ('cards' | 'compact' | 'map') | null;
+              limit?: number | null;
+              cities?:
+                | {
+                    city?: string | null;
+                    label?: string | null;
+                    href?: string | null;
+                    image?: (number | null) | Media;
+                    id?: string | null;
+                  }[]
+                | null;
+              ctaLabel?: string | null;
+              ctaHref?: string | null;
+              id?: string | null;
+              blockName?: string | null;
+              blockType: 'cityInventory';
+            }
+          | {
+              eyebrow?: string | null;
+              heading?: string | null;
+              body?: string | null;
+              image?: (number | null) | Media;
+              mobileImage?: (number | null) | Media;
+              imageAlt?: string | null;
+              variant?: ('image' | 'split' | 'compact') | null;
+              theme?: ('brand' | 'light' | 'dark') | null;
+              href?: string | null;
+              ctaLabel?: string | null;
+              ctaHref?: string | null;
+              id?: string | null;
+              blockName?: string | null;
+              blockType: 'promoBanner';
+            }
+          | {
+              eyebrow?: string | null;
+              heading?: string | null;
+              body?: string | null;
+              layout?: ('steps' | 'cards') | null;
+              steps?:
+                | {
+                    icon?: ('search' | 'inspection' | 'financing' | 'delivery' | 'shield') | null;
+                    label?: string | null;
+                    description?: string | null;
+                    id?: string | null;
+                  }[]
+                | null;
+              id?: string | null;
+              blockName?: string | null;
+              blockType: 'trustSteps';
+            }
+          | {
+              eyebrow?: string | null;
+              heading?: string | null;
+              body?: string | null;
+              layout?: ('carousel' | 'grid') | null;
+              items?:
+                | {
+                    quote?: string | null;
+                    author?: string | null;
+                    role?: string | null;
+                    city?: string | null;
+                    rating?: number | null;
+                    image?: (number | null) | Media;
+                    id?: string | null;
+                  }[]
+                | null;
+              ctaLabel?: string | null;
+              ctaHref?: string | null;
+              id?: string | null;
+              blockName?: string | null;
+              blockType: 'testimonials';
+            }
+          | {
+              eyebrow?: string | null;
+              heading?: string | null;
+              body?: string | null;
+              layout?: ('featured' | 'grid') | null;
+              videos?:
+                | {
+                    title?: string | null;
+                    description?: string | null;
+                    videoUrl?: string | null;
+                    thumbnail?: (number | null) | Media;
+                    duration?: string | null;
+                    id?: string | null;
+                  }[]
+                | null;
+              ctaLabel?: string | null;
+              ctaHref?: string | null;
+              id?: string | null;
+              blockName?: string | null;
+              blockType: 'videoTips';
             }
           | {
               eyebrow?: string | null;
@@ -1694,7 +2311,13 @@ export interface SiteConfig {
       showLocationPrompt?: boolean | null;
     };
     vehicleDetail?: {
+      showGallery?: boolean | null;
+      showPurchaseCard?: boolean | null;
+      showQuickSpecs?: boolean | null;
+      showDescription?: boolean | null;
+      showFeatures?: boolean | null;
       showSimilarVehicles?: boolean | null;
+      showMobileCta?: boolean | null;
       ctaHeading?: string | null;
       ctaBody?: string | null;
     };
@@ -1732,6 +2355,7 @@ export interface SiteConfigSelect<T extends boolean = true> {
         mainLinks?:
           | T
           | {
+              type?: T;
               label?: T;
               href?: T;
               children?:
@@ -1741,6 +2365,20 @@ export interface SiteConfigSelect<T extends boolean = true> {
                     href?: T;
                     id?: T;
                   };
+              id?: T;
+            };
+        footerLinks?:
+          | T
+          | {
+              label?: T;
+              href?: T;
+              id?: T;
+            };
+        legalLinks?:
+          | T
+          | {
+              label?: T;
+              href?: T;
               id?: T;
             };
         cta?:
@@ -1816,6 +2454,27 @@ export interface SiteConfigSelect<T extends boolean = true> {
                     id?: T;
                     blockName?: T;
                   };
+              inventoryCollection?:
+                | T
+                | {
+                    collection?: T;
+                    heading?: T;
+                    body?: T;
+                    layout?: T;
+                    limit?: T;
+                    display?:
+                      | T
+                      | {
+                          showPrice?: T;
+                          showMileage?: T;
+                          showCity?: T;
+                          showTags?: T;
+                        };
+                    ctaLabel?: T;
+                    ctaHref?: T;
+                    id?: T;
+                    blockName?: T;
+                  };
               inventorySearch?:
                 | T
                 | {
@@ -1827,6 +2486,108 @@ export interface SiteConfigSelect<T extends boolean = true> {
                     city?: T;
                     brand?: T;
                     bodyType?: T;
+                    id?: T;
+                    blockName?: T;
+                  };
+              cityInventory?:
+                | T
+                | {
+                    eyebrow?: T;
+                    heading?: T;
+                    body?: T;
+                    layout?: T;
+                    limit?: T;
+                    cities?:
+                      | T
+                      | {
+                          city?: T;
+                          label?: T;
+                          href?: T;
+                          image?: T;
+                          id?: T;
+                        };
+                    ctaLabel?: T;
+                    ctaHref?: T;
+                    id?: T;
+                    blockName?: T;
+                  };
+              promoBanner?:
+                | T
+                | {
+                    eyebrow?: T;
+                    heading?: T;
+                    body?: T;
+                    image?: T;
+                    mobileImage?: T;
+                    imageAlt?: T;
+                    variant?: T;
+                    theme?: T;
+                    href?: T;
+                    ctaLabel?: T;
+                    ctaHref?: T;
+                    id?: T;
+                    blockName?: T;
+                  };
+              trustSteps?:
+                | T
+                | {
+                    eyebrow?: T;
+                    heading?: T;
+                    body?: T;
+                    layout?: T;
+                    steps?:
+                      | T
+                      | {
+                          icon?: T;
+                          label?: T;
+                          description?: T;
+                          id?: T;
+                        };
+                    id?: T;
+                    blockName?: T;
+                  };
+              testimonials?:
+                | T
+                | {
+                    eyebrow?: T;
+                    heading?: T;
+                    body?: T;
+                    layout?: T;
+                    items?:
+                      | T
+                      | {
+                          quote?: T;
+                          author?: T;
+                          role?: T;
+                          city?: T;
+                          rating?: T;
+                          image?: T;
+                          id?: T;
+                        };
+                    ctaLabel?: T;
+                    ctaHref?: T;
+                    id?: T;
+                    blockName?: T;
+                  };
+              videoTips?:
+                | T
+                | {
+                    eyebrow?: T;
+                    heading?: T;
+                    body?: T;
+                    layout?: T;
+                    videos?:
+                      | T
+                      | {
+                          title?: T;
+                          description?: T;
+                          videoUrl?: T;
+                          thumbnail?: T;
+                          duration?: T;
+                          id?: T;
+                        };
+                    ctaLabel?: T;
+                    ctaHref?: T;
                     id?: T;
                     blockName?: T;
                   };
@@ -1902,7 +2663,13 @@ export interface SiteConfigSelect<T extends boolean = true> {
         vehicleDetail?:
           | T
           | {
+              showGallery?: T;
+              showPurchaseCard?: T;
+              showQuickSpecs?: T;
+              showDescription?: T;
+              showFeatures?: T;
               showSimilarVehicles?: T;
+              showMobileCta?: T;
               ctaHeading?: T;
               ctaBody?: T;
             };

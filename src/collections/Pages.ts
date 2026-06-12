@@ -4,7 +4,16 @@ import { siteSectionBlocks } from '../blocks/SiteSections'
 import { canManageContent } from '../access/roles'
 
 const FRONTEND_URL = process.env.NEXT_PUBLIC_FRONTEND_URL || 'http://localhost:3000'
-const protectedSlugs = ['api', 'cars', 'seminuevos', 'marcas', 'contacts', 'contact', 'contacto', 'admin']
+const protectedSlugs = [
+  'api',
+  'cars',
+  'seminuevos',
+  'marcas',
+  'contacts',
+  'contact',
+  'contacto',
+  'admin',
+]
 
 function slugify(value: string | null | undefined) {
   return String(value ?? '')
@@ -25,9 +34,9 @@ export const Pages: CollectionConfig = {
     delete: canManageContent,
   },
   admin: {
-    group: 'Site Builder',
+    group: false,
     useAsTitle: 'title',
-    defaultColumns: ['title', 'slug', 'isVisible', 'updatedAt'],
+    defaultColumns: ['title', 'slug', 'status', 'showInNavigation', 'updatedAt'],
     livePreview: {
       breakpoints: [
         { label: 'Mobile', name: 'mobile', width: 390, height: 844 },
@@ -56,7 +65,26 @@ export const Pages: CollectionConfig = {
         ],
       },
     },
-    { name: 'isVisible', type: 'checkbox', defaultValue: true, label: 'Visible en sitio' },
+    {
+      name: 'status',
+      type: 'select',
+      defaultValue: 'draft',
+      label: 'Estatus',
+      options: [
+        { label: 'Borrador', value: 'draft' },
+        { label: 'Publicado', value: 'published' },
+        { label: 'Archivado', value: 'archived' },
+      ],
+    },
+    { name: 'isVisible', type: 'checkbox', defaultValue: false, label: 'Visible en sitio' },
+    {
+      name: 'showInNavigation',
+      type: 'checkbox',
+      defaultValue: false,
+      label: 'Mostrar en navegacion',
+    },
+    { name: 'navLabel', type: 'text', label: 'Etiqueta de navegacion' },
+    { name: 'navParent', type: 'text', label: 'Grupo padre de navegacion' },
     {
       name: 'seo',
       type: 'group',
@@ -66,6 +94,21 @@ export const Pages: CollectionConfig = {
         { name: 'image', type: 'upload', relationTo: 'media' },
       ],
     },
-    { name: 'sections', type: 'blocks', blocks: siteSectionBlocks, required: true, label: 'Secciones' },
+    {
+      name: 'sections',
+      type: 'blocks',
+      blocks: siteSectionBlocks,
+      required: true,
+      label: 'Secciones',
+    },
   ],
+  hooks: {
+    beforeChange: [
+      ({ data }) => {
+        if (data.status === 'published') data.isVisible = true
+        if (data.status === 'draft' || data.status === 'archived') data.isVisible = false
+        return data
+      },
+    ],
+  },
 }

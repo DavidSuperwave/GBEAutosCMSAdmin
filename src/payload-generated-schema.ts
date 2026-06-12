@@ -14,11 +14,11 @@ import {
   foreignKey,
   integer,
   varchar,
-  timestamp,
+  text,
   serial,
   numeric,
-  text,
   boolean,
+  timestamp,
   jsonb,
   pgEnum,
 } from '@payloadcms/db-postgres/drizzle/pg-core'
@@ -53,22 +53,171 @@ export const enum_vehicles_inventory_status = pgEnum('enum_vehicles_inventory_st
   'reserved',
   'sold',
 ])
+export const enum_vehicles_publish_status = pgEnum('enum_vehicles_publish_status', [
+  'draft',
+  'needs_review',
+  'published',
+  'archived',
+])
+export const enum_vehicles_image_status = pgEnum('enum_vehicles_image_status', [
+  'missing',
+  'candidate_found',
+  'uploaded',
+  'generated',
+  'approved',
+  'rejected',
+])
+export const enum_vehicles_spec_status = pgEnum('enum_vehicles_spec_status', [
+  'missing',
+  'partial',
+  'matched',
+  'manual',
+  'verified',
+])
 export const enum_vehicles_source_meta_spec_source = pgEnum(
   'enum_vehicles_source_meta_spec_source',
   ['catalog', 'rapidapi', 'manual', 'none'],
 )
-export const enum_leads_source = pgEnum('enum_leads_source', [
-  'website_form',
-  'whatsapp',
-  'phone',
-  'walk_in',
+export const enum_vehicle_tags_type = pgEnum('enum_vehicle_tags_type', [
+  'manual',
+  'automatic',
+  'system',
 ])
-export const enum_leads_stage = pgEnum('enum_leads_stage', [
-  'new',
-  'contacted',
-  'in_progress',
-  'closed_won',
-  'closed_lost',
+export const enum_vehicle_collections_collection_type = pgEnum(
+  'enum_vehicle_collections_collection_type',
+  ['manual', 'smart'],
+)
+export const enum_vehicle_collections_rules_condition = pgEnum(
+  'enum_vehicle_collections_rules_condition',
+  ['new', 'used'],
+)
+export const enum_vehicle_collections_rules_body_type = pgEnum(
+  'enum_vehicle_collections_rules_body_type',
+  ['sedan', 'suv', 'pickup', 'coupe', 'hatchback', 'van', 'other'],
+)
+export const enum_vehicle_collections_rules_fuel = pgEnum('enum_vehicle_collections_rules_fuel', [
+  'gasoline',
+  'diesel',
+  'hybrid',
+  'electric',
+])
+export const enum_vehicle_collections_rules_transmission = pgEnum(
+  'enum_vehicle_collections_rules_transmission',
+  ['automatic', 'manual', 'cvt'],
+)
+export const enum_vehicle_collections_rules_inventory_status = pgEnum(
+  'enum_vehicle_collections_rules_inventory_status',
+  ['available', 'reserved', 'sold'],
+)
+export const enum_vehicle_collections_rules_publish_status = pgEnum(
+  'enum_vehicle_collections_rules_publish_status',
+  ['draft', 'needs_review', 'published', 'archived'],
+)
+export const enum_vehicle_collections_sort = pgEnum('enum_vehicle_collections_sort', [
+  'newest',
+  'mostViewed',
+  'mostClicked',
+  'mostLeads',
+  'priceAsc',
+  'priceDesc',
+  'mileageAsc',
+  'yearDesc',
+])
+export const enum_import_jobs_file_type = pgEnum('enum_import_jobs_file_type', ['csv', 'xlsx'])
+export const enum_import_jobs_status = pgEnum('enum_import_jobs_status', [
+  'pending',
+  'validating',
+  'ready',
+  'importing',
+  'completed',
+  'rolled_back',
+  'failed',
+])
+export const enum_vehicle_media_assets_source_type = pgEnum(
+  'enum_vehicle_media_assets_source_type',
+  ['uploaded', 'dealer_photo', 'api_candidate', 'ai_generated', 'ai_edited', 'representative'],
+)
+export const enum_vehicle_media_assets_approval_status = pgEnum(
+  'enum_vehicle_media_assets_approval_status',
+  ['draft', 'needs_review', 'approved', 'rejected'],
+)
+export const enum_vehicle_media_assets_match_confidence = pgEnum(
+  'enum_vehicle_media_assets_match_confidence',
+  [
+    'exact_vehicle',
+    'same_trim_color',
+    'same_model_color',
+    'same_model',
+    'representative',
+    'generated',
+    'unknown',
+  ],
+)
+export const enum_vehicle_media_assets_rights_status = pgEnum(
+  'enum_vehicle_media_assets_rights_status',
+  ['owned', 'licensed', 'unknown'],
+)
+export const enum_vehicle_media_assets_usage = pgEnum('enum_vehicle_media_assets_usage', [
+  'vehicle_hero',
+  'vehicle_gallery',
+  'homepage',
+  'landing_page',
+  'promo_banner',
+  'social_ad',
+])
+export const enum_workshop_jobs_messages_role = pgEnum('enum_workshop_jobs_messages_role', [
+  'user',
+  'assistant',
+  'system',
+])
+export const enum_workshop_jobs_job_type = pgEnum('enum_workshop_jobs_job_type', [
+  'vehicle_image',
+  'marketing_asset',
+])
+export const enum_workshop_jobs_prompt_preset = pgEnum('enum_workshop_jobs_prompt_preset', [
+  'vehicle_hero',
+  'transparent_bg',
+  'clean_dealership_bg',
+  'logo_overlay',
+  'homepage_banner',
+  'social_ad',
+  'promo_banner',
+  'seminuevo_gallery_cover',
+  'new_car_representative',
+])
+export const enum_workshop_jobs_aspect_ratio = pgEnum('enum_workshop_jobs_aspect_ratio', [
+  '16:9',
+  '1:1',
+  '9:16',
+  '4:3',
+])
+export const enum_workshop_jobs_save_destination = pgEnum('enum_workshop_jobs_save_destination', [
+  'media_library',
+  'vehicle_hero',
+  'vehicle_gallery',
+  'vehicle_listing_section',
+  'homepage_section',
+  'landing_section',
+  'promo_banner',
+])
+export const enum_workshop_jobs_status = pgEnum('enum_workshop_jobs_status', [
+  'draft',
+  'generating',
+  'ready_for_review',
+  'approved',
+  'rejected',
+  'failed',
+])
+export const enum_image_templates_preset = pgEnum('enum_image_templates_preset', [
+  'vehicle_hero',
+  'transparent_bg',
+  'clean_dealership_bg',
+  'logo_overlay',
+  'homepage_banner',
+  'social_ad',
+  'promo_banner',
+  'seminuevo_gallery_cover',
+  'new_car_representative',
 ])
 export const enum_pages_blocks_featured_vehicles_source = pgEnum(
   'enum_pages_blocks_featured_vehicles_source',
@@ -78,18 +227,80 @@ export const enum_pages_blocks_featured_vehicles_body_type = pgEnum(
   'enum_pages_blocks_featured_vehicles_body_type',
   ['sedan', 'suv', 'pickup', 'coupe', 'hatchback', 'van', 'other'],
 )
+export const enum_pages_blocks_inventory_collection_layout = pgEnum(
+  'enum_pages_blocks_inventory_collection_layout',
+  ['grid', 'carousel', 'featuredSplit'],
+)
 export const enum_pages_blocks_inventory_search_body_type = pgEnum(
   'enum_pages_blocks_inventory_search_body_type',
   ['', 'sedan', 'suv', 'pickup', 'coupe', 'hatchback', 'van', 'other'],
 )
+export const enum_pages_blocks_city_inventory_layout = pgEnum(
+  'enum_pages_blocks_city_inventory_layout',
+  ['cards', 'compact', 'map'],
+)
+export const enum_pages_blocks_promo_banner_variant = pgEnum(
+  'enum_pages_blocks_promo_banner_variant',
+  ['image', 'split', 'compact'],
+)
+export const enum_pages_blocks_promo_banner_theme = pgEnum('enum_pages_blocks_promo_banner_theme', [
+  'brand',
+  'light',
+  'dark',
+])
+export const enum_pages_blocks_trust_steps_steps_icon = pgEnum(
+  'enum_pages_blocks_trust_steps_steps_icon',
+  ['search', 'inspection', 'financing', 'delivery', 'shield'],
+)
+export const enum_pages_blocks_trust_steps_layout = pgEnum('enum_pages_blocks_trust_steps_layout', [
+  'steps',
+  'cards',
+])
+export const enum_pages_blocks_testimonials_layout = pgEnum(
+  'enum_pages_blocks_testimonials_layout',
+  ['carousel', 'grid'],
+)
+export const enum_pages_blocks_video_tips_layout = pgEnum('enum_pages_blocks_video_tips_layout', [
+  'featured',
+  'grid',
+])
 export const enum_pages_blocks_media_text_layout = pgEnum('enum_pages_blocks_media_text_layout', [
   'mediaLeft',
   'mediaRight',
+])
+export const enum_pages_status = pgEnum('enum_pages_status', ['draft', 'published', 'archived'])
+export const enum_leads_lead_source = pgEnum('enum_leads_lead_source', [
+  'whatsapp_vehicle_form',
+  'contact_form',
+  'phone_click',
+])
+export const enum_leads_source = pgEnum('enum_leads_source', [
+  'website_form',
+  'whatsapp',
+  'whatsapp_vehicle_form',
+  'contact_form',
+  'phone_click',
+  'phone',
+  'walk_in',
+])
+export const enum_leads_stage = pgEnum('enum_leads_stage', [
+  'new',
+  'whatsapp_opened',
+  'contacted',
+  'appointment_set',
+  'in_progress',
+  'closed_won',
+  'closed_lost',
 ])
 export const enum_analytics_events_event_type = pgEnum('enum_analytics_events_event_type', [
   'page_view',
   'vehicle_view',
   'vehicle_click',
+  'whatsapp_form_open',
+  'whatsapp_form_submit',
+  'whatsapp_open',
+  'collection_view',
+  'filter_used',
   'cta_click',
   'page_duration',
 ])
@@ -98,6 +309,18 @@ export const enum_analytics_events_device_type = pgEnum('enum_analytics_events_d
   'tablet',
   'desktop',
 ])
+export const enum_users_role = pgEnum('enum_users_role', [
+  'admin',
+  'inventory_manager',
+  'content_editor',
+  'sales_manager',
+  'media_editor',
+  'viewer',
+])
+export const enum_site_config_navigation_main_links_type = pgEnum(
+  'enum_site_config_navigation_main_links_type',
+  ['page', 'collection', 'brand', 'inventory', 'custom'],
+)
 export const enum_site_config_blocks_featured_vehicles_source = pgEnum(
   'enum_site_config_blocks_featured_vehicles_source',
   ['latestUsed', 'manual', 'city', 'brand', 'bodyType'],
@@ -106,94 +329,45 @@ export const enum_site_config_blocks_featured_vehicles_body_type = pgEnum(
   'enum_site_config_blocks_featured_vehicles_body_type',
   ['sedan', 'suv', 'pickup', 'coupe', 'hatchback', 'van', 'other'],
 )
+export const enum_site_config_blocks_inventory_collection_layout = pgEnum(
+  'enum_site_config_blocks_inventory_collection_layout',
+  ['grid', 'carousel', 'featuredSplit'],
+)
 export const enum_site_config_blocks_inventory_search_body_type = pgEnum(
   'enum_site_config_blocks_inventory_search_body_type',
   ['', 'sedan', 'suv', 'pickup', 'coupe', 'hatchback', 'van', 'other'],
 )
+export const enum_site_config_blocks_city_inventory_layout = pgEnum(
+  'enum_site_config_blocks_city_inventory_layout',
+  ['cards', 'compact', 'map'],
+)
+export const enum_site_config_blocks_promo_banner_variant = pgEnum(
+  'enum_site_config_blocks_promo_banner_variant',
+  ['image', 'split', 'compact'],
+)
+export const enum_site_config_blocks_promo_banner_theme = pgEnum(
+  'enum_site_config_blocks_promo_banner_theme',
+  ['brand', 'light', 'dark'],
+)
+export const enum_site_config_blocks_trust_steps_steps_icon = pgEnum(
+  'enum_site_config_blocks_trust_steps_steps_icon',
+  ['search', 'inspection', 'financing', 'delivery', 'shield'],
+)
+export const enum_site_config_blocks_trust_steps_layout = pgEnum(
+  'enum_site_config_blocks_trust_steps_layout',
+  ['steps', 'cards'],
+)
+export const enum_site_config_blocks_testimonials_layout = pgEnum(
+  'enum_site_config_blocks_testimonials_layout',
+  ['carousel', 'grid'],
+)
+export const enum_site_config_blocks_video_tips_layout = pgEnum(
+  'enum_site_config_blocks_video_tips_layout',
+  ['featured', 'grid'],
+)
 export const enum_site_config_blocks_media_text_layout = pgEnum(
   'enum_site_config_blocks_media_text_layout',
   ['mediaLeft', 'mediaRight'],
-)
-
-export const users_sessions = pgTable(
-  'users_sessions',
-  {
-    _order: integer('_order').notNull(),
-    _parentID: integer('_parent_id').notNull(),
-    id: varchar('id').primaryKey(),
-    createdAt: timestamp('created_at', { mode: 'string', withTimezone: true, precision: 3 }),
-    expiresAt: timestamp('expires_at', {
-      mode: 'string',
-      withTimezone: true,
-      precision: 3,
-    }).notNull(),
-  },
-  (columns) => [
-    index('users_sessions_order_idx').on(columns._order),
-    index('users_sessions_parent_id_idx').on(columns._parentID),
-    foreignKey({
-      columns: [columns['_parentID']],
-      foreignColumns: [users.id],
-      name: 'users_sessions_parent_id_fk',
-    }).onDelete('cascade'),
-  ],
-)
-
-export const users = pgTable(
-  'users',
-  {
-    id: serial('id').primaryKey(),
-    updatedAt: timestamp('updated_at', { mode: 'string', withTimezone: true, precision: 3 })
-      .defaultNow()
-      .notNull(),
-    createdAt: timestamp('created_at', { mode: 'string', withTimezone: true, precision: 3 })
-      .defaultNow()
-      .notNull(),
-    email: varchar('email').notNull(),
-    resetPasswordToken: varchar('reset_password_token'),
-    resetPasswordExpiration: timestamp('reset_password_expiration', {
-      mode: 'string',
-      withTimezone: true,
-      precision: 3,
-    }),
-    salt: varchar('salt'),
-    hash: varchar('hash'),
-    loginAttempts: numeric('login_attempts', { mode: 'number' }).default(0),
-    lockUntil: timestamp('lock_until', { mode: 'string', withTimezone: true, precision: 3 }),
-  },
-  (columns) => [
-    index('users_updated_at_idx').on(columns.updatedAt),
-    index('users_created_at_idx').on(columns.createdAt),
-    uniqueIndex('users_email_idx').on(columns.email),
-  ],
-)
-
-export const media = pgTable(
-  'media',
-  {
-    id: serial('id').primaryKey(),
-    alt: varchar('alt').notNull(),
-    updatedAt: timestamp('updated_at', { mode: 'string', withTimezone: true, precision: 3 })
-      .defaultNow()
-      .notNull(),
-    createdAt: timestamp('created_at', { mode: 'string', withTimezone: true, precision: 3 })
-      .defaultNow()
-      .notNull(),
-    url: varchar('url'),
-    thumbnailURL: varchar('thumbnail_u_r_l'),
-    filename: varchar('filename'),
-    mimeType: varchar('mime_type'),
-    filesize: numeric('filesize', { mode: 'number' }),
-    width: numeric('width', { mode: 'number' }),
-    height: numeric('height', { mode: 'number' }),
-    focalX: numeric('focal_x', { mode: 'number' }),
-    focalY: numeric('focal_y', { mode: 'number' }),
-  },
-  (columns) => [
-    index('media_updated_at_idx').on(columns.updatedAt),
-    index('media_created_at_idx').on(columns.createdAt),
-    uniqueIndex('media_filename_idx').on(columns.filename),
-  ],
 )
 
 export const vehicles_badges = pgTable(
@@ -470,24 +644,51 @@ export const vehicles = pgTable(
     uuid: varchar('uuid'),
     slug: varchar('slug').notNull(),
     brand: varchar('brand').notNull(),
+    modelFamily: varchar('model_family'),
     model: varchar('model').notNull(),
-    year: numeric('year', { mode: 'number' }).notNull(),
+    trim: varchar('trim'),
+    year: numeric('year', { mode: 'number' }),
+    exteriorColor: varchar('exterior_color'),
+    interiorColor: varchar('interior_color'),
+    vehicleType: varchar('vehicle_type'),
+    segment: varchar('segment'),
+    motorType: varchar('motor_type'),
     stockId: varchar('stock_id'),
     condition: enum_vehicles_condition('condition').notNull().default('new'),
-    dealership: integer('dealership_id')
-      .notNull()
-      .references(() => dealerships.id, {
-        onDelete: 'set null',
-      }),
+    dealership: integer('dealership_id').references(() => dealerships.id, {
+      onDelete: 'set null',
+    }),
     city: varchar('city'),
     mileage: numeric('mileage', { mode: 'number' }),
     bodyType: enum_vehicles_body_type('body_type'),
     transmission: enum_vehicles_transmission('transmission'),
     fuel: enum_vehicles_fuel('fuel'),
-    price: varchar('price').notNull(),
+    featured: boolean('featured').default(false),
+    price: varchar('price'),
     inventoryStatus: enum_vehicles_inventory_status('inventory_status')
       .notNull()
       .default('available'),
+    publishStatus: enum_vehicles_publish_status('publish_status').default('draft'),
+    allowFallbackRouting: boolean('allow_fallback_routing').default(false),
+    imageStatus: enum_vehicles_image_status('image_status').default('missing'),
+    specStatus: enum_vehicles_spec_status('spec_status').default('missing'),
+    completenessScore: numeric('completeness_score', { mode: 'number' }).default(0),
+    publishedAt: timestamp('published_at', { mode: 'string', withTimezone: true, precision: 3 }),
+    lastPublishedBy: integer('last_published_by_id').references(() => users.id, {
+      onDelete: 'set null',
+    }),
+    lastReviewedAt: timestamp('last_reviewed_at', {
+      mode: 'string',
+      withTimezone: true,
+      precision: 3,
+    }),
+    lastReviewedBy: integer('last_reviewed_by_id').references(() => users.id, {
+      onDelete: 'set null',
+    }),
+    reviewNotes: varchar('review_notes'),
+    sourceId: varchar('source_id'),
+    sourceImportId: varchar('source_import_id'),
+    sourceDealerName: varchar('source_dealer_name'),
     image: integer('image_id').references(() => media.id, {
       onDelete: 'set null',
     }),
@@ -530,52 +731,53 @@ export const vehicles = pgTable(
     uniqueIndex('vehicles_uuid_idx').on(columns.uuid),
     uniqueIndex('vehicles_slug_idx').on(columns.slug),
     index('vehicles_dealership_idx').on(columns.dealership),
+    index('vehicles_last_published_by_idx').on(columns.lastPublishedBy),
+    index('vehicles_last_reviewed_by_idx').on(columns.lastReviewedBy),
     index('vehicles_image_idx').on(columns.image),
     index('vehicles_updated_at_idx').on(columns.updatedAt),
     index('vehicles_created_at_idx').on(columns.createdAt),
   ],
 )
 
-export const dealerships = pgTable(
-  'dealerships',
+export const vehicles_rels = pgTable(
+  'vehicles_rels',
   {
     id: serial('id').primaryKey(),
-    brandName: varchar('brand_name').notNull(),
-    displayName: varchar('display_name').notNull(),
-    city: varchar('city').notNull(),
-    phone: varchar('phone'),
-    whatsapp: varchar('whatsapp'),
-    coordinates_lat: numeric('coordinates_lat', { mode: 'number' }),
-    coordinates_lng: numeric('coordinates_lng', { mode: 'number' }),
-    isActive: boolean('is_active').default(true),
-    updatedAt: timestamp('updated_at', { mode: 'string', withTimezone: true, precision: 3 })
-      .defaultNow()
-      .notNull(),
-    createdAt: timestamp('created_at', { mode: 'string', withTimezone: true, precision: 3 })
-      .defaultNow()
-      .notNull(),
+    order: integer('order'),
+    parent: integer('parent_id').notNull(),
+    path: varchar('path').notNull(),
+    'vehicle-tagsID': integer('vehicle_tags_id'),
   },
   (columns) => [
-    index('dealerships_updated_at_idx').on(columns.updatedAt),
-    index('dealerships_created_at_idx').on(columns.createdAt),
+    index('vehicles_rels_order_idx').on(columns.order),
+    index('vehicles_rels_parent_idx').on(columns.parent),
+    index('vehicles_rels_path_idx').on(columns.path),
+    index('vehicles_rels_vehicle_tags_id_idx').on(columns['vehicle-tagsID']),
+    foreignKey({
+      columns: [columns['parent']],
+      foreignColumns: [vehicles.id],
+      name: 'vehicles_rels_parent_fk',
+    }).onDelete('cascade'),
+    foreignKey({
+      columns: [columns['vehicle-tagsID']],
+      foreignColumns: [vehicle_tags.id],
+      name: 'vehicles_rels_vehicle_tags_fk',
+    }).onDelete('cascade'),
   ],
 )
 
-export const leads = pgTable(
-  'leads',
+export const vehicle_tags = pgTable(
+  'vehicle_tags',
   {
     id: serial('id').primaryKey(),
-    firstName: varchar('first_name').notNull(),
-    lastName: varchar('last_name'),
-    email: varchar('email'),
-    phone: varchar('phone').notNull(),
-    source: enum_leads_source('source').default('website_form'),
-    vehicle: integer('vehicle_id').references(() => vehicles.id, {
-      onDelete: 'set null',
-    }),
-    message: varchar('message'),
-    stage: enum_leads_stage('stage').default('new'),
-    notes: varchar('notes'),
+    name: varchar('name').notNull(),
+    slug: varchar('slug').notNull(),
+    label: varchar('label'),
+    description: varchar('description'),
+    type: enum_vehicle_tags_type('type').default('manual'),
+    color: varchar('color'),
+    isVisible: boolean('is_visible').default(true),
+    sortOrder: numeric('sort_order', { mode: 'number' }),
     updatedAt: timestamp('updated_at', { mode: 'string', withTimezone: true, precision: 3 })
       .defaultNow()
       .notNull(),
@@ -584,9 +786,380 @@ export const leads = pgTable(
       .notNull(),
   },
   (columns) => [
-    index('leads_vehicle_idx').on(columns.vehicle),
-    index('leads_updated_at_idx').on(columns.updatedAt),
-    index('leads_created_at_idx').on(columns.createdAt),
+    uniqueIndex('vehicle_tags_slug_idx').on(columns.slug),
+    index('vehicle_tags_updated_at_idx').on(columns.updatedAt),
+    index('vehicle_tags_created_at_idx').on(columns.createdAt),
+  ],
+)
+
+export const vehicle_collections = pgTable(
+  'vehicle_collections',
+  {
+    id: serial('id').primaryKey(),
+    name: varchar('name').notNull(),
+    slug: varchar('slug').notNull(),
+    description: varchar('description'),
+    image: integer('image_id').references(() => media.id, {
+      onDelete: 'set null',
+    }),
+    collectionType: enum_vehicle_collections_collection_type('collection_type')
+      .notNull()
+      .default('smart'),
+    rules_condition: enum_vehicle_collections_rules_condition('rules_condition'),
+    rules_brand: varchar('rules_brand'),
+    rules_city: varchar('rules_city'),
+    rules_dealership: integer('rules_dealership_id').references(() => dealerships.id, {
+      onDelete: 'set null',
+    }),
+    rules_bodyType: enum_vehicle_collections_rules_body_type('rules_body_type'),
+    rules_segment: varchar('rules_segment'),
+    rules_vehicleType: varchar('rules_vehicle_type'),
+    rules_fuel: enum_vehicle_collections_rules_fuel('rules_fuel'),
+    rules_transmission: enum_vehicle_collections_rules_transmission('rules_transmission'),
+    rules_inventoryStatus:
+      enum_vehicle_collections_rules_inventory_status('rules_inventory_status'),
+    rules_publishStatus: enum_vehicle_collections_rules_publish_status('rules_publish_status'),
+    sort: enum_vehicle_collections_sort('sort').default('newest'),
+    limit: numeric('limit', { mode: 'number' }).default(12),
+    isVisible: boolean('is_visible').default(true),
+    seo_title: varchar('seo_title'),
+    seo_description: varchar('seo_description'),
+    seo_image: integer('seo_image_id').references(() => media.id, {
+      onDelete: 'set null',
+    }),
+    updatedAt: timestamp('updated_at', { mode: 'string', withTimezone: true, precision: 3 })
+      .defaultNow()
+      .notNull(),
+    createdAt: timestamp('created_at', { mode: 'string', withTimezone: true, precision: 3 })
+      .defaultNow()
+      .notNull(),
+  },
+  (columns) => [
+    uniqueIndex('vehicle_collections_slug_idx').on(columns.slug),
+    index('vehicle_collections_image_idx').on(columns.image),
+    index('vehicle_collections_rules_rules_dealership_idx').on(columns.rules_dealership),
+    index('vehicle_collections_seo_seo_image_idx').on(columns.seo_image),
+    index('vehicle_collections_updated_at_idx').on(columns.updatedAt),
+    index('vehicle_collections_created_at_idx').on(columns.createdAt),
+  ],
+)
+
+export const vehicle_collections_rels = pgTable(
+  'vehicle_collections_rels',
+  {
+    id: serial('id').primaryKey(),
+    order: integer('order'),
+    parent: integer('parent_id').notNull(),
+    path: varchar('path').notNull(),
+    vehiclesID: integer('vehicles_id'),
+    'vehicle-tagsID': integer('vehicle_tags_id'),
+  },
+  (columns) => [
+    index('vehicle_collections_rels_order_idx').on(columns.order),
+    index('vehicle_collections_rels_parent_idx').on(columns.parent),
+    index('vehicle_collections_rels_path_idx').on(columns.path),
+    index('vehicle_collections_rels_vehicles_id_idx').on(columns.vehiclesID),
+    index('vehicle_collections_rels_vehicle_tags_id_idx').on(columns['vehicle-tagsID']),
+    foreignKey({
+      columns: [columns['parent']],
+      foreignColumns: [vehicle_collections.id],
+      name: 'vehicle_collections_rels_parent_fk',
+    }).onDelete('cascade'),
+    foreignKey({
+      columns: [columns['vehiclesID']],
+      foreignColumns: [vehicles.id],
+      name: 'vehicle_collections_rels_vehicles_fk',
+    }).onDelete('cascade'),
+    foreignKey({
+      columns: [columns['vehicle-tagsID']],
+      foreignColumns: [vehicle_tags.id],
+      name: 'vehicle_collections_rels_vehicle_tags_fk',
+    }).onDelete('cascade'),
+  ],
+)
+
+export const import_jobs_errors = pgTable(
+  'import_jobs_errors',
+  {
+    _order: integer('_order').notNull(),
+    _parentID: integer('_parent_id').notNull(),
+    id: varchar('id').primaryKey(),
+    row: numeric('row', { mode: 'number' }),
+    message: varchar('message'),
+  },
+  (columns) => [
+    index('import_jobs_errors_order_idx').on(columns._order),
+    index('import_jobs_errors_parent_id_idx').on(columns._parentID),
+    foreignKey({
+      columns: [columns['_parentID']],
+      foreignColumns: [import_jobs.id],
+      name: 'import_jobs_errors_parent_id_fk',
+    }).onDelete('cascade'),
+  ],
+)
+
+export const import_jobs = pgTable(
+  'import_jobs',
+  {
+    id: serial('id').primaryKey(),
+    fileName: varchar('file_name').notNull(),
+    fileType: enum_import_jobs_file_type('file_type').default('csv'),
+    status: enum_import_jobs_status('status').default('pending'),
+    rowCount: numeric('row_count', { mode: 'number' }).default(0),
+    createdCount: numeric('created_count', { mode: 'number' }).default(0),
+    updatedCount: numeric('updated_count', { mode: 'number' }).default(0),
+    skippedCount: numeric('skipped_count', { mode: 'number' }).default(0),
+    reviewCount: numeric('review_count', { mode: 'number' }).default(0),
+    errorCount: numeric('error_count', { mode: 'number' }).default(0),
+    mapping: jsonb('mapping'),
+    summary: varchar('summary'),
+    createdVehicleIds: jsonb('created_vehicle_ids'),
+    uploadedBy: integer('uploaded_by_id').references(() => users.id, {
+      onDelete: 'set null',
+    }),
+    updatedAt: timestamp('updated_at', { mode: 'string', withTimezone: true, precision: 3 })
+      .defaultNow()
+      .notNull(),
+    createdAt: timestamp('created_at', { mode: 'string', withTimezone: true, precision: 3 })
+      .defaultNow()
+      .notNull(),
+  },
+  (columns) => [
+    index('import_jobs_uploaded_by_idx').on(columns.uploadedBy),
+    index('import_jobs_updated_at_idx').on(columns.updatedAt),
+    index('import_jobs_created_at_idx').on(columns.createdAt),
+  ],
+)
+
+export const vehicle_media_assets = pgTable(
+  'vehicle_media_assets',
+  {
+    id: serial('id').primaryKey(),
+    title: varchar('title'),
+    vehicle: integer('vehicle_id').references(() => vehicles.id, {
+      onDelete: 'set null',
+    }),
+    media: integer('media_id')
+      .notNull()
+      .references(() => media.id, {
+        onDelete: 'set null',
+      }),
+    sourceType: enum_vehicle_media_assets_source_type('source_type').default('uploaded'),
+    sourceUrl: varchar('source_url'),
+    sourceProvider: varchar('source_provider'),
+    matchKey: varchar('match_key'),
+    make: varchar('make'),
+    model: varchar('model'),
+    year: numeric('year', { mode: 'number' }),
+    trim: varchar('trim'),
+    exteriorColor: varchar('exterior_color'),
+    approvalStatus: enum_vehicle_media_assets_approval_status('approval_status').default('draft'),
+    matchConfidence:
+      enum_vehicle_media_assets_match_confidence('match_confidence').default('unknown'),
+    exteriorColorMatched: boolean('exterior_color_matched'),
+    rightsStatus: enum_vehicle_media_assets_rights_status('rights_status').default('unknown'),
+    usage: enum_vehicle_media_assets_usage('usage'),
+    notes: varchar('notes'),
+    createdBy: integer('created_by_id').references(() => users.id, {
+      onDelete: 'set null',
+    }),
+    approvedBy: integer('approved_by_id').references(() => users.id, {
+      onDelete: 'set null',
+    }),
+    approvedAt: timestamp('approved_at', { mode: 'string', withTimezone: true, precision: 3 }),
+    updatedAt: timestamp('updated_at', { mode: 'string', withTimezone: true, precision: 3 })
+      .defaultNow()
+      .notNull(),
+    createdAt: timestamp('created_at', { mode: 'string', withTimezone: true, precision: 3 })
+      .defaultNow()
+      .notNull(),
+  },
+  (columns) => [
+    index('vehicle_media_assets_vehicle_idx').on(columns.vehicle),
+    index('vehicle_media_assets_media_idx').on(columns.media),
+    index('vehicle_media_assets_match_key_idx').on(columns.matchKey),
+    index('vehicle_media_assets_created_by_idx').on(columns.createdBy),
+    index('vehicle_media_assets_approved_by_idx').on(columns.approvedBy),
+    index('vehicle_media_assets_updated_at_idx').on(columns.updatedAt),
+    index('vehicle_media_assets_created_at_idx').on(columns.createdAt),
+  ],
+)
+
+export const vehicle_image_searches = pgTable(
+  'vehicle_image_searches',
+  {
+    id: serial('id').primaryKey(),
+    provider: varchar('provider').notNull().default('carsxe'),
+    matchKey: varchar('match_key').notNull(),
+    query: jsonb('query'),
+    candidates: jsonb('candidates'),
+    fetchedAt: timestamp('fetched_at', { mode: 'string', withTimezone: true, precision: 3 }),
+    expiresAt: timestamp('expires_at', { mode: 'string', withTimezone: true, precision: 3 }),
+    lastError: varchar('last_error'),
+    updatedAt: timestamp('updated_at', { mode: 'string', withTimezone: true, precision: 3 })
+      .defaultNow()
+      .notNull(),
+    createdAt: timestamp('created_at', { mode: 'string', withTimezone: true, precision: 3 })
+      .defaultNow()
+      .notNull(),
+  },
+  (columns) => [
+    index('vehicle_image_searches_match_key_idx').on(columns.matchKey),
+    index('vehicle_image_searches_expires_at_idx').on(columns.expiresAt),
+    index('vehicle_image_searches_updated_at_idx').on(columns.updatedAt),
+    index('vehicle_image_searches_created_at_idx').on(columns.createdAt),
+  ],
+)
+
+export const workshop_jobs_input_images = pgTable(
+  'workshop_jobs_input_images',
+  {
+    _order: integer('_order').notNull(),
+    _parentID: integer('_parent_id').notNull(),
+    id: varchar('id').primaryKey(),
+    image: integer('image_id')
+      .notNull()
+      .references(() => media.id, {
+        onDelete: 'set null',
+      }),
+  },
+  (columns) => [
+    index('workshop_jobs_input_images_order_idx').on(columns._order),
+    index('workshop_jobs_input_images_parent_id_idx').on(columns._parentID),
+    index('workshop_jobs_input_images_image_idx').on(columns.image),
+    foreignKey({
+      columns: [columns['_parentID']],
+      foreignColumns: [workshop_jobs.id],
+      name: 'workshop_jobs_input_images_parent_id_fk',
+    }).onDelete('cascade'),
+  ],
+)
+
+export const workshop_jobs_messages = pgTable(
+  'workshop_jobs_messages',
+  {
+    _order: integer('_order').notNull(),
+    _parentID: integer('_parent_id').notNull(),
+    id: varchar('id').primaryKey(),
+    role: enum_workshop_jobs_messages_role('role').notNull().default('user'),
+    content: varchar('content').notNull(),
+    turnId: varchar('turn_id'),
+    createdAt: timestamp('created_at', { mode: 'string', withTimezone: true, precision: 3 }),
+  },
+  (columns) => [
+    index('workshop_jobs_messages_order_idx').on(columns._order),
+    index('workshop_jobs_messages_parent_id_idx').on(columns._parentID),
+    index('workshop_jobs_messages_turn_id_idx').on(columns.turnId),
+    foreignKey({
+      columns: [columns['_parentID']],
+      foreignColumns: [workshop_jobs.id],
+      name: 'workshop_jobs_messages_parent_id_fk',
+    }).onDelete('cascade'),
+  ],
+)
+
+export const workshop_jobs_outputs = pgTable(
+  'workshop_jobs_outputs',
+  {
+    _order: integer('_order').notNull(),
+    _parentID: integer('_parent_id').notNull(),
+    id: varchar('id').primaryKey(),
+    image: integer('image_id').references(() => media.id, {
+      onDelete: 'set null',
+    }),
+    url: varchar('url'),
+    turnId: varchar('turn_id'),
+    selected: boolean('selected'),
+  },
+  (columns) => [
+    index('workshop_jobs_outputs_order_idx').on(columns._order),
+    index('workshop_jobs_outputs_parent_id_idx').on(columns._parentID),
+    index('workshop_jobs_outputs_image_idx').on(columns.image),
+    index('workshop_jobs_outputs_turn_id_idx').on(columns.turnId),
+    foreignKey({
+      columns: [columns['_parentID']],
+      foreignColumns: [workshop_jobs.id],
+      name: 'workshop_jobs_outputs_parent_id_fk',
+    }).onDelete('cascade'),
+  ],
+)
+
+export const workshop_jobs = pgTable(
+  'workshop_jobs',
+  {
+    id: serial('id').primaryKey(),
+    title: varchar('title'),
+    jobType: enum_workshop_jobs_job_type('job_type').default('vehicle_image'),
+    linkedVehicle: integer('linked_vehicle_id').references(() => vehicles.id, {
+      onDelete: 'set null',
+    }),
+    promptPreset: enum_workshop_jobs_prompt_preset('prompt_preset').default('vehicle_hero'),
+    aspectRatio: enum_workshop_jobs_aspect_ratio('aspect_ratio').default('16:9'),
+    prompt: varchar('prompt'),
+    styleTemplate: integer('style_template_id').references(() => image_templates.id, {
+      onDelete: 'set null',
+    }),
+    styleName: varchar('style_name'),
+    stylePrompt: varchar('style_prompt'),
+    vehicleContext_brand: varchar('vehicle_context_brand'),
+    vehicleContext_model: varchar('vehicle_context_model'),
+    vehicleContext_year: numeric('vehicle_context_year', { mode: 'number' }),
+    vehicleContext_color: varchar('vehicle_context_color'),
+    styleReferenceUrl: varchar('style_reference_url'),
+    approvedOutput: integer('approved_output_id').references(() => media.id, {
+      onDelete: 'set null',
+    }),
+    saveDestination: enum_workshop_jobs_save_destination('save_destination'),
+    status: enum_workshop_jobs_status('status').default('draft'),
+    error: varchar('error'),
+    createdBy: integer('created_by_id').references(() => users.id, {
+      onDelete: 'set null',
+    }),
+    completedAt: timestamp('completed_at', { mode: 'string', withTimezone: true, precision: 3 }),
+    updatedAt: timestamp('updated_at', { mode: 'string', withTimezone: true, precision: 3 })
+      .defaultNow()
+      .notNull(),
+    createdAt: timestamp('created_at', { mode: 'string', withTimezone: true, precision: 3 })
+      .defaultNow()
+      .notNull(),
+  },
+  (columns) => [
+    index('workshop_jobs_job_type_idx').on(columns.jobType),
+    index('workshop_jobs_linked_vehicle_idx').on(columns.linkedVehicle),
+    index('workshop_jobs_style_template_idx').on(columns.styleTemplate),
+    index('workshop_jobs_approved_output_idx').on(columns.approvedOutput),
+    index('workshop_jobs_created_by_idx').on(columns.createdBy),
+    index('workshop_jobs_updated_at_idx').on(columns.updatedAt),
+    index('workshop_jobs_created_at_idx').on(columns.createdAt),
+  ],
+)
+
+export const image_templates = pgTable(
+  'image_templates',
+  {
+    id: serial('id').primaryKey(),
+    name: varchar('name').notNull(),
+    preset: enum_image_templates_preset('preset').default('vehicle_hero'),
+    prompt: varchar('prompt'),
+    referenceImage: integer('reference_image_id').references(() => media.id, {
+      onDelete: 'set null',
+    }),
+    description: varchar('description'),
+    createdBy: integer('created_by_id').references(() => users.id, {
+      onDelete: 'set null',
+    }),
+    updatedAt: timestamp('updated_at', { mode: 'string', withTimezone: true, precision: 3 })
+      .defaultNow()
+      .notNull(),
+    createdAt: timestamp('created_at', { mode: 'string', withTimezone: true, precision: 3 })
+      .defaultNow()
+      .notNull(),
+  },
+  (columns) => [
+    index('image_templates_reference_image_idx').on(columns.referenceImage),
+    index('image_templates_created_by_idx').on(columns.createdBy),
+    index('image_templates_updated_at_idx').on(columns.updatedAt),
+    index('image_templates_created_at_idx').on(columns.createdAt),
   ],
 )
 
@@ -703,6 +1276,43 @@ export const pages_blocks_featured_vehicles = pgTable(
   ],
 )
 
+export const pages_blocks_inventory_collection = pgTable(
+  'pages_blocks_inventory_collection',
+  {
+    _order: integer('_order').notNull(),
+    _parentID: integer('_parent_id').notNull(),
+    _path: text('_path').notNull(),
+    id: varchar('id').primaryKey(),
+    collection: integer('collection_id')
+      .notNull()
+      .references(() => vehicle_collections.id, {
+        onDelete: 'set null',
+      }),
+    heading: varchar('heading'),
+    body: varchar('body'),
+    layout: enum_pages_blocks_inventory_collection_layout('layout').default('grid'),
+    limit: numeric('limit', { mode: 'number' }).default(8),
+    display_showPrice: boolean('display_show_price').default(true),
+    display_showMileage: boolean('display_show_mileage').default(true),
+    display_showCity: boolean('display_show_city').default(true),
+    display_showTags: boolean('display_show_tags').default(true),
+    ctaLabel: varchar('cta_label'),
+    ctaHref: varchar('cta_href'),
+    blockName: varchar('block_name'),
+  },
+  (columns) => [
+    index('pages_blocks_inventory_collection_order_idx').on(columns._order),
+    index('pages_blocks_inventory_collection_parent_id_idx').on(columns._parentID),
+    index('pages_blocks_inventory_collection_path_idx').on(columns._path),
+    index('pages_blocks_inventory_collection_collection_idx').on(columns.collection),
+    foreignKey({
+      columns: [columns['_parentID']],
+      foreignColumns: [pages.id],
+      name: 'pages_blocks_inventory_collection_parent_id_fk',
+    }).onDelete('cascade'),
+  ],
+)
+
 export const pages_blocks_inventory_search = pgTable(
   'pages_blocks_inventory_search',
   {
@@ -731,6 +1341,250 @@ export const pages_blocks_inventory_search = pgTable(
       columns: [columns['_parentID']],
       foreignColumns: [pages.id],
       name: 'pages_blocks_inventory_search_parent_id_fk',
+    }).onDelete('cascade'),
+  ],
+)
+
+export const pages_blocks_city_inventory_cities = pgTable(
+  'pages_blocks_city_inventory_cities',
+  {
+    _order: integer('_order').notNull(),
+    _parentID: varchar('_parent_id').notNull(),
+    id: varchar('id').primaryKey(),
+    city: varchar('city'),
+    label: varchar('label'),
+    href: varchar('href'),
+    image: integer('image_id').references(() => media.id, {
+      onDelete: 'set null',
+    }),
+  },
+  (columns) => [
+    index('pages_blocks_city_inventory_cities_order_idx').on(columns._order),
+    index('pages_blocks_city_inventory_cities_parent_id_idx').on(columns._parentID),
+    index('pages_blocks_city_inventory_cities_image_idx').on(columns.image),
+    foreignKey({
+      columns: [columns['_parentID']],
+      foreignColumns: [pages_blocks_city_inventory.id],
+      name: 'pages_blocks_city_inventory_cities_parent_id_fk',
+    }).onDelete('cascade'),
+  ],
+)
+
+export const pages_blocks_city_inventory = pgTable(
+  'pages_blocks_city_inventory',
+  {
+    _order: integer('_order').notNull(),
+    _parentID: integer('_parent_id').notNull(),
+    _path: text('_path').notNull(),
+    id: varchar('id').primaryKey(),
+    eyebrow: varchar('eyebrow').default('Inventario por ciudad'),
+    heading: varchar('heading').default('Encuentra seminuevos cerca de ti'),
+    body: varchar('body'),
+    layout: enum_pages_blocks_city_inventory_layout('layout').default('cards'),
+    limit: numeric('limit', { mode: 'number' }).default(6),
+    ctaLabel: varchar('cta_label'),
+    ctaHref: varchar('cta_href'),
+    blockName: varchar('block_name'),
+  },
+  (columns) => [
+    index('pages_blocks_city_inventory_order_idx').on(columns._order),
+    index('pages_blocks_city_inventory_parent_id_idx').on(columns._parentID),
+    index('pages_blocks_city_inventory_path_idx').on(columns._path),
+    foreignKey({
+      columns: [columns['_parentID']],
+      foreignColumns: [pages.id],
+      name: 'pages_blocks_city_inventory_parent_id_fk',
+    }).onDelete('cascade'),
+  ],
+)
+
+export const pages_blocks_promo_banner = pgTable(
+  'pages_blocks_promo_banner',
+  {
+    _order: integer('_order').notNull(),
+    _parentID: integer('_parent_id').notNull(),
+    _path: text('_path').notNull(),
+    id: varchar('id').primaryKey(),
+    eyebrow: varchar('eyebrow').default('Promocion'),
+    heading: varchar('heading').default('Promocion especial'),
+    body: varchar('body'),
+    image: integer('image_id').references(() => media.id, {
+      onDelete: 'set null',
+    }),
+    mobileImage: integer('mobile_image_id').references(() => media.id, {
+      onDelete: 'set null',
+    }),
+    imageAlt: varchar('image_alt'),
+    variant: enum_pages_blocks_promo_banner_variant('variant').default('image'),
+    theme: enum_pages_blocks_promo_banner_theme('theme').default('brand'),
+    href: varchar('href'),
+    ctaLabel: varchar('cta_label'),
+    ctaHref: varchar('cta_href'),
+    blockName: varchar('block_name'),
+  },
+  (columns) => [
+    index('pages_blocks_promo_banner_order_idx').on(columns._order),
+    index('pages_blocks_promo_banner_parent_id_idx').on(columns._parentID),
+    index('pages_blocks_promo_banner_path_idx').on(columns._path),
+    index('pages_blocks_promo_banner_image_idx').on(columns.image),
+    index('pages_blocks_promo_banner_mobile_image_idx').on(columns.mobileImage),
+    foreignKey({
+      columns: [columns['_parentID']],
+      foreignColumns: [pages.id],
+      name: 'pages_blocks_promo_banner_parent_id_fk',
+    }).onDelete('cascade'),
+  ],
+)
+
+export const pages_blocks_trust_steps_steps = pgTable(
+  'pages_blocks_trust_steps_steps',
+  {
+    _order: integer('_order').notNull(),
+    _parentID: varchar('_parent_id').notNull(),
+    id: varchar('id').primaryKey(),
+    icon: enum_pages_blocks_trust_steps_steps_icon('icon').default('search'),
+    label: varchar('label'),
+    description: varchar('description'),
+  },
+  (columns) => [
+    index('pages_blocks_trust_steps_steps_order_idx').on(columns._order),
+    index('pages_blocks_trust_steps_steps_parent_id_idx').on(columns._parentID),
+    foreignKey({
+      columns: [columns['_parentID']],
+      foreignColumns: [pages_blocks_trust_steps.id],
+      name: 'pages_blocks_trust_steps_steps_parent_id_fk',
+    }).onDelete('cascade'),
+  ],
+)
+
+export const pages_blocks_trust_steps = pgTable(
+  'pages_blocks_trust_steps',
+  {
+    _order: integer('_order').notNull(),
+    _parentID: integer('_parent_id').notNull(),
+    _path: text('_path').notNull(),
+    id: varchar('id').primaryKey(),
+    eyebrow: varchar('eyebrow').default('Compra con confianza'),
+    heading: varchar('heading').default('Te acompanamos en cada paso'),
+    body: varchar('body'),
+    layout: enum_pages_blocks_trust_steps_layout('layout').default('steps'),
+    blockName: varchar('block_name'),
+  },
+  (columns) => [
+    index('pages_blocks_trust_steps_order_idx').on(columns._order),
+    index('pages_blocks_trust_steps_parent_id_idx').on(columns._parentID),
+    index('pages_blocks_trust_steps_path_idx').on(columns._path),
+    foreignKey({
+      columns: [columns['_parentID']],
+      foreignColumns: [pages.id],
+      name: 'pages_blocks_trust_steps_parent_id_fk',
+    }).onDelete('cascade'),
+  ],
+)
+
+export const pages_blocks_testimonials_items = pgTable(
+  'pages_blocks_testimonials_items',
+  {
+    _order: integer('_order').notNull(),
+    _parentID: varchar('_parent_id').notNull(),
+    id: varchar('id').primaryKey(),
+    quote: varchar('quote'),
+    author: varchar('author'),
+    role: varchar('role'),
+    city: varchar('city'),
+    rating: numeric('rating', { mode: 'number' }).default(5),
+    image: integer('image_id').references(() => media.id, {
+      onDelete: 'set null',
+    }),
+  },
+  (columns) => [
+    index('pages_blocks_testimonials_items_order_idx').on(columns._order),
+    index('pages_blocks_testimonials_items_parent_id_idx').on(columns._parentID),
+    index('pages_blocks_testimonials_items_image_idx').on(columns.image),
+    foreignKey({
+      columns: [columns['_parentID']],
+      foreignColumns: [pages_blocks_testimonials.id],
+      name: 'pages_blocks_testimonials_items_parent_id_fk',
+    }).onDelete('cascade'),
+  ],
+)
+
+export const pages_blocks_testimonials = pgTable(
+  'pages_blocks_testimonials',
+  {
+    _order: integer('_order').notNull(),
+    _parentID: integer('_parent_id').notNull(),
+    _path: text('_path').notNull(),
+    id: varchar('id').primaryKey(),
+    eyebrow: varchar('eyebrow').default('Clientes felices'),
+    heading: varchar('heading').default('Historias de nuestros clientes'),
+    body: varchar('body'),
+    layout: enum_pages_blocks_testimonials_layout('layout').default('carousel'),
+    ctaLabel: varchar('cta_label'),
+    ctaHref: varchar('cta_href'),
+    blockName: varchar('block_name'),
+  },
+  (columns) => [
+    index('pages_blocks_testimonials_order_idx').on(columns._order),
+    index('pages_blocks_testimonials_parent_id_idx').on(columns._parentID),
+    index('pages_blocks_testimonials_path_idx').on(columns._path),
+    foreignKey({
+      columns: [columns['_parentID']],
+      foreignColumns: [pages.id],
+      name: 'pages_blocks_testimonials_parent_id_fk',
+    }).onDelete('cascade'),
+  ],
+)
+
+export const pages_blocks_video_tips_videos = pgTable(
+  'pages_blocks_video_tips_videos',
+  {
+    _order: integer('_order').notNull(),
+    _parentID: varchar('_parent_id').notNull(),
+    id: varchar('id').primaryKey(),
+    title: varchar('title'),
+    description: varchar('description'),
+    videoUrl: varchar('video_url'),
+    thumbnail: integer('thumbnail_id').references(() => media.id, {
+      onDelete: 'set null',
+    }),
+    duration: varchar('duration'),
+  },
+  (columns) => [
+    index('pages_blocks_video_tips_videos_order_idx').on(columns._order),
+    index('pages_blocks_video_tips_videos_parent_id_idx').on(columns._parentID),
+    index('pages_blocks_video_tips_videos_thumbnail_idx').on(columns.thumbnail),
+    foreignKey({
+      columns: [columns['_parentID']],
+      foreignColumns: [pages_blocks_video_tips.id],
+      name: 'pages_blocks_video_tips_videos_parent_id_fk',
+    }).onDelete('cascade'),
+  ],
+)
+
+export const pages_blocks_video_tips = pgTable(
+  'pages_blocks_video_tips',
+  {
+    _order: integer('_order').notNull(),
+    _parentID: integer('_parent_id').notNull(),
+    _path: text('_path').notNull(),
+    id: varchar('id').primaryKey(),
+    eyebrow: varchar('eyebrow').default('Guias en video'),
+    heading: varchar('heading').default('Tips para elegir tu proximo auto'),
+    body: varchar('body'),
+    layout: enum_pages_blocks_video_tips_layout('layout').default('featured'),
+    ctaLabel: varchar('cta_label'),
+    ctaHref: varchar('cta_href'),
+    blockName: varchar('block_name'),
+  },
+  (columns) => [
+    index('pages_blocks_video_tips_order_idx').on(columns._order),
+    index('pages_blocks_video_tips_parent_id_idx').on(columns._parentID),
+    index('pages_blocks_video_tips_path_idx').on(columns._path),
+    foreignKey({
+      columns: [columns['_parentID']],
+      foreignColumns: [pages.id],
+      name: 'pages_blocks_video_tips_parent_id_fk',
     }).onDelete('cascade'),
   ],
 )
@@ -848,7 +1702,11 @@ export const pages = pgTable(
     id: serial('id').primaryKey(),
     title: varchar('title').notNull(),
     slug: varchar('slug').notNull(),
-    isVisible: boolean('is_visible').default(true),
+    status: enum_pages_status('status').default('draft'),
+    isVisible: boolean('is_visible').default(false),
+    showInNavigation: boolean('show_in_navigation').default(false),
+    navLabel: varchar('nav_label'),
+    navParent: varchar('nav_parent'),
     seo_title: varchar('seo_title'),
     seo_description: varchar('seo_description'),
     seo_image: integer('seo_image_id').references(() => media.id, {
@@ -896,6 +1754,87 @@ export const pages_rels = pgTable(
   ],
 )
 
+export const media = pgTable(
+  'media',
+  {
+    id: serial('id').primaryKey(),
+    alt: varchar('alt').notNull(),
+    updatedAt: timestamp('updated_at', { mode: 'string', withTimezone: true, precision: 3 })
+      .defaultNow()
+      .notNull(),
+    createdAt: timestamp('created_at', { mode: 'string', withTimezone: true, precision: 3 })
+      .defaultNow()
+      .notNull(),
+    url: varchar('url'),
+    thumbnailURL: varchar('thumbnail_u_r_l'),
+    filename: varchar('filename'),
+    mimeType: varchar('mime_type'),
+    filesize: numeric('filesize', { mode: 'number' }),
+    width: numeric('width', { mode: 'number' }),
+    height: numeric('height', { mode: 'number' }),
+    focalX: numeric('focal_x', { mode: 'number' }),
+    focalY: numeric('focal_y', { mode: 'number' }),
+  },
+  (columns) => [
+    index('media_updated_at_idx').on(columns.updatedAt),
+    index('media_created_at_idx').on(columns.createdAt),
+    uniqueIndex('media_filename_idx').on(columns.filename),
+  ],
+)
+
+export const leads = pgTable(
+  'leads',
+  {
+    id: serial('id').primaryKey(),
+    firstName: varchar('first_name').notNull(),
+    lastName: varchar('last_name'),
+    email: varchar('email'),
+    phone: varchar('phone'),
+    city: varchar('city'),
+    agency: integer('agency_id').references(() => dealerships.id, {
+      onDelete: 'set null',
+    }),
+    vehicleLabel: varchar('vehicle_label'),
+    whatsappNumber: varchar('whatsapp_number'),
+    whatsappOpenedAt: timestamp('whatsapp_opened_at', {
+      mode: 'string',
+      withTimezone: true,
+      precision: 3,
+    }),
+    sourcePage: varchar('source_page'),
+    sourceSection: varchar('source_section'),
+    leadSource: enum_leads_lead_source('lead_source').default('whatsapp_vehicle_form'),
+    source: enum_leads_source('source').default('website_form'),
+    vehicle: integer('vehicle_id').references(() => vehicles.id, {
+      onDelete: 'set null',
+    }),
+    message: varchar('message'),
+    stage: enum_leads_stage('stage').default('new'),
+    assignedTo: integer('assigned_to_id').references(() => users.id, {
+      onDelete: 'set null',
+    }),
+    contactedBy: integer('contacted_by_id').references(() => users.id, {
+      onDelete: 'set null',
+    }),
+    contactedAt: timestamp('contacted_at', { mode: 'string', withTimezone: true, precision: 3 }),
+    notes: varchar('notes'),
+    updatedAt: timestamp('updated_at', { mode: 'string', withTimezone: true, precision: 3 })
+      .defaultNow()
+      .notNull(),
+    createdAt: timestamp('created_at', { mode: 'string', withTimezone: true, precision: 3 })
+      .defaultNow()
+      .notNull(),
+  },
+  (columns) => [
+    index('leads_agency_idx').on(columns.agency),
+    index('leads_vehicle_idx').on(columns.vehicle),
+    index('leads_assigned_to_idx').on(columns.assignedTo),
+    index('leads_contacted_by_idx').on(columns.contactedBy),
+    index('leads_updated_at_idx').on(columns.updatedAt),
+    index('leads_created_at_idx').on(columns.createdAt),
+  ],
+)
+
 export const analytics_events = pgTable(
   'analytics_events',
   {
@@ -908,6 +1847,19 @@ export const analytics_events = pgTable(
     }),
     vehicleLabel: varchar('vehicle_label'),
     targetLabel: varchar('target_label'),
+    agency: integer('agency_id').references(() => dealerships.id, {
+      onDelete: 'set null',
+    }),
+    city: varchar('city'),
+    brand: varchar('brand'),
+    condition: varchar('condition'),
+    collectionId: integer('collection_id_id').references(() => vehicle_collections.id, {
+      onDelete: 'set null',
+    }),
+    leadId: integer('lead_id_id').references(() => leads.id, {
+      onDelete: 'set null',
+    }),
+    sourceSection: varchar('source_section'),
     durationSeconds: numeric('duration_seconds', { mode: 'number' }),
     sessionId: varchar('session_id'),
     visitorId: varchar('visitor_id'),
@@ -922,8 +1874,98 @@ export const analytics_events = pgTable(
   },
   (columns) => [
     index('analytics_events_vehicle_idx').on(columns.vehicle),
+    index('analytics_events_agency_idx').on(columns.agency),
+    index('analytics_events_collection_id_idx').on(columns.collectionId),
+    index('analytics_events_lead_id_idx').on(columns.leadId),
     index('analytics_events_updated_at_idx').on(columns.updatedAt),
     index('analytics_events_created_at_idx').on(columns.createdAt),
+  ],
+)
+
+export const dealerships = pgTable(
+  'dealerships',
+  {
+    id: serial('id').primaryKey(),
+    brandName: varchar('brand_name').notNull(),
+    displayName: varchar('display_name').notNull(),
+    city: varchar('city').notNull(),
+    state: varchar('state'),
+    address: varchar('address'),
+    phone: varchar('phone'),
+    whatsapp: varchar('whatsapp'),
+    email: varchar('email'),
+    hours: varchar('hours'),
+    coordinates_lat: numeric('coordinates_lat', { mode: 'number' }),
+    coordinates_lng: numeric('coordinates_lng', { mode: 'number' }),
+    defaultForCity: boolean('default_for_city').default(false),
+    salesRepName: varchar('sales_rep_name'),
+    internalNotes: varchar('internal_notes'),
+    isActive: boolean('is_active').default(true),
+    updatedAt: timestamp('updated_at', { mode: 'string', withTimezone: true, precision: 3 })
+      .defaultNow()
+      .notNull(),
+    createdAt: timestamp('created_at', { mode: 'string', withTimezone: true, precision: 3 })
+      .defaultNow()
+      .notNull(),
+  },
+  (columns) => [
+    index('dealerships_updated_at_idx').on(columns.updatedAt),
+    index('dealerships_created_at_idx').on(columns.createdAt),
+  ],
+)
+
+export const users_sessions = pgTable(
+  'users_sessions',
+  {
+    _order: integer('_order').notNull(),
+    _parentID: integer('_parent_id').notNull(),
+    id: varchar('id').primaryKey(),
+    createdAt: timestamp('created_at', { mode: 'string', withTimezone: true, precision: 3 }),
+    expiresAt: timestamp('expires_at', {
+      mode: 'string',
+      withTimezone: true,
+      precision: 3,
+    }).notNull(),
+  },
+  (columns) => [
+    index('users_sessions_order_idx').on(columns._order),
+    index('users_sessions_parent_id_idx').on(columns._parentID),
+    foreignKey({
+      columns: [columns['_parentID']],
+      foreignColumns: [users.id],
+      name: 'users_sessions_parent_id_fk',
+    }).onDelete('cascade'),
+  ],
+)
+
+export const users = pgTable(
+  'users',
+  {
+    id: serial('id').primaryKey(),
+    name: varchar('name'),
+    role: enum_users_role('role').default('viewer'),
+    updatedAt: timestamp('updated_at', { mode: 'string', withTimezone: true, precision: 3 })
+      .defaultNow()
+      .notNull(),
+    createdAt: timestamp('created_at', { mode: 'string', withTimezone: true, precision: 3 })
+      .defaultNow()
+      .notNull(),
+    email: varchar('email').notNull(),
+    resetPasswordToken: varchar('reset_password_token'),
+    resetPasswordExpiration: timestamp('reset_password_expiration', {
+      mode: 'string',
+      withTimezone: true,
+      precision: 3,
+    }),
+    salt: varchar('salt'),
+    hash: varchar('hash'),
+    loginAttempts: numeric('login_attempts', { mode: 'number' }).default(0),
+    lockUntil: timestamp('lock_until', { mode: 'string', withTimezone: true, precision: 3 }),
+  },
+  (columns) => [
+    index('users_updated_at_idx').on(columns.updatedAt),
+    index('users_created_at_idx').on(columns.createdAt),
+    uniqueIndex('users_email_idx').on(columns.email),
   ],
 )
 
@@ -963,41 +2005,51 @@ export const payload_locked_documents_rels = pgTable(
     order: integer('order'),
     parent: integer('parent_id').notNull(),
     path: varchar('path').notNull(),
-    usersID: integer('users_id'),
-    mediaID: integer('media_id'),
     vehiclesID: integer('vehicles_id'),
-    dealershipsID: integer('dealerships_id'),
-    leadsID: integer('leads_id'),
+    'vehicle-tagsID': integer('vehicle_tags_id'),
+    'vehicle-collectionsID': integer('vehicle_collections_id'),
+    'import-jobsID': integer('import_jobs_id'),
+    'vehicle-media-assetsID': integer('vehicle_media_assets_id'),
+    'vehicle-image-searchesID': integer('vehicle_image_searches_id'),
+    'workshop-jobsID': integer('workshop_jobs_id'),
+    'image-templatesID': integer('image_templates_id'),
     pagesID: integer('pages_id'),
+    mediaID: integer('media_id'),
+    leadsID: integer('leads_id'),
     'analytics-eventsID': integer('analytics_events_id'),
+    dealershipsID: integer('dealerships_id'),
+    usersID: integer('users_id'),
   },
   (columns) => [
     index('payload_locked_documents_rels_order_idx').on(columns.order),
     index('payload_locked_documents_rels_parent_idx').on(columns.parent),
     index('payload_locked_documents_rels_path_idx').on(columns.path),
-    index('payload_locked_documents_rels_users_id_idx').on(columns.usersID),
-    index('payload_locked_documents_rels_media_id_idx').on(columns.mediaID),
     index('payload_locked_documents_rels_vehicles_id_idx').on(columns.vehiclesID),
-    index('payload_locked_documents_rels_dealerships_id_idx').on(columns.dealershipsID),
-    index('payload_locked_documents_rels_leads_id_idx').on(columns.leadsID),
+    index('payload_locked_documents_rels_vehicle_tags_id_idx').on(columns['vehicle-tagsID']),
+    index('payload_locked_documents_rels_vehicle_collections_id_idx').on(
+      columns['vehicle-collectionsID'],
+    ),
+    index('payload_locked_documents_rels_import_jobs_id_idx').on(columns['import-jobsID']),
+    index('payload_locked_documents_rels_vehicle_media_assets_id_idx').on(
+      columns['vehicle-media-assetsID'],
+    ),
+    index('payload_locked_documents_rels_vehicle_image_searches_id_idx').on(
+      columns['vehicle-image-searchesID'],
+    ),
+    index('payload_locked_documents_rels_workshop_jobs_id_idx').on(columns['workshop-jobsID']),
+    index('payload_locked_documents_rels_image_templates_id_idx').on(columns['image-templatesID']),
     index('payload_locked_documents_rels_pages_id_idx').on(columns.pagesID),
+    index('payload_locked_documents_rels_media_id_idx').on(columns.mediaID),
+    index('payload_locked_documents_rels_leads_id_idx').on(columns.leadsID),
     index('payload_locked_documents_rels_analytics_events_id_idx').on(
       columns['analytics-eventsID'],
     ),
+    index('payload_locked_documents_rels_dealerships_id_idx').on(columns.dealershipsID),
+    index('payload_locked_documents_rels_users_id_idx').on(columns.usersID),
     foreignKey({
       columns: [columns['parent']],
       foreignColumns: [payload_locked_documents.id],
       name: 'payload_locked_documents_rels_parent_fk',
-    }).onDelete('cascade'),
-    foreignKey({
-      columns: [columns['usersID']],
-      foreignColumns: [users.id],
-      name: 'payload_locked_documents_rels_users_fk',
-    }).onDelete('cascade'),
-    foreignKey({
-      columns: [columns['mediaID']],
-      foreignColumns: [media.id],
-      name: 'payload_locked_documents_rels_media_fk',
     }).onDelete('cascade'),
     foreignKey({
       columns: [columns['vehiclesID']],
@@ -1005,14 +2057,39 @@ export const payload_locked_documents_rels = pgTable(
       name: 'payload_locked_documents_rels_vehicles_fk',
     }).onDelete('cascade'),
     foreignKey({
-      columns: [columns['dealershipsID']],
-      foreignColumns: [dealerships.id],
-      name: 'payload_locked_documents_rels_dealerships_fk',
+      columns: [columns['vehicle-tagsID']],
+      foreignColumns: [vehicle_tags.id],
+      name: 'payload_locked_documents_rels_vehicle_tags_fk',
     }).onDelete('cascade'),
     foreignKey({
-      columns: [columns['leadsID']],
-      foreignColumns: [leads.id],
-      name: 'payload_locked_documents_rels_leads_fk',
+      columns: [columns['vehicle-collectionsID']],
+      foreignColumns: [vehicle_collections.id],
+      name: 'payload_locked_documents_rels_vehicle_collections_fk',
+    }).onDelete('cascade'),
+    foreignKey({
+      columns: [columns['import-jobsID']],
+      foreignColumns: [import_jobs.id],
+      name: 'payload_locked_documents_rels_import_jobs_fk',
+    }).onDelete('cascade'),
+    foreignKey({
+      columns: [columns['vehicle-media-assetsID']],
+      foreignColumns: [vehicle_media_assets.id],
+      name: 'payload_locked_documents_rels_vehicle_media_assets_fk',
+    }).onDelete('cascade'),
+    foreignKey({
+      columns: [columns['vehicle-image-searchesID']],
+      foreignColumns: [vehicle_image_searches.id],
+      name: 'payload_locked_documents_rels_vehicle_image_searches_fk',
+    }).onDelete('cascade'),
+    foreignKey({
+      columns: [columns['workshop-jobsID']],
+      foreignColumns: [workshop_jobs.id],
+      name: 'payload_locked_documents_rels_workshop_jobs_fk',
+    }).onDelete('cascade'),
+    foreignKey({
+      columns: [columns['image-templatesID']],
+      foreignColumns: [image_templates.id],
+      name: 'payload_locked_documents_rels_image_templates_fk',
     }).onDelete('cascade'),
     foreignKey({
       columns: [columns['pagesID']],
@@ -1020,9 +2097,29 @@ export const payload_locked_documents_rels = pgTable(
       name: 'payload_locked_documents_rels_pages_fk',
     }).onDelete('cascade'),
     foreignKey({
+      columns: [columns['mediaID']],
+      foreignColumns: [media.id],
+      name: 'payload_locked_documents_rels_media_fk',
+    }).onDelete('cascade'),
+    foreignKey({
+      columns: [columns['leadsID']],
+      foreignColumns: [leads.id],
+      name: 'payload_locked_documents_rels_leads_fk',
+    }).onDelete('cascade'),
+    foreignKey({
       columns: [columns['analytics-eventsID']],
       foreignColumns: [analytics_events.id],
       name: 'payload_locked_documents_rels_analytics_events_fk',
+    }).onDelete('cascade'),
+    foreignKey({
+      columns: [columns['dealershipsID']],
+      foreignColumns: [dealerships.id],
+      name: 'payload_locked_documents_rels_dealerships_fk',
+    }).onDelete('cascade'),
+    foreignKey({
+      columns: [columns['usersID']],
+      foreignColumns: [users.id],
+      name: 'payload_locked_documents_rels_users_fk',
     }).onDelete('cascade'),
   ],
 )
@@ -1119,6 +2216,7 @@ export const site_config_navigation_main_links = pgTable(
     _order: integer('_order').notNull(),
     _parentID: integer('_parent_id').notNull(),
     id: varchar('id').primaryKey(),
+    type: enum_site_config_navigation_main_links_type('type').default('custom'),
     label: varchar('label').notNull(),
     href: varchar('href').notNull(),
   },
@@ -1129,6 +2227,46 @@ export const site_config_navigation_main_links = pgTable(
       columns: [columns['_parentID']],
       foreignColumns: [site_config.id],
       name: 'site_config_navigation_main_links_parent_id_fk',
+    }).onDelete('cascade'),
+  ],
+)
+
+export const site_config_navigation_footer_links = pgTable(
+  'site_config_navigation_footer_links',
+  {
+    _order: integer('_order').notNull(),
+    _parentID: integer('_parent_id').notNull(),
+    id: varchar('id').primaryKey(),
+    label: varchar('label').notNull(),
+    href: varchar('href').notNull(),
+  },
+  (columns) => [
+    index('site_config_navigation_footer_links_order_idx').on(columns._order),
+    index('site_config_navigation_footer_links_parent_id_idx').on(columns._parentID),
+    foreignKey({
+      columns: [columns['_parentID']],
+      foreignColumns: [site_config.id],
+      name: 'site_config_navigation_footer_links_parent_id_fk',
+    }).onDelete('cascade'),
+  ],
+)
+
+export const site_config_navigation_legal_links = pgTable(
+  'site_config_navigation_legal_links',
+  {
+    _order: integer('_order').notNull(),
+    _parentID: integer('_parent_id').notNull(),
+    id: varchar('id').primaryKey(),
+    label: varchar('label').notNull(),
+    href: varchar('href').notNull(),
+  },
+  (columns) => [
+    index('site_config_navigation_legal_links_order_idx').on(columns._order),
+    index('site_config_navigation_legal_links_parent_id_idx').on(columns._parentID),
+    foreignKey({
+      columns: [columns['_parentID']],
+      foreignColumns: [site_config.id],
+      name: 'site_config_navigation_legal_links_parent_id_fk',
     }).onDelete('cascade'),
   ],
 )
@@ -1246,6 +2384,43 @@ export const site_config_blocks_featured_vehicles = pgTable(
   ],
 )
 
+export const site_config_blocks_inventory_collection = pgTable(
+  'site_config_blocks_inventory_collection',
+  {
+    _order: integer('_order').notNull(),
+    _parentID: integer('_parent_id').notNull(),
+    _path: text('_path').notNull(),
+    id: varchar('id').primaryKey(),
+    collection: integer('collection_id')
+      .notNull()
+      .references(() => vehicle_collections.id, {
+        onDelete: 'set null',
+      }),
+    heading: varchar('heading'),
+    body: varchar('body'),
+    layout: enum_site_config_blocks_inventory_collection_layout('layout').default('grid'),
+    limit: numeric('limit', { mode: 'number' }).default(8),
+    display_showPrice: boolean('display_show_price').default(true),
+    display_showMileage: boolean('display_show_mileage').default(true),
+    display_showCity: boolean('display_show_city').default(true),
+    display_showTags: boolean('display_show_tags').default(true),
+    ctaLabel: varchar('cta_label'),
+    ctaHref: varchar('cta_href'),
+    blockName: varchar('block_name'),
+  },
+  (columns) => [
+    index('site_config_blocks_inventory_collection_order_idx').on(columns._order),
+    index('site_config_blocks_inventory_collection_parent_id_idx').on(columns._parentID),
+    index('site_config_blocks_inventory_collection_path_idx').on(columns._path),
+    index('site_config_blocks_inventory_collection_collection_idx').on(columns.collection),
+    foreignKey({
+      columns: [columns['_parentID']],
+      foreignColumns: [site_config.id],
+      name: 'site_config_blocks_inventory_collection_parent_id_fk',
+    }).onDelete('cascade'),
+  ],
+)
+
 export const site_config_blocks_inventory_search = pgTable(
   'site_config_blocks_inventory_search',
   {
@@ -1274,6 +2449,250 @@ export const site_config_blocks_inventory_search = pgTable(
       columns: [columns['_parentID']],
       foreignColumns: [site_config.id],
       name: 'site_config_blocks_inventory_search_parent_id_fk',
+    }).onDelete('cascade'),
+  ],
+)
+
+export const site_config_blocks_city_inventory_cities = pgTable(
+  'site_config_blocks_city_inventory_cities',
+  {
+    _order: integer('_order').notNull(),
+    _parentID: varchar('_parent_id').notNull(),
+    id: varchar('id').primaryKey(),
+    city: varchar('city'),
+    label: varchar('label'),
+    href: varchar('href'),
+    image: integer('image_id').references(() => media.id, {
+      onDelete: 'set null',
+    }),
+  },
+  (columns) => [
+    index('site_config_blocks_city_inventory_cities_order_idx').on(columns._order),
+    index('site_config_blocks_city_inventory_cities_parent_id_idx').on(columns._parentID),
+    index('site_config_blocks_city_inventory_cities_image_idx').on(columns.image),
+    foreignKey({
+      columns: [columns['_parentID']],
+      foreignColumns: [site_config_blocks_city_inventory.id],
+      name: 'site_config_blocks_city_inventory_cities_parent_id_fk',
+    }).onDelete('cascade'),
+  ],
+)
+
+export const site_config_blocks_city_inventory = pgTable(
+  'site_config_blocks_city_inventory',
+  {
+    _order: integer('_order').notNull(),
+    _parentID: integer('_parent_id').notNull(),
+    _path: text('_path').notNull(),
+    id: varchar('id').primaryKey(),
+    eyebrow: varchar('eyebrow').default('Inventario por ciudad'),
+    heading: varchar('heading').default('Encuentra seminuevos cerca de ti'),
+    body: varchar('body'),
+    layout: enum_site_config_blocks_city_inventory_layout('layout').default('cards'),
+    limit: numeric('limit', { mode: 'number' }).default(6),
+    ctaLabel: varchar('cta_label'),
+    ctaHref: varchar('cta_href'),
+    blockName: varchar('block_name'),
+  },
+  (columns) => [
+    index('site_config_blocks_city_inventory_order_idx').on(columns._order),
+    index('site_config_blocks_city_inventory_parent_id_idx').on(columns._parentID),
+    index('site_config_blocks_city_inventory_path_idx').on(columns._path),
+    foreignKey({
+      columns: [columns['_parentID']],
+      foreignColumns: [site_config.id],
+      name: 'site_config_blocks_city_inventory_parent_id_fk',
+    }).onDelete('cascade'),
+  ],
+)
+
+export const site_config_blocks_promo_banner = pgTable(
+  'site_config_blocks_promo_banner',
+  {
+    _order: integer('_order').notNull(),
+    _parentID: integer('_parent_id').notNull(),
+    _path: text('_path').notNull(),
+    id: varchar('id').primaryKey(),
+    eyebrow: varchar('eyebrow').default('Promocion'),
+    heading: varchar('heading').default('Promocion especial'),
+    body: varchar('body'),
+    image: integer('image_id').references(() => media.id, {
+      onDelete: 'set null',
+    }),
+    mobileImage: integer('mobile_image_id').references(() => media.id, {
+      onDelete: 'set null',
+    }),
+    imageAlt: varchar('image_alt'),
+    variant: enum_site_config_blocks_promo_banner_variant('variant').default('image'),
+    theme: enum_site_config_blocks_promo_banner_theme('theme').default('brand'),
+    href: varchar('href'),
+    ctaLabel: varchar('cta_label'),
+    ctaHref: varchar('cta_href'),
+    blockName: varchar('block_name'),
+  },
+  (columns) => [
+    index('site_config_blocks_promo_banner_order_idx').on(columns._order),
+    index('site_config_blocks_promo_banner_parent_id_idx').on(columns._parentID),
+    index('site_config_blocks_promo_banner_path_idx').on(columns._path),
+    index('site_config_blocks_promo_banner_image_idx').on(columns.image),
+    index('site_config_blocks_promo_banner_mobile_image_idx').on(columns.mobileImage),
+    foreignKey({
+      columns: [columns['_parentID']],
+      foreignColumns: [site_config.id],
+      name: 'site_config_blocks_promo_banner_parent_id_fk',
+    }).onDelete('cascade'),
+  ],
+)
+
+export const site_config_blocks_trust_steps_steps = pgTable(
+  'site_config_blocks_trust_steps_steps',
+  {
+    _order: integer('_order').notNull(),
+    _parentID: varchar('_parent_id').notNull(),
+    id: varchar('id').primaryKey(),
+    icon: enum_site_config_blocks_trust_steps_steps_icon('icon').default('search'),
+    label: varchar('label'),
+    description: varchar('description'),
+  },
+  (columns) => [
+    index('site_config_blocks_trust_steps_steps_order_idx').on(columns._order),
+    index('site_config_blocks_trust_steps_steps_parent_id_idx').on(columns._parentID),
+    foreignKey({
+      columns: [columns['_parentID']],
+      foreignColumns: [site_config_blocks_trust_steps.id],
+      name: 'site_config_blocks_trust_steps_steps_parent_id_fk',
+    }).onDelete('cascade'),
+  ],
+)
+
+export const site_config_blocks_trust_steps = pgTable(
+  'site_config_blocks_trust_steps',
+  {
+    _order: integer('_order').notNull(),
+    _parentID: integer('_parent_id').notNull(),
+    _path: text('_path').notNull(),
+    id: varchar('id').primaryKey(),
+    eyebrow: varchar('eyebrow').default('Compra con confianza'),
+    heading: varchar('heading').default('Te acompanamos en cada paso'),
+    body: varchar('body'),
+    layout: enum_site_config_blocks_trust_steps_layout('layout').default('steps'),
+    blockName: varchar('block_name'),
+  },
+  (columns) => [
+    index('site_config_blocks_trust_steps_order_idx').on(columns._order),
+    index('site_config_blocks_trust_steps_parent_id_idx').on(columns._parentID),
+    index('site_config_blocks_trust_steps_path_idx').on(columns._path),
+    foreignKey({
+      columns: [columns['_parentID']],
+      foreignColumns: [site_config.id],
+      name: 'site_config_blocks_trust_steps_parent_id_fk',
+    }).onDelete('cascade'),
+  ],
+)
+
+export const site_config_blocks_testimonials_items = pgTable(
+  'site_config_blocks_testimonials_items',
+  {
+    _order: integer('_order').notNull(),
+    _parentID: varchar('_parent_id').notNull(),
+    id: varchar('id').primaryKey(),
+    quote: varchar('quote'),
+    author: varchar('author'),
+    role: varchar('role'),
+    city: varchar('city'),
+    rating: numeric('rating', { mode: 'number' }).default(5),
+    image: integer('image_id').references(() => media.id, {
+      onDelete: 'set null',
+    }),
+  },
+  (columns) => [
+    index('site_config_blocks_testimonials_items_order_idx').on(columns._order),
+    index('site_config_blocks_testimonials_items_parent_id_idx').on(columns._parentID),
+    index('site_config_blocks_testimonials_items_image_idx').on(columns.image),
+    foreignKey({
+      columns: [columns['_parentID']],
+      foreignColumns: [site_config_blocks_testimonials.id],
+      name: 'site_config_blocks_testimonials_items_parent_id_fk',
+    }).onDelete('cascade'),
+  ],
+)
+
+export const site_config_blocks_testimonials = pgTable(
+  'site_config_blocks_testimonials',
+  {
+    _order: integer('_order').notNull(),
+    _parentID: integer('_parent_id').notNull(),
+    _path: text('_path').notNull(),
+    id: varchar('id').primaryKey(),
+    eyebrow: varchar('eyebrow').default('Clientes felices'),
+    heading: varchar('heading').default('Historias de nuestros clientes'),
+    body: varchar('body'),
+    layout: enum_site_config_blocks_testimonials_layout('layout').default('carousel'),
+    ctaLabel: varchar('cta_label'),
+    ctaHref: varchar('cta_href'),
+    blockName: varchar('block_name'),
+  },
+  (columns) => [
+    index('site_config_blocks_testimonials_order_idx').on(columns._order),
+    index('site_config_blocks_testimonials_parent_id_idx').on(columns._parentID),
+    index('site_config_blocks_testimonials_path_idx').on(columns._path),
+    foreignKey({
+      columns: [columns['_parentID']],
+      foreignColumns: [site_config.id],
+      name: 'site_config_blocks_testimonials_parent_id_fk',
+    }).onDelete('cascade'),
+  ],
+)
+
+export const site_config_blocks_video_tips_videos = pgTable(
+  'site_config_blocks_video_tips_videos',
+  {
+    _order: integer('_order').notNull(),
+    _parentID: varchar('_parent_id').notNull(),
+    id: varchar('id').primaryKey(),
+    title: varchar('title'),
+    description: varchar('description'),
+    videoUrl: varchar('video_url'),
+    thumbnail: integer('thumbnail_id').references(() => media.id, {
+      onDelete: 'set null',
+    }),
+    duration: varchar('duration'),
+  },
+  (columns) => [
+    index('site_config_blocks_video_tips_videos_order_idx').on(columns._order),
+    index('site_config_blocks_video_tips_videos_parent_id_idx').on(columns._parentID),
+    index('site_config_blocks_video_tips_videos_thumbnail_idx').on(columns.thumbnail),
+    foreignKey({
+      columns: [columns['_parentID']],
+      foreignColumns: [site_config_blocks_video_tips.id],
+      name: 'site_config_blocks_video_tips_videos_parent_id_fk',
+    }).onDelete('cascade'),
+  ],
+)
+
+export const site_config_blocks_video_tips = pgTable(
+  'site_config_blocks_video_tips',
+  {
+    _order: integer('_order').notNull(),
+    _parentID: integer('_parent_id').notNull(),
+    _path: text('_path').notNull(),
+    id: varchar('id').primaryKey(),
+    eyebrow: varchar('eyebrow').default('Guias en video'),
+    heading: varchar('heading').default('Tips para elegir tu proximo auto'),
+    body: varchar('body'),
+    layout: enum_site_config_blocks_video_tips_layout('layout').default('featured'),
+    ctaLabel: varchar('cta_label'),
+    ctaHref: varchar('cta_href'),
+    blockName: varchar('block_name'),
+  },
+  (columns) => [
+    index('site_config_blocks_video_tips_order_idx').on(columns._order),
+    index('site_config_blocks_video_tips_parent_id_idx').on(columns._parentID),
+    index('site_config_blocks_video_tips_path_idx').on(columns._path),
+    foreignKey({
+      columns: [columns['_parentID']],
+      foreignColumns: [site_config.id],
+      name: 'site_config_blocks_video_tips_parent_id_fk',
     }).onDelete('cascade'),
   ],
 )
@@ -1460,19 +2879,6 @@ export const site_config_rels = pgTable(
   ],
 )
 
-export const relations_users_sessions = relations(users_sessions, ({ one }) => ({
-  _parentID: one(users, {
-    fields: [users_sessions._parentID],
-    references: [users.id],
-    relationName: 'sessions',
-  }),
-}))
-export const relations_users = relations(users, ({ many }) => ({
-  sessions: many(users_sessions, {
-    relationName: 'sessions',
-  }),
-}))
-export const relations_media = relations(media, () => ({}))
 export const relations_vehicles_badges = relations(vehicles_badges, ({ one }) => ({
   _parentID: one(vehicles, {
     fields: [vehicles_badges._parentID],
@@ -1602,6 +3008,18 @@ export const relations_vehicles_blocks_cta = relations(vehicles_blocks_cta, ({ o
     relationName: '_blocks_cta',
   }),
 }))
+export const relations_vehicles_rels = relations(vehicles_rels, ({ one }) => ({
+  parent: one(vehicles, {
+    fields: [vehicles_rels.parent],
+    references: [vehicles.id],
+    relationName: '_rels',
+  }),
+  'vehicle-tagsID': one(vehicle_tags, {
+    fields: [vehicles_rels['vehicle-tagsID']],
+    references: [vehicle_tags.id],
+    relationName: 'vehicle-tags',
+  }),
+}))
 export const relations_vehicles = relations(vehicles, ({ one, many }) => ({
   dealership: one(dealerships, {
     fields: [vehicles.dealership],
@@ -1610,6 +3028,16 @@ export const relations_vehicles = relations(vehicles, ({ one, many }) => ({
   }),
   badges: many(vehicles_badges, {
     relationName: 'badges',
+  }),
+  lastPublishedBy: one(users, {
+    fields: [vehicles.lastPublishedBy],
+    references: [users.id],
+    relationName: 'lastPublishedBy',
+  }),
+  lastReviewedBy: one(users, {
+    fields: [vehicles.lastReviewedBy],
+    references: [users.id],
+    relationName: 'lastReviewedBy',
   }),
   image: one(media, {
     fields: [vehicles.image],
@@ -1640,13 +3068,166 @@ export const relations_vehicles = relations(vehicles, ({ one, many }) => ({
   _blocks_cta: many(vehicles_blocks_cta, {
     relationName: '_blocks_cta',
   }),
+  _rels: many(vehicles_rels, {
+    relationName: '_rels',
+  }),
 }))
-export const relations_dealerships = relations(dealerships, () => ({}))
-export const relations_leads = relations(leads, ({ one }) => ({
+export const relations_vehicle_tags = relations(vehicle_tags, () => ({}))
+export const relations_vehicle_collections_rels = relations(
+  vehicle_collections_rels,
+  ({ one }) => ({
+    parent: one(vehicle_collections, {
+      fields: [vehicle_collections_rels.parent],
+      references: [vehicle_collections.id],
+      relationName: '_rels',
+    }),
+    vehiclesID: one(vehicles, {
+      fields: [vehicle_collections_rels.vehiclesID],
+      references: [vehicles.id],
+      relationName: 'vehicles',
+    }),
+    'vehicle-tagsID': one(vehicle_tags, {
+      fields: [vehicle_collections_rels['vehicle-tagsID']],
+      references: [vehicle_tags.id],
+      relationName: 'vehicle-tags',
+    }),
+  }),
+)
+export const relations_vehicle_collections = relations(vehicle_collections, ({ one, many }) => ({
+  image: one(media, {
+    fields: [vehicle_collections.image],
+    references: [media.id],
+    relationName: 'image',
+  }),
+  rules_dealership: one(dealerships, {
+    fields: [vehicle_collections.rules_dealership],
+    references: [dealerships.id],
+    relationName: 'rules_dealership',
+  }),
+  seo_image: one(media, {
+    fields: [vehicle_collections.seo_image],
+    references: [media.id],
+    relationName: 'seo_image',
+  }),
+  _rels: many(vehicle_collections_rels, {
+    relationName: '_rels',
+  }),
+}))
+export const relations_import_jobs_errors = relations(import_jobs_errors, ({ one }) => ({
+  _parentID: one(import_jobs, {
+    fields: [import_jobs_errors._parentID],
+    references: [import_jobs.id],
+    relationName: 'errors',
+  }),
+}))
+export const relations_import_jobs = relations(import_jobs, ({ one, many }) => ({
+  errors: many(import_jobs_errors, {
+    relationName: 'errors',
+  }),
+  uploadedBy: one(users, {
+    fields: [import_jobs.uploadedBy],
+    references: [users.id],
+    relationName: 'uploadedBy',
+  }),
+}))
+export const relations_vehicle_media_assets = relations(vehicle_media_assets, ({ one }) => ({
   vehicle: one(vehicles, {
-    fields: [leads.vehicle],
+    fields: [vehicle_media_assets.vehicle],
     references: [vehicles.id],
     relationName: 'vehicle',
+  }),
+  media: one(media, {
+    fields: [vehicle_media_assets.media],
+    references: [media.id],
+    relationName: 'media',
+  }),
+  createdBy: one(users, {
+    fields: [vehicle_media_assets.createdBy],
+    references: [users.id],
+    relationName: 'createdBy',
+  }),
+  approvedBy: one(users, {
+    fields: [vehicle_media_assets.approvedBy],
+    references: [users.id],
+    relationName: 'approvedBy',
+  }),
+}))
+export const relations_vehicle_image_searches = relations(vehicle_image_searches, () => ({}))
+export const relations_workshop_jobs_input_images = relations(
+  workshop_jobs_input_images,
+  ({ one }) => ({
+    _parentID: one(workshop_jobs, {
+      fields: [workshop_jobs_input_images._parentID],
+      references: [workshop_jobs.id],
+      relationName: 'inputImages',
+    }),
+    image: one(media, {
+      fields: [workshop_jobs_input_images.image],
+      references: [media.id],
+      relationName: 'image',
+    }),
+  }),
+)
+export const relations_workshop_jobs_messages = relations(workshop_jobs_messages, ({ one }) => ({
+  _parentID: one(workshop_jobs, {
+    fields: [workshop_jobs_messages._parentID],
+    references: [workshop_jobs.id],
+    relationName: 'messages',
+  }),
+}))
+export const relations_workshop_jobs_outputs = relations(workshop_jobs_outputs, ({ one }) => ({
+  _parentID: one(workshop_jobs, {
+    fields: [workshop_jobs_outputs._parentID],
+    references: [workshop_jobs.id],
+    relationName: 'outputs',
+  }),
+  image: one(media, {
+    fields: [workshop_jobs_outputs.image],
+    references: [media.id],
+    relationName: 'image',
+  }),
+}))
+export const relations_workshop_jobs = relations(workshop_jobs, ({ one, many }) => ({
+  linkedVehicle: one(vehicles, {
+    fields: [workshop_jobs.linkedVehicle],
+    references: [vehicles.id],
+    relationName: 'linkedVehicle',
+  }),
+  inputImages: many(workshop_jobs_input_images, {
+    relationName: 'inputImages',
+  }),
+  styleTemplate: one(image_templates, {
+    fields: [workshop_jobs.styleTemplate],
+    references: [image_templates.id],
+    relationName: 'styleTemplate',
+  }),
+  messages: many(workshop_jobs_messages, {
+    relationName: 'messages',
+  }),
+  outputs: many(workshop_jobs_outputs, {
+    relationName: 'outputs',
+  }),
+  approvedOutput: one(media, {
+    fields: [workshop_jobs.approvedOutput],
+    references: [media.id],
+    relationName: 'approvedOutput',
+  }),
+  createdBy: one(users, {
+    fields: [workshop_jobs.createdBy],
+    references: [users.id],
+    relationName: 'createdBy',
+  }),
+}))
+export const relations_image_templates = relations(image_templates, ({ one }) => ({
+  referenceImage: one(media, {
+    fields: [image_templates.referenceImage],
+    references: [media.id],
+    relationName: 'referenceImage',
+  }),
+  createdBy: one(users, {
+    fields: [image_templates.createdBy],
+    references: [users.id],
+    relationName: 'createdBy',
   }),
 }))
 export const relations_pages_blocks_hero = relations(pages_blocks_hero, ({ one }) => ({
@@ -1699,6 +3280,21 @@ export const relations_pages_blocks_featured_vehicles = relations(
     }),
   }),
 )
+export const relations_pages_blocks_inventory_collection = relations(
+  pages_blocks_inventory_collection,
+  ({ one }) => ({
+    _parentID: one(pages, {
+      fields: [pages_blocks_inventory_collection._parentID],
+      references: [pages.id],
+      relationName: '_blocks_inventoryCollection',
+    }),
+    collection: one(vehicle_collections, {
+      fields: [pages_blocks_inventory_collection.collection],
+      references: [vehicle_collections.id],
+      relationName: 'collection',
+    }),
+  }),
+)
 export const relations_pages_blocks_inventory_search = relations(
   pages_blocks_inventory_search,
   ({ one }) => ({
@@ -1711,6 +3307,133 @@ export const relations_pages_blocks_inventory_search = relations(
       fields: [pages_blocks_inventory_search.media],
       references: [media.id],
       relationName: 'media',
+    }),
+  }),
+)
+export const relations_pages_blocks_city_inventory_cities = relations(
+  pages_blocks_city_inventory_cities,
+  ({ one }) => ({
+    _parentID: one(pages_blocks_city_inventory, {
+      fields: [pages_blocks_city_inventory_cities._parentID],
+      references: [pages_blocks_city_inventory.id],
+      relationName: 'cities',
+    }),
+    image: one(media, {
+      fields: [pages_blocks_city_inventory_cities.image],
+      references: [media.id],
+      relationName: 'image',
+    }),
+  }),
+)
+export const relations_pages_blocks_city_inventory = relations(
+  pages_blocks_city_inventory,
+  ({ one, many }) => ({
+    _parentID: one(pages, {
+      fields: [pages_blocks_city_inventory._parentID],
+      references: [pages.id],
+      relationName: '_blocks_cityInventory',
+    }),
+    cities: many(pages_blocks_city_inventory_cities, {
+      relationName: 'cities',
+    }),
+  }),
+)
+export const relations_pages_blocks_promo_banner = relations(
+  pages_blocks_promo_banner,
+  ({ one }) => ({
+    _parentID: one(pages, {
+      fields: [pages_blocks_promo_banner._parentID],
+      references: [pages.id],
+      relationName: '_blocks_promoBanner',
+    }),
+    image: one(media, {
+      fields: [pages_blocks_promo_banner.image],
+      references: [media.id],
+      relationName: 'image',
+    }),
+    mobileImage: one(media, {
+      fields: [pages_blocks_promo_banner.mobileImage],
+      references: [media.id],
+      relationName: 'mobileImage',
+    }),
+  }),
+)
+export const relations_pages_blocks_trust_steps_steps = relations(
+  pages_blocks_trust_steps_steps,
+  ({ one }) => ({
+    _parentID: one(pages_blocks_trust_steps, {
+      fields: [pages_blocks_trust_steps_steps._parentID],
+      references: [pages_blocks_trust_steps.id],
+      relationName: 'steps',
+    }),
+  }),
+)
+export const relations_pages_blocks_trust_steps = relations(
+  pages_blocks_trust_steps,
+  ({ one, many }) => ({
+    _parentID: one(pages, {
+      fields: [pages_blocks_trust_steps._parentID],
+      references: [pages.id],
+      relationName: '_blocks_trustSteps',
+    }),
+    steps: many(pages_blocks_trust_steps_steps, {
+      relationName: 'steps',
+    }),
+  }),
+)
+export const relations_pages_blocks_testimonials_items = relations(
+  pages_blocks_testimonials_items,
+  ({ one }) => ({
+    _parentID: one(pages_blocks_testimonials, {
+      fields: [pages_blocks_testimonials_items._parentID],
+      references: [pages_blocks_testimonials.id],
+      relationName: 'items',
+    }),
+    image: one(media, {
+      fields: [pages_blocks_testimonials_items.image],
+      references: [media.id],
+      relationName: 'image',
+    }),
+  }),
+)
+export const relations_pages_blocks_testimonials = relations(
+  pages_blocks_testimonials,
+  ({ one, many }) => ({
+    _parentID: one(pages, {
+      fields: [pages_blocks_testimonials._parentID],
+      references: [pages.id],
+      relationName: '_blocks_testimonials',
+    }),
+    items: many(pages_blocks_testimonials_items, {
+      relationName: 'items',
+    }),
+  }),
+)
+export const relations_pages_blocks_video_tips_videos = relations(
+  pages_blocks_video_tips_videos,
+  ({ one }) => ({
+    _parentID: one(pages_blocks_video_tips, {
+      fields: [pages_blocks_video_tips_videos._parentID],
+      references: [pages_blocks_video_tips.id],
+      relationName: 'videos',
+    }),
+    thumbnail: one(media, {
+      fields: [pages_blocks_video_tips_videos.thumbnail],
+      references: [media.id],
+      relationName: 'thumbnail',
+    }),
+  }),
+)
+export const relations_pages_blocks_video_tips = relations(
+  pages_blocks_video_tips,
+  ({ one, many }) => ({
+    _parentID: one(pages, {
+      fields: [pages_blocks_video_tips._parentID],
+      references: [pages.id],
+      relationName: '_blocks_videoTips',
+    }),
+    videos: many(pages_blocks_video_tips_videos, {
+      relationName: 'videos',
     }),
   }),
 )
@@ -1774,8 +3497,26 @@ export const relations_pages = relations(pages, ({ one, many }) => ({
   _blocks_featuredVehicles: many(pages_blocks_featured_vehicles, {
     relationName: '_blocks_featuredVehicles',
   }),
+  _blocks_inventoryCollection: many(pages_blocks_inventory_collection, {
+    relationName: '_blocks_inventoryCollection',
+  }),
   _blocks_inventorySearch: many(pages_blocks_inventory_search, {
     relationName: '_blocks_inventorySearch',
+  }),
+  _blocks_cityInventory: many(pages_blocks_city_inventory, {
+    relationName: '_blocks_cityInventory',
+  }),
+  _blocks_promoBanner: many(pages_blocks_promo_banner, {
+    relationName: '_blocks_promoBanner',
+  }),
+  _blocks_trustSteps: many(pages_blocks_trust_steps, {
+    relationName: '_blocks_trustSteps',
+  }),
+  _blocks_testimonials: many(pages_blocks_testimonials, {
+    relationName: '_blocks_testimonials',
+  }),
+  _blocks_videoTips: many(pages_blocks_video_tips, {
+    relationName: '_blocks_videoTips',
   }),
   _blocks_brands: many(pages_blocks_brands, {
     relationName: '_blocks_brands',
@@ -1793,11 +3534,62 @@ export const relations_pages = relations(pages, ({ one, many }) => ({
     relationName: '_rels',
   }),
 }))
+export const relations_media = relations(media, () => ({}))
+export const relations_leads = relations(leads, ({ one }) => ({
+  agency: one(dealerships, {
+    fields: [leads.agency],
+    references: [dealerships.id],
+    relationName: 'agency',
+  }),
+  vehicle: one(vehicles, {
+    fields: [leads.vehicle],
+    references: [vehicles.id],
+    relationName: 'vehicle',
+  }),
+  assignedTo: one(users, {
+    fields: [leads.assignedTo],
+    references: [users.id],
+    relationName: 'assignedTo',
+  }),
+  contactedBy: one(users, {
+    fields: [leads.contactedBy],
+    references: [users.id],
+    relationName: 'contactedBy',
+  }),
+}))
 export const relations_analytics_events = relations(analytics_events, ({ one }) => ({
   vehicle: one(vehicles, {
     fields: [analytics_events.vehicle],
     references: [vehicles.id],
     relationName: 'vehicle',
+  }),
+  agency: one(dealerships, {
+    fields: [analytics_events.agency],
+    references: [dealerships.id],
+    relationName: 'agency',
+  }),
+  collectionId: one(vehicle_collections, {
+    fields: [analytics_events.collectionId],
+    references: [vehicle_collections.id],
+    relationName: 'collectionId',
+  }),
+  leadId: one(leads, {
+    fields: [analytics_events.leadId],
+    references: [leads.id],
+    relationName: 'leadId',
+  }),
+}))
+export const relations_dealerships = relations(dealerships, () => ({}))
+export const relations_users_sessions = relations(users_sessions, ({ one }) => ({
+  _parentID: one(users, {
+    fields: [users_sessions._parentID],
+    references: [users.id],
+    relationName: 'sessions',
+  }),
+}))
+export const relations_users = relations(users, ({ many }) => ({
+  sessions: many(users_sessions, {
+    relationName: 'sessions',
   }),
 }))
 export const relations_payload_kv = relations(payload_kv, () => ({}))
@@ -1809,40 +3601,75 @@ export const relations_payload_locked_documents_rels = relations(
       references: [payload_locked_documents.id],
       relationName: '_rels',
     }),
-    usersID: one(users, {
-      fields: [payload_locked_documents_rels.usersID],
-      references: [users.id],
-      relationName: 'users',
-    }),
-    mediaID: one(media, {
-      fields: [payload_locked_documents_rels.mediaID],
-      references: [media.id],
-      relationName: 'media',
-    }),
     vehiclesID: one(vehicles, {
       fields: [payload_locked_documents_rels.vehiclesID],
       references: [vehicles.id],
       relationName: 'vehicles',
     }),
-    dealershipsID: one(dealerships, {
-      fields: [payload_locked_documents_rels.dealershipsID],
-      references: [dealerships.id],
-      relationName: 'dealerships',
+    'vehicle-tagsID': one(vehicle_tags, {
+      fields: [payload_locked_documents_rels['vehicle-tagsID']],
+      references: [vehicle_tags.id],
+      relationName: 'vehicle-tags',
     }),
-    leadsID: one(leads, {
-      fields: [payload_locked_documents_rels.leadsID],
-      references: [leads.id],
-      relationName: 'leads',
+    'vehicle-collectionsID': one(vehicle_collections, {
+      fields: [payload_locked_documents_rels['vehicle-collectionsID']],
+      references: [vehicle_collections.id],
+      relationName: 'vehicle-collections',
+    }),
+    'import-jobsID': one(import_jobs, {
+      fields: [payload_locked_documents_rels['import-jobsID']],
+      references: [import_jobs.id],
+      relationName: 'import-jobs',
+    }),
+    'vehicle-media-assetsID': one(vehicle_media_assets, {
+      fields: [payload_locked_documents_rels['vehicle-media-assetsID']],
+      references: [vehicle_media_assets.id],
+      relationName: 'vehicle-media-assets',
+    }),
+    'vehicle-image-searchesID': one(vehicle_image_searches, {
+      fields: [payload_locked_documents_rels['vehicle-image-searchesID']],
+      references: [vehicle_image_searches.id],
+      relationName: 'vehicle-image-searches',
+    }),
+    'workshop-jobsID': one(workshop_jobs, {
+      fields: [payload_locked_documents_rels['workshop-jobsID']],
+      references: [workshop_jobs.id],
+      relationName: 'workshop-jobs',
+    }),
+    'image-templatesID': one(image_templates, {
+      fields: [payload_locked_documents_rels['image-templatesID']],
+      references: [image_templates.id],
+      relationName: 'image-templates',
     }),
     pagesID: one(pages, {
       fields: [payload_locked_documents_rels.pagesID],
       references: [pages.id],
       relationName: 'pages',
     }),
+    mediaID: one(media, {
+      fields: [payload_locked_documents_rels.mediaID],
+      references: [media.id],
+      relationName: 'media',
+    }),
+    leadsID: one(leads, {
+      fields: [payload_locked_documents_rels.leadsID],
+      references: [leads.id],
+      relationName: 'leads',
+    }),
     'analytics-eventsID': one(analytics_events, {
       fields: [payload_locked_documents_rels['analytics-eventsID']],
       references: [analytics_events.id],
       relationName: 'analytics-events',
+    }),
+    dealershipsID: one(dealerships, {
+      fields: [payload_locked_documents_rels.dealershipsID],
+      references: [dealerships.id],
+      relationName: 'dealerships',
+    }),
+    usersID: one(users, {
+      fields: [payload_locked_documents_rels.usersID],
+      references: [users.id],
+      relationName: 'users',
     }),
   }),
 )
@@ -1898,6 +3725,26 @@ export const relations_site_config_navigation_main_links = relations(
     }),
   }),
 )
+export const relations_site_config_navigation_footer_links = relations(
+  site_config_navigation_footer_links,
+  ({ one }) => ({
+    _parentID: one(site_config, {
+      fields: [site_config_navigation_footer_links._parentID],
+      references: [site_config.id],
+      relationName: 'navigation_footerLinks',
+    }),
+  }),
+)
+export const relations_site_config_navigation_legal_links = relations(
+  site_config_navigation_legal_links,
+  ({ one }) => ({
+    _parentID: one(site_config, {
+      fields: [site_config_navigation_legal_links._parentID],
+      references: [site_config.id],
+      relationName: 'navigation_legalLinks',
+    }),
+  }),
+)
 export const relations_site_config_blocks_hero = relations(site_config_blocks_hero, ({ one }) => ({
   _parentID: one(site_config, {
     fields: [site_config_blocks_hero._parentID],
@@ -1948,6 +3795,21 @@ export const relations_site_config_blocks_featured_vehicles = relations(
     }),
   }),
 )
+export const relations_site_config_blocks_inventory_collection = relations(
+  site_config_blocks_inventory_collection,
+  ({ one }) => ({
+    _parentID: one(site_config, {
+      fields: [site_config_blocks_inventory_collection._parentID],
+      references: [site_config.id],
+      relationName: '_blocks_inventoryCollection',
+    }),
+    collection: one(vehicle_collections, {
+      fields: [site_config_blocks_inventory_collection.collection],
+      references: [vehicle_collections.id],
+      relationName: 'collection',
+    }),
+  }),
+)
 export const relations_site_config_blocks_inventory_search = relations(
   site_config_blocks_inventory_search,
   ({ one }) => ({
@@ -1960,6 +3822,133 @@ export const relations_site_config_blocks_inventory_search = relations(
       fields: [site_config_blocks_inventory_search.media],
       references: [media.id],
       relationName: 'media',
+    }),
+  }),
+)
+export const relations_site_config_blocks_city_inventory_cities = relations(
+  site_config_blocks_city_inventory_cities,
+  ({ one }) => ({
+    _parentID: one(site_config_blocks_city_inventory, {
+      fields: [site_config_blocks_city_inventory_cities._parentID],
+      references: [site_config_blocks_city_inventory.id],
+      relationName: 'cities',
+    }),
+    image: one(media, {
+      fields: [site_config_blocks_city_inventory_cities.image],
+      references: [media.id],
+      relationName: 'image',
+    }),
+  }),
+)
+export const relations_site_config_blocks_city_inventory = relations(
+  site_config_blocks_city_inventory,
+  ({ one, many }) => ({
+    _parentID: one(site_config, {
+      fields: [site_config_blocks_city_inventory._parentID],
+      references: [site_config.id],
+      relationName: '_blocks_cityInventory',
+    }),
+    cities: many(site_config_blocks_city_inventory_cities, {
+      relationName: 'cities',
+    }),
+  }),
+)
+export const relations_site_config_blocks_promo_banner = relations(
+  site_config_blocks_promo_banner,
+  ({ one }) => ({
+    _parentID: one(site_config, {
+      fields: [site_config_blocks_promo_banner._parentID],
+      references: [site_config.id],
+      relationName: '_blocks_promoBanner',
+    }),
+    image: one(media, {
+      fields: [site_config_blocks_promo_banner.image],
+      references: [media.id],
+      relationName: 'image',
+    }),
+    mobileImage: one(media, {
+      fields: [site_config_blocks_promo_banner.mobileImage],
+      references: [media.id],
+      relationName: 'mobileImage',
+    }),
+  }),
+)
+export const relations_site_config_blocks_trust_steps_steps = relations(
+  site_config_blocks_trust_steps_steps,
+  ({ one }) => ({
+    _parentID: one(site_config_blocks_trust_steps, {
+      fields: [site_config_blocks_trust_steps_steps._parentID],
+      references: [site_config_blocks_trust_steps.id],
+      relationName: 'steps',
+    }),
+  }),
+)
+export const relations_site_config_blocks_trust_steps = relations(
+  site_config_blocks_trust_steps,
+  ({ one, many }) => ({
+    _parentID: one(site_config, {
+      fields: [site_config_blocks_trust_steps._parentID],
+      references: [site_config.id],
+      relationName: '_blocks_trustSteps',
+    }),
+    steps: many(site_config_blocks_trust_steps_steps, {
+      relationName: 'steps',
+    }),
+  }),
+)
+export const relations_site_config_blocks_testimonials_items = relations(
+  site_config_blocks_testimonials_items,
+  ({ one }) => ({
+    _parentID: one(site_config_blocks_testimonials, {
+      fields: [site_config_blocks_testimonials_items._parentID],
+      references: [site_config_blocks_testimonials.id],
+      relationName: 'items',
+    }),
+    image: one(media, {
+      fields: [site_config_blocks_testimonials_items.image],
+      references: [media.id],
+      relationName: 'image',
+    }),
+  }),
+)
+export const relations_site_config_blocks_testimonials = relations(
+  site_config_blocks_testimonials,
+  ({ one, many }) => ({
+    _parentID: one(site_config, {
+      fields: [site_config_blocks_testimonials._parentID],
+      references: [site_config.id],
+      relationName: '_blocks_testimonials',
+    }),
+    items: many(site_config_blocks_testimonials_items, {
+      relationName: 'items',
+    }),
+  }),
+)
+export const relations_site_config_blocks_video_tips_videos = relations(
+  site_config_blocks_video_tips_videos,
+  ({ one }) => ({
+    _parentID: one(site_config_blocks_video_tips, {
+      fields: [site_config_blocks_video_tips_videos._parentID],
+      references: [site_config_blocks_video_tips.id],
+      relationName: 'videos',
+    }),
+    thumbnail: one(media, {
+      fields: [site_config_blocks_video_tips_videos.thumbnail],
+      references: [media.id],
+      relationName: 'thumbnail',
+    }),
+  }),
+)
+export const relations_site_config_blocks_video_tips = relations(
+  site_config_blocks_video_tips,
+  ({ one, many }) => ({
+    _parentID: one(site_config, {
+      fields: [site_config_blocks_video_tips._parentID],
+      references: [site_config.id],
+      relationName: '_blocks_videoTips',
+    }),
+    videos: many(site_config_blocks_video_tips_videos, {
+      relationName: 'videos',
     }),
   }),
 )
@@ -2026,6 +4015,12 @@ export const relations_site_config = relations(site_config, ({ one, many }) => (
   navigation_mainLinks: many(site_config_navigation_main_links, {
     relationName: 'navigation_mainLinks',
   }),
+  navigation_footerLinks: many(site_config_navigation_footer_links, {
+    relationName: 'navigation_footerLinks',
+  }),
+  navigation_legalLinks: many(site_config_navigation_legal_links, {
+    relationName: 'navigation_legalLinks',
+  }),
   _blocks_hero: many(site_config_blocks_hero, {
     relationName: '_blocks_hero',
   }),
@@ -2035,8 +4030,26 @@ export const relations_site_config = relations(site_config, ({ one, many }) => (
   _blocks_featuredVehicles: many(site_config_blocks_featured_vehicles, {
     relationName: '_blocks_featuredVehicles',
   }),
+  _blocks_inventoryCollection: many(site_config_blocks_inventory_collection, {
+    relationName: '_blocks_inventoryCollection',
+  }),
   _blocks_inventorySearch: many(site_config_blocks_inventory_search, {
     relationName: '_blocks_inventorySearch',
+  }),
+  _blocks_cityInventory: many(site_config_blocks_city_inventory, {
+    relationName: '_blocks_cityInventory',
+  }),
+  _blocks_promoBanner: many(site_config_blocks_promo_banner, {
+    relationName: '_blocks_promoBanner',
+  }),
+  _blocks_trustSteps: many(site_config_blocks_trust_steps, {
+    relationName: '_blocks_trustSteps',
+  }),
+  _blocks_testimonials: many(site_config_blocks_testimonials, {
+    relationName: '_blocks_testimonials',
+  }),
+  _blocks_videoTips: many(site_config_blocks_video_tips, {
+    relationName: '_blocks_videoTips',
   }),
   _blocks_brands: many(site_config_blocks_brands, {
     relationName: '_blocks_brands',
@@ -2067,22 +4080,65 @@ type DatabaseSchema = {
   enum_vehicles_transmission: typeof enum_vehicles_transmission
   enum_vehicles_fuel: typeof enum_vehicles_fuel
   enum_vehicles_inventory_status: typeof enum_vehicles_inventory_status
+  enum_vehicles_publish_status: typeof enum_vehicles_publish_status
+  enum_vehicles_image_status: typeof enum_vehicles_image_status
+  enum_vehicles_spec_status: typeof enum_vehicles_spec_status
   enum_vehicles_source_meta_spec_source: typeof enum_vehicles_source_meta_spec_source
-  enum_leads_source: typeof enum_leads_source
-  enum_leads_stage: typeof enum_leads_stage
+  enum_vehicle_tags_type: typeof enum_vehicle_tags_type
+  enum_vehicle_collections_collection_type: typeof enum_vehicle_collections_collection_type
+  enum_vehicle_collections_rules_condition: typeof enum_vehicle_collections_rules_condition
+  enum_vehicle_collections_rules_body_type: typeof enum_vehicle_collections_rules_body_type
+  enum_vehicle_collections_rules_fuel: typeof enum_vehicle_collections_rules_fuel
+  enum_vehicle_collections_rules_transmission: typeof enum_vehicle_collections_rules_transmission
+  enum_vehicle_collections_rules_inventory_status: typeof enum_vehicle_collections_rules_inventory_status
+  enum_vehicle_collections_rules_publish_status: typeof enum_vehicle_collections_rules_publish_status
+  enum_vehicle_collections_sort: typeof enum_vehicle_collections_sort
+  enum_import_jobs_file_type: typeof enum_import_jobs_file_type
+  enum_import_jobs_status: typeof enum_import_jobs_status
+  enum_vehicle_media_assets_source_type: typeof enum_vehicle_media_assets_source_type
+  enum_vehicle_media_assets_approval_status: typeof enum_vehicle_media_assets_approval_status
+  enum_vehicle_media_assets_match_confidence: typeof enum_vehicle_media_assets_match_confidence
+  enum_vehicle_media_assets_rights_status: typeof enum_vehicle_media_assets_rights_status
+  enum_vehicle_media_assets_usage: typeof enum_vehicle_media_assets_usage
+  enum_workshop_jobs_messages_role: typeof enum_workshop_jobs_messages_role
+  enum_workshop_jobs_job_type: typeof enum_workshop_jobs_job_type
+  enum_workshop_jobs_prompt_preset: typeof enum_workshop_jobs_prompt_preset
+  enum_workshop_jobs_aspect_ratio: typeof enum_workshop_jobs_aspect_ratio
+  enum_workshop_jobs_save_destination: typeof enum_workshop_jobs_save_destination
+  enum_workshop_jobs_status: typeof enum_workshop_jobs_status
+  enum_image_templates_preset: typeof enum_image_templates_preset
   enum_pages_blocks_featured_vehicles_source: typeof enum_pages_blocks_featured_vehicles_source
   enum_pages_blocks_featured_vehicles_body_type: typeof enum_pages_blocks_featured_vehicles_body_type
+  enum_pages_blocks_inventory_collection_layout: typeof enum_pages_blocks_inventory_collection_layout
   enum_pages_blocks_inventory_search_body_type: typeof enum_pages_blocks_inventory_search_body_type
+  enum_pages_blocks_city_inventory_layout: typeof enum_pages_blocks_city_inventory_layout
+  enum_pages_blocks_promo_banner_variant: typeof enum_pages_blocks_promo_banner_variant
+  enum_pages_blocks_promo_banner_theme: typeof enum_pages_blocks_promo_banner_theme
+  enum_pages_blocks_trust_steps_steps_icon: typeof enum_pages_blocks_trust_steps_steps_icon
+  enum_pages_blocks_trust_steps_layout: typeof enum_pages_blocks_trust_steps_layout
+  enum_pages_blocks_testimonials_layout: typeof enum_pages_blocks_testimonials_layout
+  enum_pages_blocks_video_tips_layout: typeof enum_pages_blocks_video_tips_layout
   enum_pages_blocks_media_text_layout: typeof enum_pages_blocks_media_text_layout
+  enum_pages_status: typeof enum_pages_status
+  enum_leads_lead_source: typeof enum_leads_lead_source
+  enum_leads_source: typeof enum_leads_source
+  enum_leads_stage: typeof enum_leads_stage
   enum_analytics_events_event_type: typeof enum_analytics_events_event_type
   enum_analytics_events_device_type: typeof enum_analytics_events_device_type
+  enum_users_role: typeof enum_users_role
+  enum_site_config_navigation_main_links_type: typeof enum_site_config_navigation_main_links_type
   enum_site_config_blocks_featured_vehicles_source: typeof enum_site_config_blocks_featured_vehicles_source
   enum_site_config_blocks_featured_vehicles_body_type: typeof enum_site_config_blocks_featured_vehicles_body_type
+  enum_site_config_blocks_inventory_collection_layout: typeof enum_site_config_blocks_inventory_collection_layout
   enum_site_config_blocks_inventory_search_body_type: typeof enum_site_config_blocks_inventory_search_body_type
+  enum_site_config_blocks_city_inventory_layout: typeof enum_site_config_blocks_city_inventory_layout
+  enum_site_config_blocks_promo_banner_variant: typeof enum_site_config_blocks_promo_banner_variant
+  enum_site_config_blocks_promo_banner_theme: typeof enum_site_config_blocks_promo_banner_theme
+  enum_site_config_blocks_trust_steps_steps_icon: typeof enum_site_config_blocks_trust_steps_steps_icon
+  enum_site_config_blocks_trust_steps_layout: typeof enum_site_config_blocks_trust_steps_layout
+  enum_site_config_blocks_testimonials_layout: typeof enum_site_config_blocks_testimonials_layout
+  enum_site_config_blocks_video_tips_layout: typeof enum_site_config_blocks_video_tips_layout
   enum_site_config_blocks_media_text_layout: typeof enum_site_config_blocks_media_text_layout
-  users_sessions: typeof users_sessions
-  users: typeof users
-  media: typeof media
   vehicles_badges: typeof vehicles_badges
   vehicles_gallery: typeof vehicles_gallery
   vehicles_features: typeof vehicles_features
@@ -2096,20 +4152,46 @@ type DatabaseSchema = {
   vehicles_blocks_feature_grid: typeof vehicles_blocks_feature_grid
   vehicles_blocks_cta: typeof vehicles_blocks_cta
   vehicles: typeof vehicles
-  dealerships: typeof dealerships
-  leads: typeof leads
+  vehicles_rels: typeof vehicles_rels
+  vehicle_tags: typeof vehicle_tags
+  vehicle_collections: typeof vehicle_collections
+  vehicle_collections_rels: typeof vehicle_collections_rels
+  import_jobs_errors: typeof import_jobs_errors
+  import_jobs: typeof import_jobs
+  vehicle_media_assets: typeof vehicle_media_assets
+  vehicle_image_searches: typeof vehicle_image_searches
+  workshop_jobs_input_images: typeof workshop_jobs_input_images
+  workshop_jobs_messages: typeof workshop_jobs_messages
+  workshop_jobs_outputs: typeof workshop_jobs_outputs
+  workshop_jobs: typeof workshop_jobs
+  image_templates: typeof image_templates
   pages_blocks_hero: typeof pages_blocks_hero
   pages_blocks_promo_strip_items: typeof pages_blocks_promo_strip_items
   pages_blocks_promo_strip: typeof pages_blocks_promo_strip
   pages_blocks_featured_vehicles: typeof pages_blocks_featured_vehicles
+  pages_blocks_inventory_collection: typeof pages_blocks_inventory_collection
   pages_blocks_inventory_search: typeof pages_blocks_inventory_search
+  pages_blocks_city_inventory_cities: typeof pages_blocks_city_inventory_cities
+  pages_blocks_city_inventory: typeof pages_blocks_city_inventory
+  pages_blocks_promo_banner: typeof pages_blocks_promo_banner
+  pages_blocks_trust_steps_steps: typeof pages_blocks_trust_steps_steps
+  pages_blocks_trust_steps: typeof pages_blocks_trust_steps
+  pages_blocks_testimonials_items: typeof pages_blocks_testimonials_items
+  pages_blocks_testimonials: typeof pages_blocks_testimonials
+  pages_blocks_video_tips_videos: typeof pages_blocks_video_tips_videos
+  pages_blocks_video_tips: typeof pages_blocks_video_tips
   pages_blocks_brands: typeof pages_blocks_brands
   pages_blocks_agencies: typeof pages_blocks_agencies
   pages_blocks_media_text: typeof pages_blocks_media_text
   pages_blocks_cta: typeof pages_blocks_cta
   pages: typeof pages
   pages_rels: typeof pages_rels
+  media: typeof media
+  leads: typeof leads
   analytics_events: typeof analytics_events
+  dealerships: typeof dealerships
+  users_sessions: typeof users_sessions
+  users: typeof users
   payload_kv: typeof payload_kv
   payload_locked_documents: typeof payload_locked_documents
   payload_locked_documents_rels: typeof payload_locked_documents_rels
@@ -2118,20 +4200,29 @@ type DatabaseSchema = {
   payload_migrations: typeof payload_migrations
   site_config_navigation_main_links_children: typeof site_config_navigation_main_links_children
   site_config_navigation_main_links: typeof site_config_navigation_main_links
+  site_config_navigation_footer_links: typeof site_config_navigation_footer_links
+  site_config_navigation_legal_links: typeof site_config_navigation_legal_links
   site_config_blocks_hero: typeof site_config_blocks_hero
   site_config_blocks_promo_strip_items: typeof site_config_blocks_promo_strip_items
   site_config_blocks_promo_strip: typeof site_config_blocks_promo_strip
   site_config_blocks_featured_vehicles: typeof site_config_blocks_featured_vehicles
+  site_config_blocks_inventory_collection: typeof site_config_blocks_inventory_collection
   site_config_blocks_inventory_search: typeof site_config_blocks_inventory_search
+  site_config_blocks_city_inventory_cities: typeof site_config_blocks_city_inventory_cities
+  site_config_blocks_city_inventory: typeof site_config_blocks_city_inventory
+  site_config_blocks_promo_banner: typeof site_config_blocks_promo_banner
+  site_config_blocks_trust_steps_steps: typeof site_config_blocks_trust_steps_steps
+  site_config_blocks_trust_steps: typeof site_config_blocks_trust_steps
+  site_config_blocks_testimonials_items: typeof site_config_blocks_testimonials_items
+  site_config_blocks_testimonials: typeof site_config_blocks_testimonials
+  site_config_blocks_video_tips_videos: typeof site_config_blocks_video_tips_videos
+  site_config_blocks_video_tips: typeof site_config_blocks_video_tips
   site_config_blocks_brands: typeof site_config_blocks_brands
   site_config_blocks_agencies: typeof site_config_blocks_agencies
   site_config_blocks_media_text: typeof site_config_blocks_media_text
   site_config_blocks_cta: typeof site_config_blocks_cta
   site_config: typeof site_config
   site_config_rels: typeof site_config_rels
-  relations_users_sessions: typeof relations_users_sessions
-  relations_users: typeof relations_users
-  relations_media: typeof relations_media
   relations_vehicles_badges: typeof relations_vehicles_badges
   relations_vehicles_gallery: typeof relations_vehicles_gallery
   relations_vehicles_features: typeof relations_vehicles_features
@@ -2144,21 +4235,47 @@ type DatabaseSchema = {
   relations_vehicles_blocks_feature_grid_items: typeof relations_vehicles_blocks_feature_grid_items
   relations_vehicles_blocks_feature_grid: typeof relations_vehicles_blocks_feature_grid
   relations_vehicles_blocks_cta: typeof relations_vehicles_blocks_cta
+  relations_vehicles_rels: typeof relations_vehicles_rels
   relations_vehicles: typeof relations_vehicles
-  relations_dealerships: typeof relations_dealerships
-  relations_leads: typeof relations_leads
+  relations_vehicle_tags: typeof relations_vehicle_tags
+  relations_vehicle_collections_rels: typeof relations_vehicle_collections_rels
+  relations_vehicle_collections: typeof relations_vehicle_collections
+  relations_import_jobs_errors: typeof relations_import_jobs_errors
+  relations_import_jobs: typeof relations_import_jobs
+  relations_vehicle_media_assets: typeof relations_vehicle_media_assets
+  relations_vehicle_image_searches: typeof relations_vehicle_image_searches
+  relations_workshop_jobs_input_images: typeof relations_workshop_jobs_input_images
+  relations_workshop_jobs_messages: typeof relations_workshop_jobs_messages
+  relations_workshop_jobs_outputs: typeof relations_workshop_jobs_outputs
+  relations_workshop_jobs: typeof relations_workshop_jobs
+  relations_image_templates: typeof relations_image_templates
   relations_pages_blocks_hero: typeof relations_pages_blocks_hero
   relations_pages_blocks_promo_strip_items: typeof relations_pages_blocks_promo_strip_items
   relations_pages_blocks_promo_strip: typeof relations_pages_blocks_promo_strip
   relations_pages_blocks_featured_vehicles: typeof relations_pages_blocks_featured_vehicles
+  relations_pages_blocks_inventory_collection: typeof relations_pages_blocks_inventory_collection
   relations_pages_blocks_inventory_search: typeof relations_pages_blocks_inventory_search
+  relations_pages_blocks_city_inventory_cities: typeof relations_pages_blocks_city_inventory_cities
+  relations_pages_blocks_city_inventory: typeof relations_pages_blocks_city_inventory
+  relations_pages_blocks_promo_banner: typeof relations_pages_blocks_promo_banner
+  relations_pages_blocks_trust_steps_steps: typeof relations_pages_blocks_trust_steps_steps
+  relations_pages_blocks_trust_steps: typeof relations_pages_blocks_trust_steps
+  relations_pages_blocks_testimonials_items: typeof relations_pages_blocks_testimonials_items
+  relations_pages_blocks_testimonials: typeof relations_pages_blocks_testimonials
+  relations_pages_blocks_video_tips_videos: typeof relations_pages_blocks_video_tips_videos
+  relations_pages_blocks_video_tips: typeof relations_pages_blocks_video_tips
   relations_pages_blocks_brands: typeof relations_pages_blocks_brands
   relations_pages_blocks_agencies: typeof relations_pages_blocks_agencies
   relations_pages_blocks_media_text: typeof relations_pages_blocks_media_text
   relations_pages_blocks_cta: typeof relations_pages_blocks_cta
   relations_pages_rels: typeof relations_pages_rels
   relations_pages: typeof relations_pages
+  relations_media: typeof relations_media
+  relations_leads: typeof relations_leads
   relations_analytics_events: typeof relations_analytics_events
+  relations_dealerships: typeof relations_dealerships
+  relations_users_sessions: typeof relations_users_sessions
+  relations_users: typeof relations_users
   relations_payload_kv: typeof relations_payload_kv
   relations_payload_locked_documents_rels: typeof relations_payload_locked_documents_rels
   relations_payload_locked_documents: typeof relations_payload_locked_documents
@@ -2167,11 +4284,23 @@ type DatabaseSchema = {
   relations_payload_migrations: typeof relations_payload_migrations
   relations_site_config_navigation_main_links_children: typeof relations_site_config_navigation_main_links_children
   relations_site_config_navigation_main_links: typeof relations_site_config_navigation_main_links
+  relations_site_config_navigation_footer_links: typeof relations_site_config_navigation_footer_links
+  relations_site_config_navigation_legal_links: typeof relations_site_config_navigation_legal_links
   relations_site_config_blocks_hero: typeof relations_site_config_blocks_hero
   relations_site_config_blocks_promo_strip_items: typeof relations_site_config_blocks_promo_strip_items
   relations_site_config_blocks_promo_strip: typeof relations_site_config_blocks_promo_strip
   relations_site_config_blocks_featured_vehicles: typeof relations_site_config_blocks_featured_vehicles
+  relations_site_config_blocks_inventory_collection: typeof relations_site_config_blocks_inventory_collection
   relations_site_config_blocks_inventory_search: typeof relations_site_config_blocks_inventory_search
+  relations_site_config_blocks_city_inventory_cities: typeof relations_site_config_blocks_city_inventory_cities
+  relations_site_config_blocks_city_inventory: typeof relations_site_config_blocks_city_inventory
+  relations_site_config_blocks_promo_banner: typeof relations_site_config_blocks_promo_banner
+  relations_site_config_blocks_trust_steps_steps: typeof relations_site_config_blocks_trust_steps_steps
+  relations_site_config_blocks_trust_steps: typeof relations_site_config_blocks_trust_steps
+  relations_site_config_blocks_testimonials_items: typeof relations_site_config_blocks_testimonials_items
+  relations_site_config_blocks_testimonials: typeof relations_site_config_blocks_testimonials
+  relations_site_config_blocks_video_tips_videos: typeof relations_site_config_blocks_video_tips_videos
+  relations_site_config_blocks_video_tips: typeof relations_site_config_blocks_video_tips
   relations_site_config_blocks_brands: typeof relations_site_config_blocks_brands
   relations_site_config_blocks_agencies: typeof relations_site_config_blocks_agencies
   relations_site_config_blocks_media_text: typeof relations_site_config_blocks_media_text

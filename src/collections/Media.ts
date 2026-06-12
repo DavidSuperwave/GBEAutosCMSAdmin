@@ -11,7 +11,7 @@ export const Media: CollectionConfig = {
     delete: canManageMedia,
   },
   admin: {
-    group: 'Media Workshop',
+    group: false,
   },
   labels: {
     singular: 'Medio',

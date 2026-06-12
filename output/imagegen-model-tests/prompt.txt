@@ -1,0 +1,12 @@
+Use case: precise-object-edit
+Asset type: vehicle inventory listing photo / AI generation wizard test
+Primary request: Transform Image 1 into a clean indoor dealership turntable studio photo matching the environment style of Image 2.
+Input images: Image 1 is the edit target vehicle and must preserve the exact blue Hyundai SUV identity, body shape, wheels, angle, grille, headlights, paint color, and visible proportions. Image 2 is the studio/background style reference only.
+Scene/backdrop: bright neutral gray/white curved cyclorama wall, glossy light gray circular turntable platform with a subtle dark circular outline, clean dealership photo bay, no outdoor road, no trees, no sky.
+Subject: the same blue Hyundai SUV from Image 1, stationary, front three-quarter angle, centered slightly right like a professional inventory photo.
+Style/medium: photorealistic automotive dealership photography, realistic reflections, crisp details, natural lens perspective.
+Composition/framing: wide 16:9 image, full vehicle visible with space around it, camera at low eye-level similar to Image 2.
+Lighting/mood: soft overhead studio lighting, controlled reflections on paint and glass, realistic soft shadow under the vehicle, polished but not CGI.
+Color palette: neutral grays and whites for the studio; preserve the vehicle's blue paint.
+Constraints: change only the environment/background and lighting context; keep the vehicle model, color, wheels, license plate area, trim, orientation, and proportions from Image 1. Do not turn it into an Audi or copy the vehicle from Image 2.
+Avoid: outdoor scenery, motion blur, road markings, trees, text, watermark, logos added to the wall, distorted wheels, extra vehicles, impossible reflections, overly synthetic 3D render look.

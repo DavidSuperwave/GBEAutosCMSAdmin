@@ -7,9 +7,6 @@ import {
   ChatContainerContent,
   ChatContainerRoot,
   ChatContainerScrollAnchor,
-  FileUpload,
-  FileUploadContent,
-  FileUploadTrigger,
   Image as PromptKitImage,
   Message as PromptKitMessage,
   MessageAction,
@@ -62,12 +59,14 @@ type JobMessage = {
   role?: 'user' | 'assistant' | 'system'
   content?: string
   createdAt?: string
+  turnId?: string
 }
 
 type Output = {
   image?: MediaRef
   url?: string
   selected?: boolean
+  turnId?: string
 }
 
 type Job = {
@@ -114,6 +113,7 @@ type ChatReference = {
 
 type ChatFile = {
   id: string
+  canRename?: boolean
   label: string
   mediaId?: number | string
   meta: string
@@ -125,6 +125,16 @@ type ChatFile = {
 const BUNDLED_STUDIO_URL = '/admin-ai/studio-turntable-reference.jpg'
 const BUNDLED_STUDIO_PROMPT =
   'Clean indoor dealership turntable studio: neutral gray/white curved wall, glossy circular floor, soft overhead agency lighting, realistic reflections.'
+const DEFAULT_GENERATION_PROMPT =
+  'Create a clean indoor dealership turntable studio image. Preserve the exact vehicle identity and make the license plate unreadable with no visible text.'
+const DEFAULT_STUDIO_STYLE: StyleChoice = {
+  type: 'studio',
+  label: 'Estudio turntable',
+  description: 'Fondo gris/blanco, piso circular, luz de agencia.',
+  prompt: BUNDLED_STUDIO_PROMPT,
+  preset: 'clean_dealership_bg',
+  url: BUNDLED_STUDIO_URL,
+}
 
 function mediaId(ref: MediaRef): number | string | undefined {
   if (ref == null) return undefined
@@ -134,6 +144,11 @@ function mediaId(ref: MediaRef): number | string | undefined {
 
 function mediaUrl(ref: MediaRef): string | undefined {
   if (ref && typeof ref === 'object') return ref.thumbnailURL || ref.url
+  return undefined
+}
+
+function mediaAlt(ref: MediaRef): string | undefined {
+  if (ref && typeof ref === 'object') return ref.alt
   return undefined
 }
 
@@ -152,16 +167,61 @@ function uniqueCandidates(candidates: CandidateImage[]): CandidateImage[] {
 }
 
 function templateToStyle(template: Template): StyleChoice {
+  const name = template.name || 'Estilo guardado'
+  const isBundledStudioName = name.trim().toLowerCase() === DEFAULT_STUDIO_STYLE.label.trim().toLowerCase()
+  const referenceUrl = mediaUrl(template.referenceImage)
   return {
     type: 'template',
-    label: template.name || 'Estilo guardado',
+    label: name,
     description: template.description || template.prompt || 'Prompt guardado como estilo.',
     prompt: template.prompt || '',
     preset: template.preset || 'clean_dealership_bg',
     mediaId: mediaId(template.referenceImage),
-    url: mediaUrl(template.referenceImage),
+    url: referenceUrl || (isBundledStudioName ? DEFAULT_STUDIO_STYLE.url : undefined),
     templateId: template.id,
   }
+}
+
+function templateDedupeKey(styleChoice: StyleChoice): string {
+  return [
+    styleChoice.type === 'studio' ? 'studio' : 'template',
+    (styleChoice.label || '').trim().toLowerCase(),
+    (styleChoice.prompt || '').trim().toLowerCase(),
+  ].join('|')
+}
+
+function dedupeStyles(styles: StyleChoice[]): StyleChoice[] {
+  const map = new Map<string, StyleChoice>()
+  styles.forEach((styleChoice) => {
+    const key = templateDedupeKey(styleChoice)
+    const existing = map.get(key)
+    if (!existing) {
+      map.set(key, styleChoice)
+      return
+    }
+    const existingHasImage = Boolean(existing.url || existing.mediaId)
+    const nextHasImage = Boolean(styleChoice.url || styleChoice.mediaId)
+    if (!existingHasImage && nextHasImage) map.set(key, styleChoice)
+    else if (existingHasImage === nextHasImage && Number(styleChoice.templateId || 0) > Number(existing.templateId || 0)) map.set(key, styleChoice)
+  })
+  return Array.from(map.values())
+}
+
+function jobDedupeKey(job: Job): string {
+  return [
+    (job.styleName || job.title || '').trim().toLowerCase(),
+    (job.stylePrompt || '').trim().toLowerCase(),
+  ].join('|')
+}
+
+function dedupeJobs(jobs: Job[]): Job[] {
+  const seen = new Set<string>()
+  return jobs.filter((job) => {
+    const key = jobDedupeKey(job)
+    if (!key || seen.has(key)) return false
+    seen.add(key)
+    return true
+  })
 }
 
 function outputKey(output: Output, index: number): string {
@@ -172,11 +232,19 @@ function outputUrl(output: Output): string | undefined {
   return mediaUrl(output.image) || output.url
 }
 
+function createTurnId(): string {
+  return `turn-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
+}
+
 function extractDoc<T>(value: unknown): T {
   if (value && typeof value === 'object' && 'doc' in value) {
     return (value as { doc: T }).doc
   }
   return value as T
+}
+
+function compactPayload<T extends Record<string, unknown>>(value: T): T {
+  return Object.fromEntries(Object.entries(value).filter(([, item]) => item !== undefined && item !== null && item !== '')) as T
 }
 
 async function loadCanvasImage(url: string): Promise<HTMLImageElement> {
@@ -288,6 +356,78 @@ function ImageEditorModal({
   )
 }
 
+type StyleTemplateModalProps = {
+  busy: boolean
+  description: string
+  name: string
+  onClose: () => void
+  onDescriptionChange: (value: string) => void
+  onNameChange: (value: string) => void
+  onPromptChange: (value: string) => void
+  onSave: () => void
+  onSaveAndGenerate: () => void
+  prompt: string
+  style: StyleChoice
+}
+
+function StyleTemplateModal({
+  busy,
+  description,
+  name,
+  onClose,
+  onDescriptionChange,
+  onNameChange,
+  onPromptChange,
+  onSave,
+  onSaveAndGenerate,
+  prompt,
+  style,
+}: StyleTemplateModalProps) {
+  return (
+    <div className="vehicle-ai-style-modal" role="dialog" aria-modal="true" aria-label="Crear plantilla de imagen">
+      <button className="vehicle-ai-style-modal__backdrop" onClick={onClose} type="button" />
+      <section className="vehicle-ai-style-modal__panel">
+        <header className="vehicle-ai-style-modal__header">
+          <div>
+            <p>Plantilla reutilizable</p>
+            <h3>{style.templateId ? 'Editar plantilla' : 'Crear plantilla'}</h3>
+          </div>
+          <button aria-label="Cerrar plantilla" disabled={busy} onClick={onClose} type="button">
+            x
+          </button>
+        </header>
+        <div className="vehicle-ai-style-modal__body">
+          <div className="vehicle-ai-style-modal__preview">
+            {style.url ? <PromptKitImage src={style.url} alt="" /> : <div className="vehicle-ai-style-modal__empty-preview">Imagen</div>}
+          </div>
+          <div className="vehicle-ai-style-modal__form">
+            <label>
+              <span>Nombre de la plantilla</span>
+              <input disabled={busy} onChange={(event) => onNameChange(event.target.value)} value={name} />
+            </label>
+            <label>
+              <span>Descripcion</span>
+              <input disabled={busy} onChange={(event) => onDescriptionChange(event.target.value)} value={description} />
+            </label>
+            <label>
+              <span>Prompt guardado</span>
+              <textarea disabled={busy} onChange={(event) => onPromptChange(event.target.value)} rows={8} value={prompt} />
+            </label>
+          </div>
+        </div>
+        <footer className="vehicle-ai-style-modal__footer">
+          <button disabled={busy} onClick={onSave} type="button">
+            Guardar cambios
+          </button>
+          <button disabled={busy} onClick={onSaveAndGenerate} type="button">
+            Generar
+          </button>
+        </footer>
+      </section>
+    </div>
+  )
+}
+
 export default function VehicleAIImageWizard({
   assets,
   onChanged,
@@ -311,20 +451,17 @@ export default function VehicleAIImageWizard({
   const [step, setStep] = useState(0)
   const [selectedSourceId, setSelectedSourceId] = useState<string>('')
   const [uploadedSources, setUploadedSources] = useState<CandidateImage[]>([])
-  const [style, setStyle] = useState<StyleChoice>({
-    type: 'studio',
-    label: 'Estudio turntable',
-    description: 'Fondo gris/blanco, piso circular, luz de agencia.',
-    prompt: BUNDLED_STUDIO_PROMPT,
-    preset: 'clean_dealership_bg',
-    url: BUNDLED_STUDIO_URL,
-  })
-  const [styleDraftName, setStyleDraftName] = useState(style.label)
-  const [styleDraftPrompt, setStyleDraftPrompt] = useState(style.prompt || '')
-  const [styleDraftDescription, setStyleDraftDescription] = useState(style.description || '')
+  const [style, setStyle] = useState<StyleChoice>(DEFAULT_STUDIO_STYLE)
+  const [editingStyle, setEditingStyle] = useState<StyleChoice | null>(null)
+  const [editingTemplateId, setEditingTemplateId] = useState<number | string | undefined>(undefined)
+  const [styleDraftName, setStyleDraftName] = useState(DEFAULT_STUDIO_STYLE.label)
+  const [styleDraftPrompt, setStyleDraftPrompt] = useState(DEFAULT_STUDIO_STYLE.prompt || '')
+  const [styleDraftDescription, setStyleDraftDescription] = useState(DEFAULT_STUDIO_STYLE.description || '')
   const [jobs, setJobs] = useState<Job[]>([])
   const [activeJob, setActiveJob] = useState<Job | null>(null)
   const [prompt, setPrompt] = useState('')
+  const [optimisticMessages, setOptimisticMessages] = useState<JobMessage[]>([])
+  const [pendingTurnId, setPendingTurnId] = useState('')
   const [chatReferences, setChatReferences] = useState<ChatReference[]>([])
   const [busy, setBusy] = useState(false)
   const [generationState, setGenerationState] = useState('')
@@ -333,33 +470,21 @@ export default function VehicleAIImageWizard({
   const [selectedOutputs, setSelectedOutputs] = useState<Set<string>>(new Set())
   const [previewFile, setPreviewFile] = useState<ChatFile | null>(null)
   const [editingOutput, setEditingOutput] = useState<{ index: number; output: Output } | null>(null)
+  const [styleModalOpen, setStyleModalOpen] = useState(false)
+  const [filesOpen, setFilesOpen] = useState(false)
+  const [renamingFileId, setRenamingFileId] = useState('')
+  const [renameDraft, setRenameDraft] = useState('')
   const [cropAspect, setCropAspect] = useState<'free' | '16:9' | '4:3' | '1:1'>('16:9')
   const [cropZoom, setCropZoom] = useState(1)
 
-  const effectiveStyle = useMemo(
-    () => ({
-      ...style,
-      description: styleDraftDescription,
-      label: styleDraftName.trim() || style.label,
-      prompt: styleDraftPrompt,
-    }),
-    [style, styleDraftDescription, styleDraftName, styleDraftPrompt],
-  )
+  const effectiveStyle = style
 
   const styleOptions = useMemo(() => {
-    const saved = templates.map(templateToStyle)
-    return saved.length
-      ? saved
-      : [
-          {
-            type: 'studio' as const,
-            label: 'Estudio turntable',
-            description: 'Fondo gris/blanco, piso circular, luz de agencia.',
-            prompt: BUNDLED_STUDIO_PROMPT,
-            preset: 'clean_dealership_bg',
-            url: BUNDLED_STUDIO_URL,
-          },
-        ]
+    const saved = dedupeStyles(templates.map(templateToStyle))
+    const hasSavedBundledStudio = saved.some(
+      (item) => item.label.trim().toLowerCase() === DEFAULT_STUDIO_STYLE.label.trim().toLowerCase(),
+    )
+    return hasSavedBundledStudio ? saved : [DEFAULT_STUDIO_STYLE, ...saved]
   }, [templates])
 
   const sourceImages = useMemo(() => {
@@ -404,6 +529,32 @@ export default function VehicleAIImageWizard({
 
   const selectedSource = sourceImages.find((image) => image.id === selectedSourceId) || sourceImages[0]
   const outputs = activeJob?.outputs || []
+  const displayedJobs = useMemo(() => dedupeJobs(jobs), [jobs])
+  const persistedMessages = activeJob?.messages || []
+  const visibleMessages = useMemo(() => {
+    const persistedTurnIds = new Set(persistedMessages.map((message) => message.turnId).filter(Boolean))
+    const pending = optimisticMessages.filter((message) => !message.turnId || !persistedTurnIds.has(message.turnId))
+    return [...persistedMessages, ...pending]
+  }, [optimisticMessages, persistedMessages])
+  const outputsByTurn = useMemo(() => {
+    const grouped = new Map<string, Array<{ output: Output; index: number }>>()
+    const legacy: Array<{ output: Output; index: number }> = []
+    outputs.forEach((output, index) => {
+      if (!output.turnId) {
+        legacy.push({ output, index })
+        return
+      }
+      const current = grouped.get(output.turnId) || []
+      current.push({ output, index })
+      grouped.set(output.turnId, current)
+    })
+    return { grouped, legacy }
+  }, [outputs])
+  const legacyOutputInsertionIndex = useMemo(() => {
+    const firstTurnIndex = visibleMessages.findIndex((message) => Boolean(message.turnId))
+    return firstTurnIndex === -1 ? visibleMessages.length : firstTurnIndex
+  }, [visibleMessages])
+  const chatRailLocked = Boolean(activeJob || optimisticMessages.length || pendingTurnId)
 
   const attachedFiles = useMemo<ChatFile[]>(() => {
     const files: ChatFile[] = []
@@ -428,6 +579,7 @@ export default function VehicleAIImageWizard({
     chatReferences.forEach((reference) => {
       files.push({
         id: `chat-ref-${reference.id}`,
+        canRename: true,
         label: reference.label,
         mediaId: reference.id,
         meta: 'Referencia de chat',
@@ -439,7 +591,8 @@ export default function VehicleAIImageWizard({
       if (!url) return
       files.push({
         id: `output-${outputKey(output, index)}`,
-        label: `Resultado ${index + 1}`,
+        canRename: mediaId(output.image) != null,
+        label: mediaAlt(output.image) || `Resultado ${index + 1}`,
         mediaId: mediaId(output.image),
         meta: output.selected ? 'Seleccionado' : 'Generado',
         output,
@@ -467,11 +620,21 @@ export default function VehicleAIImageWizard({
     if (first.type === 'template') setStyle(first)
   }, [open, style.type, styleOptions])
 
-  useEffect(() => {
-    setStyleDraftName(style.label)
-    setStyleDraftPrompt(style.prompt || '')
-    setStyleDraftDescription(style.description || '')
-  }, [style])
+  const openStyleEditor = useCallback((nextStyle: StyleChoice, templateId: number | string | undefined = nextStyle.templateId) => {
+    setEditingStyle(nextStyle)
+    setEditingTemplateId(templateId)
+    setStyleDraftName(nextStyle.label)
+    setStyleDraftPrompt(nextStyle.prompt || '')
+    setStyleDraftDescription(nextStyle.description || '')
+    setStyleModalOpen(true)
+  }, [])
+
+  const closeStyleEditor = useCallback(() => {
+    if (busy) return
+    setStyleModalOpen(false)
+    setEditingStyle(null)
+    setEditingTemplateId(undefined)
+  }, [busy])
 
   const loadJobs = useCallback(async () => {
     if (!open) return
@@ -587,15 +750,16 @@ export default function VehicleAIImageWizard({
       try {
         const media = await uploadMedia(file, file.name)
         await recordAsset(media.id, 'reference')
-        setStyle({
+        const nextStyle: StyleChoice = {
           type: 'custom',
           label: file.name,
           description: 'Referencia personalizada subida para este chat.',
           prompt: 'Use this custom image as style/background reference only.',
           mediaId: media.id,
           url: media.url || URL.createObjectURL(file),
-        })
-        setNotice('Estilo personalizado listo. Edita el prompt antes de usarlo si necesitas mas control.')
+        }
+        openStyleEditor(nextStyle, undefined)
+        setNotice('Imagen de plantilla lista. Agrega el prompt y guarda para reutilizarla.')
         onChanged()
       } catch (err) {
         setError(err instanceof Error ? err.message : 'No se pudo subir la referencia.')
@@ -604,37 +768,15 @@ export default function VehicleAIImageWizard({
         if (customStyleInputRef.current) customStyleInputRef.current.value = ''
       }
     },
-    [onChanged, recordAsset, uploadMedia],
-  )
-
-  const handleChatReferenceFiles = useCallback(
-    async (files: File[]) => {
-      const imageFiles = files.filter((file) => file.type.startsWith('image/'))
-      if (!imageFiles.length) return
-      setBusy(true)
-      setError('')
-      setNotice('')
-      try {
-        const added: ChatReference[] = []
-        for (const file of imageFiles) {
-          const media = await uploadMedia(file, file.name)
-          await recordAsset(media.id, 'reference')
-          added.push({ id: media.id, label: file.name, url: media.url || URL.createObjectURL(file) })
-        }
-        setChatReferences((current) => [...current, ...added])
-        setNotice(`${added.length} referencia(s) agregada(s) al chat.`)
-        onChanged()
-      } catch (err) {
-        setError(err instanceof Error ? err.message : 'No se pudo adjuntar la imagen.')
-      } finally {
-        setBusy(false)
-      }
-    },
-    [onChanged, recordAsset, uploadMedia],
+    [onChanged, openStyleEditor, recordAsset, uploadMedia],
   )
 
   const createJobBody = useCallback(
-    async (nextPrompt: string) => {
+    async (
+      nextPrompt: string,
+      styleForJob: StyleChoice = effectiveStyle,
+      options?: { appendToActiveJob?: boolean; baseMessages?: JobMessage[]; turnId?: string },
+    ) => {
       if (!selectedSource) throw new Error('Selecciona una imagen del vehiculo.')
       const inputMap = new Map<string, { image: number | string }>()
       const addInput = (id?: number | string) => {
@@ -642,128 +784,156 @@ export default function VehicleAIImageWizard({
         inputMap.set(String(id), { image: id })
       }
       addInput(selectedSource.mediaId)
-      addInput(effectiveStyle.mediaId)
       chatReferences.forEach((reference) => addInput(reference.id))
 
+      const appendToActiveJob = options?.appendToActiveJob ?? true
+      const existingMessages = options?.baseMessages || (appendToActiveJob ? activeJob?.messages || [] : [])
       const messages = [
-        ...(activeJob?.messages || []),
-        { role: 'user' as const, content: nextPrompt, createdAt: new Date().toISOString() },
+        ...existingMessages,
+        { role: 'user' as const, content: nextPrompt, createdAt: new Date().toISOString(), turnId: options?.turnId },
       ]
-      return {
-        title: `${vehicleTitle(vehicle)} - ${effectiveStyle.label}`,
+      return compactPayload({
+        title: `${vehicleTitle(vehicle)} - ${styleForJob.label}`,
+        jobType: 'vehicle_image',
         linkedVehicle: vehicle.id,
         inputImages: Array.from(inputMap.values()),
-        vehicleContext: {
+        vehicleContext: compactPayload({
           brand: vehicle.brand,
           model: vehicle.model,
           year: vehicle.year,
           color: vehicle.exteriorColor,
-        },
-        promptPreset: effectiveStyle.preset || 'clean_dealership_bg',
+        }),
+        aspectRatio: '16:9',
+        promptPreset: styleForJob.preset || 'clean_dealership_bg',
         prompt: nextPrompt,
         messages,
         saveDestination: 'vehicle_gallery',
-        styleTemplate: effectiveStyle.templateId,
-        styleName: effectiveStyle.label,
-        stylePrompt: effectiveStyle.prompt || '',
-        styleReferenceUrl: effectiveStyle.type === 'studio' ? effectiveStyle.url : undefined,
-      }
+        styleTemplate: styleForJob.templateId,
+        styleName: styleForJob.label,
+        stylePrompt: styleForJob.prompt || '',
+        styleReferenceUrl: styleForJob.url,
+      })
     },
     [activeJob?.messages, chatReferences, effectiveStyle, selectedSource, vehicle],
   )
 
-  const ensureJob = useCallback(
-    async (nextPrompt: string): Promise<Job> => {
-      const body = await createJobBody(nextPrompt)
-      if (activeJob?.id) {
-        const res = await fetch(`/api/workshop-jobs/${activeJob.id}`, {
-          method: 'PATCH',
+  const runGeneration = useCallback(
+    async (
+      nextPrompt: string,
+      styleForJob: StyleChoice = effectiveStyle,
+      options?: { createNewJob?: boolean; jobId?: number | string; baseMessages?: JobMessage[]; turnId?: string },
+    ) => {
+      const turnId = options?.turnId || createTurnId()
+      const optimisticMessage: JobMessage = {
+        role: 'user',
+        content: nextPrompt,
+        createdAt: new Date().toISOString(),
+        turnId,
+      }
+      const createNewJob = Boolean(options?.createNewJob)
+      const jobData = await createJobBody(nextPrompt, styleForJob, {
+        appendToActiveJob: !createNewJob,
+        baseMessages: options?.baseMessages,
+        turnId,
+      })
+      setPrompt('')
+      setStep(2)
+      setPendingTurnId(turnId)
+      setOptimisticMessages((current) =>
+        current.some((message) => message.turnId === turnId) ? current : [...current, optimisticMessage],
+      )
+      setGenerationState('Generando imagen')
+      try {
+        const res = await fetch('/api/cms/workshop/generate', {
+          method: 'POST',
           credentials: 'include',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(body),
+          body: JSON.stringify({ jobId: options?.jobId || (createNewJob ? undefined : activeJob?.id), jobData }),
         })
-        if (!res.ok) throw new Error((await res.text()).slice(0, 180))
-        return extractDoc<Job>(await res.json())
+        const data = (await res.json().catch(() => ({}))) as { configured?: boolean; error?: string; jobId?: number | string }
+        if (res.status === 501 || data.configured === false) {
+          setNotice('Chat guardado. Configura OPENROUTER_API_KEY o AI_IMAGE_API_KEY para generar.')
+        } else if (!res.ok) {
+          throw new Error(data.error || 'No se pudo generar la imagen.')
+        } else {
+          setNotice('Imagen generada y guardada en resultados.')
+        }
+        setGenerationState('Actualizando chat')
+        const fresh = data.jobId ? await fetchJob(data.jobId) : null
+        if (fresh) {
+          setActiveJob(fresh)
+          setOptimisticMessages((current) => current.filter((message) => message.turnId !== turnId))
+        }
+        await loadJobs()
+      } catch (error) {
+        setOptimisticMessages((current) => current.filter((message) => message.turnId !== turnId))
+        throw error
+      } finally {
+        setPendingTurnId((current) => (current === turnId ? '' : current))
       }
-      const res = await fetch('/api/workshop-jobs', {
-        method: 'POST',
-        credentials: 'include',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body),
-      })
-      if (!res.ok) throw new Error((await res.text()).slice(0, 180))
-      return extractDoc<Job>(await res.json())
     },
-    [activeJob?.id, createJobBody],
+    [activeJob?.id, createJobBody, effectiveStyle, fetchJob, loadJobs],
   )
 
-  const submitPrompt = useCallback(async () => {
+  const submitPrompt = useCallback(async (overridePrompt?: string, styleForJob: StyleChoice = effectiveStyle) => {
     const nextPrompt =
+      overridePrompt?.trim() ||
       prompt.trim() ||
-      'Create a clean indoor dealership turntable studio image. Preserve the exact vehicle identity and make the license plate unreadable with no visible text.'
+      DEFAULT_GENERATION_PROMPT
     setBusy(true)
     setGenerationState('Guardando prompt')
     setError('')
     setNotice('')
     try {
-      const job = await ensureJob(nextPrompt)
-      setActiveJob(job)
-      setPrompt('')
-      setStep(2)
-      setGenerationState('Generando imagen')
-      const res = await fetch('/api/cms/workshop/generate', {
-        method: 'POST',
-        credentials: 'include',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ jobId: job.id }),
-      })
-      const data = (await res.json().catch(() => ({}))) as { configured?: boolean; error?: string }
-      if (res.status === 501 || data.configured === false) {
-        setNotice('Chat guardado. Configura OPENROUTER_API_KEY o AI_IMAGE_API_KEY para generar.')
-      } else if (!res.ok) {
-        throw new Error(data.error || 'No se pudo generar la imagen.')
-      } else {
-        setNotice('Imagen generada y guardada en resultados.')
-      }
-      setGenerationState('Actualizando chat')
-      const fresh = await fetchJob(job.id)
-      if (fresh) setActiveJob(fresh)
-      await loadJobs()
+      await runGeneration(nextPrompt, styleForJob)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'No se pudo generar la imagen.')
     } finally {
       setBusy(false)
       setGenerationState('')
     }
-  }, [ensureJob, fetchJob, loadJobs, prompt])
+  }, [effectiveStyle, prompt, runGeneration])
+
+  const persistStyleTemplate = useCallback(async (): Promise<StyleChoice> => {
+    const targetStyle = editingStyle || style
+    const name = styleDraftName.trim() || targetStyle.label
+    if (!name) {
+      throw new Error('Escribe un nombre para guardar el estilo.')
+    }
+    const body = {
+      name,
+      preset: targetStyle.preset || 'clean_dealership_bg',
+      prompt: styleDraftPrompt,
+      referenceImage: targetStyle.mediaId,
+      description: styleDraftDescription,
+    }
+    const url = editingTemplateId ? `/api/image-templates/${editingTemplateId}` : '/api/image-templates'
+    const res = await fetch(url, {
+      method: editingTemplateId ? 'PATCH' : 'POST',
+      credentials: 'include',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    })
+    if (!res.ok) throw new Error((await res.text()).slice(0, 180))
+    const saved = templateToStyle(extractDoc<Template>(await res.json()))
+    return {
+      ...saved,
+      mediaId: saved.mediaId || targetStyle.mediaId,
+      type: saved.mediaId ? saved.type : targetStyle.type,
+      url: saved.url || targetStyle.url,
+    }
+  }, [editingStyle, editingTemplateId, style, styleDraftDescription, styleDraftName, styleDraftPrompt])
 
   const saveStyleTemplate = useCallback(async () => {
-    const name = styleDraftName.trim() || style.label
-    if (!name) {
-      setError('Escribe un nombre para guardar el estilo.')
-      return
-    }
     setBusy(true)
     setError('')
     setNotice('')
     try {
-      const body = {
-        name,
-        preset: effectiveStyle.preset || 'clean_dealership_bg',
-        prompt: styleDraftPrompt,
-        referenceImage: effectiveStyle.mediaId,
-        description: styleDraftDescription,
-      }
-      const url = style.templateId ? `/api/image-templates/${style.templateId}` : '/api/image-templates'
-      const res = await fetch(url, {
-        method: style.templateId ? 'PATCH' : 'POST',
-        credentials: 'include',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body),
-      })
-      if (!res.ok) throw new Error((await res.text()).slice(0, 180))
-      const saved = templateToStyle(extractDoc<Template>(await res.json()))
+      const saved = await persistStyleTemplate()
       setStyle(saved)
+      setStyleModalOpen(false)
+      setEditingStyle(null)
+      setEditingTemplateId(undefined)
       setNotice('Estilo guardado y listo para usar en el chat.')
       onTemplatesChanged?.()
     } catch (err) {
@@ -771,7 +941,87 @@ export default function VehicleAIImageWizard({
     } finally {
       setBusy(false)
     }
-  }, [effectiveStyle, onTemplatesChanged, style.label, style.templateId, styleDraftDescription, styleDraftName, styleDraftPrompt])
+  }, [onTemplatesChanged, persistStyleTemplate])
+
+  const findMatchingStyleJob = useCallback(
+    (styleForJob: StyleChoice) =>
+      jobs.find((job) => {
+        const jobTemplateId = typeof job.styleTemplate === 'object' ? job.styleTemplate?.id : job.styleTemplate
+        if (styleForJob.templateId && jobTemplateId && String(styleForJob.templateId) === String(jobTemplateId)) return true
+        return (
+          (job.styleName || '').trim().toLowerCase() === styleForJob.label.trim().toLowerCase() &&
+          (job.stylePrompt || '').trim().toLowerCase() === (styleForJob.prompt || '').trim().toLowerCase()
+        )
+      }),
+    [jobs],
+  )
+
+  const saveStyleAndGenerate = useCallback(async () => {
+    setBusy(true)
+    setGenerationState('Guardando plantilla')
+    setError('')
+    setNotice('')
+    try {
+      const saved = await persistStyleTemplate()
+      setStyle(saved)
+      const targetJob = findMatchingStyleJob(saved)
+      setActiveJob(targetJob || null)
+      setSelectedOutputs(new Set())
+      setChatReferences([])
+      setOptimisticMessages([])
+      setPendingTurnId('')
+      setFilesOpen(false)
+      setStyleModalOpen(false)
+      setEditingStyle(null)
+      setEditingTemplateId(undefined)
+      setStep(2)
+      onTemplatesChanged?.()
+      const nextPrompt =
+        saved.prompt ||
+        DEFAULT_GENERATION_PROMPT
+      setGenerationState('Guardando prompt')
+      await runGeneration(nextPrompt, saved, {
+        createNewJob: !targetJob,
+        jobId: targetJob?.id,
+        baseMessages: targetJob?.messages || [],
+      })
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'No se pudo guardar y generar la imagen.')
+    } finally {
+      setBusy(false)
+      setGenerationState('')
+    }
+  }, [findMatchingStyleJob, onTemplatesChanged, persistStyleTemplate, runGeneration])
+
+  const startStyleChat = useCallback(
+    async (nextStyle: StyleChoice) => {
+      setBusy(true)
+      setGenerationState('Preparando chat')
+      setError('')
+      setNotice('')
+      try {
+        const targetJob = findMatchingStyleJob(nextStyle)
+        setStyle(nextStyle)
+        setActiveJob(targetJob || null)
+        setSelectedOutputs(new Set())
+        setChatReferences([])
+        setOptimisticMessages([])
+        setFilesOpen(false)
+        setStep(2)
+        await runGeneration(nextStyle.prompt || DEFAULT_GENERATION_PROMPT, nextStyle, {
+          createNewJob: !targetJob,
+          jobId: targetJob?.id,
+          baseMessages: targetJob?.messages || [],
+        })
+      } catch (err) {
+        setError(err instanceof Error ? err.message : 'No se pudo iniciar el chat con este estilo.')
+      } finally {
+        setBusy(false)
+        setGenerationState('')
+      }
+    },
+    [findMatchingStyleJob, runGeneration],
+  )
 
   const addToGallery = useCallback(
     async (media: number | string) => {
@@ -914,6 +1164,45 @@ export default function VehicleAIImageWizard({
     setNotice('Resultado agregado como referencia para la siguiente version.')
   }, [])
 
+  const renameChatFile = useCallback(
+    async (file: ChatFile) => {
+      const id = file.mediaId
+      const nextName = renameDraft.trim()
+      if (id == null || !nextName) return
+      setBusy(true)
+      setError('')
+      setNotice('')
+      try {
+        const res = await fetch(`/api/media/${id}`, {
+          method: 'PATCH',
+          credentials: 'include',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ alt: nextName }),
+        })
+        if (!res.ok) throw new Error((await res.text()).slice(0, 180))
+        setChatReferences((current) =>
+          current.map((reference) => (String(reference.id) === String(id) ? { ...reference, label: nextName } : reference)),
+        )
+        setUploadedSources((current) =>
+          current.map((source) => (String(source.mediaId) === String(id) ? { ...source, label: nextName } : source)),
+        )
+        if (activeJob?.id) {
+          const fresh = await fetchJob(activeJob.id)
+          if (fresh) setActiveJob(fresh)
+        }
+        await loadJobs()
+        setRenamingFileId('')
+        setRenameDraft('')
+        setNotice('Nombre de archivo actualizado.')
+      } catch (err) {
+        setError(err instanceof Error ? err.message : 'No se pudo renombrar el archivo.')
+      } finally {
+        setBusy(false)
+      }
+    },
+    [activeJob?.id, fetchJob, loadJobs, onChanged, renameDraft],
+  )
+
   const applyJobContext = useCallback((job: Job) => {
     const firstInput = job.inputImages?.[0]?.image
     const firstId = mediaId(firstInput)
@@ -953,7 +1242,8 @@ export default function VehicleAIImageWizard({
         const id = mediaId(input.image)
         if (id == null || String(id) === String(styleId)) return null
         const url = mediaUrl(input.image)
-        return url ? { id, label: `Referencia ${index + 1}`, url } : { id, label: `Referencia ${index + 1}` }
+        const label = mediaAlt(input.image) || `Referencia ${index + 1}`
+        return url ? { id, label, url } : { id, label }
       })
       .filter((reference): reference is ChatReference => reference !== null)
     setChatReferences(references)
@@ -962,14 +1252,69 @@ export default function VehicleAIImageWizard({
   const startNewChat = useCallback(() => {
     setActiveJob(null)
     setChatReferences([])
+    setOptimisticMessages([])
+    setPendingTurnId('')
     setPrompt('')
     setSelectedOutputs(new Set())
     setError('')
     setNotice('')
     setPreviewFile(null)
     setEditingOutput(null)
+    setFilesOpen(false)
+    setRenamingFileId('')
+    setRenameDraft('')
     setStep(0)
   }, [])
+
+  const renderOutputMessage = (output: Output, index: number) => {
+    const id = outputKey(output, index)
+    const url = outputUrl(output)
+    if (!url) return null
+    return (
+      <PromptKitMessage key={`output-${id}`} role="assistant" className="vehicle-ai-wizard__result-message">
+        <MessageContent>
+          <article className={selectedOutputs.has(id) ? 'vehicle-ai-wizard__result is-selected' : 'vehicle-ai-wizard__result'}>
+            <button
+              aria-label="Seleccionar resultado"
+              className="vehicle-ai-wizard__output-check"
+              onClick={() =>
+                setSelectedOutputs((prev) => {
+                  const next = new Set(prev)
+                  if (next.has(id)) next.delete(id)
+                  else next.add(id)
+                  return next
+                })
+              }
+              type="button"
+            />
+            <button
+              aria-label={`Editar resultado ${index + 1}`}
+              className="vehicle-ai-wizard__result-image"
+              onClick={() => {
+                setCropAspect('16:9')
+                setCropZoom(1)
+                setEditingOutput({ index, output })
+              }}
+              type="button"
+            >
+              <PromptKitImage src={url} alt={`Resultado ${index + 1}`} />
+            </button>
+            <MessageActions className="vehicle-ai-wizard__result-actions">
+              <MessageAction disabled={busy} onClick={() => void importOutput(output, 'gallery')}>
+                Galeria
+              </MessageAction>
+              <MessageAction disabled={busy} onClick={() => void importOutput(output, 'hero')}>
+                Principal
+              </MessageAction>
+              <MessageAction disabled={busy} onClick={() => useOutputAsReference(output, index)}>
+                Referencia
+              </MessageAction>
+            </MessageActions>
+          </article>
+        </MessageContent>
+      </PromptKitMessage>
+    )
+  }
 
   if (!open) return null
 
@@ -993,7 +1338,12 @@ export default function VehicleAIImageWizard({
               <button
                 key={label}
                 className={`vehicle-ai-wizard__step${step === index ? ' vehicle-ai-wizard__step--active' : ''}${index < step ? ' vehicle-ai-wizard__step--done' : ''}`}
-                onClick={() => setStep(index)}
+                disabled={chatRailLocked}
+                onClick={() => {
+                  if (chatRailLocked) return
+                  setStep(index)
+                }}
+                title={chatRailLocked ? 'Inicia un nuevo chat para cambiar imagen o estilo.' : undefined}
                 type="button"
               >
                 <span>{index + 1}</span>
@@ -1014,7 +1364,7 @@ export default function VehicleAIImageWizard({
               <button className={!activeJob ? 'vehicle-ai-wizard__job vehicle-ai-wizard__job--active' : 'vehicle-ai-wizard__job'} onClick={startNewChat} type="button">
                 Nuevo chat
               </button>
-              {jobs.map((job) => (
+              {displayedJobs.map((job) => (
                 <button
                   key={job.id}
                   className={`vehicle-ai-wizard__job${String(activeJob?.id) === String(job.id) ? ' vehicle-ai-wizard__job--active' : ''}`}
@@ -1023,6 +1373,8 @@ export default function VehicleAIImageWizard({
                     applyJobContext(job)
                     setStep(2)
                     setPrompt('')
+                    setOptimisticMessages([])
+                    setPendingTurnId('')
                     setSelectedOutputs(new Set())
                   }}
                   type="button"
@@ -1071,60 +1423,40 @@ export default function VehicleAIImageWizard({
             {step === 1 ? (
               <section className="vehicle-ai-wizard__section vehicle-ai-wizard__section--style">
                 <div className="vehicle-ai-wizard__section-head">
-                  <h3>Elige estilo</h3>
-                  <ActionButton disabled={busy} onClick={() => customStyleInputRef.current?.click()} variant="secondary">
-                    Subir estilo
-                  </ActionButton>
+                  <div>
+                    <h3>Plantillas de imagen</h3>
+                    <span>Guarda una imagen de referencia con prompt para reutilizarla en otros vehiculos.</span>
+                  </div>
                 </div>
                 <input ref={customStyleInputRef} accept="image/*" hidden onChange={handleCustomStyleUpload} type="file" />
-                <div className="vehicle-ai-wizard__style-layout">
-                  <div className="vehicle-ai-wizard__card-grid vehicle-ai-wizard__card-grid--two">
-                    {styleOptions.map((option) => (
-                      <button
-                        key={`${option.type}-${option.templateId || option.label}`}
-                        className={`vehicle-ai-wizard__image-card${style.label === option.label && style.templateId === option.templateId ? ' vehicle-ai-wizard__image-card--selected' : ''}`}
-                        onClick={() => setStyle(option)}
-                        type="button"
-                      >
-                        {option.url ? <PromptKitImage src={option.url} alt="" /> : <div className="vehicle-ai-wizard__upload-card">Estilo</div>}
-                        <strong>{option.label}</strong>
-                        <span>{option.description || 'Prompt guardado como estilo.'}</span>
-                      </button>
-                    ))}
-                    {style.type === 'custom' ? (
-                      <button className="vehicle-ai-wizard__image-card vehicle-ai-wizard__image-card--selected" onClick={() => customStyleInputRef.current?.click()} type="button">
-                        {style.url ? <PromptKitImage src={style.url} alt="" /> : <div className="vehicle-ai-wizard__upload-card">+</div>}
-                        <strong>{style.label}</strong>
-                        <span>{style.description}</span>
-                      </button>
-                    ) : null}
-                  </div>
-                  <aside className="vehicle-ai-wizard__style-editor">
-                    <label>
-                      <span>Nombre del estilo</span>
-                      <input onChange={(event) => setStyleDraftName(event.target.value)} value={styleDraftName} />
-                    </label>
-                    <label>
-                      <span>Descripcion</span>
-                      <input onChange={(event) => setStyleDraftDescription(event.target.value)} value={styleDraftDescription} />
-                    </label>
-                    <label>
-                      <span>Prompt embebido</span>
-                      <textarea
-                        onChange={(event) => setStyleDraftPrompt(event.target.value)}
-                        rows={8}
-                        value={styleDraftPrompt}
-                      />
-                    </label>
-                    <div className="vehicle-ai-wizard__style-actions">
-                      <button disabled={busy} onClick={() => setStep(2)} type="button">
-                        Usar en chat
-                      </button>
-                      <button disabled={busy} onClick={() => void saveStyleTemplate()} type="button">
-                        Guardar estilo
-                      </button>
+                <div className="vehicle-ai-wizard__card-grid vehicle-ai-wizard__card-grid--two">
+                  <button
+                    className="vehicle-ai-wizard__image-card vehicle-ai-wizard__image-card--create"
+                    disabled={busy}
+                    onClick={() => customStyleInputRef.current?.click()}
+                    type="button"
+                  >
+                    <div className="vehicle-ai-wizard__upload-card">
+                      <span>+</span>
                     </div>
-                  </aside>
+                    <strong>Crear plantilla</strong>
+                    <span>Sube una foto de ejemplo, escribe el prompt y genera el primer resultado.</span>
+                  </button>
+                  {styleOptions.map((option) => (
+                    <button
+                      key={`${option.type}-${option.templateId || option.label}`}
+                      className={`vehicle-ai-wizard__image-card${style.label === option.label && style.templateId === option.templateId ? ' vehicle-ai-wizard__image-card--selected' : ''}`}
+                      disabled={busy || !selectedSource}
+                      onClick={() => {
+                        void startStyleChat(option)
+                      }}
+                      type="button"
+                    >
+                      {option.url ? <PromptKitImage src={option.url} alt="" /> : <div className="vehicle-ai-wizard__upload-card">Estilo</div>}
+                      <strong>{option.label}</strong>
+                      <span>{option.description || 'Prompt guardado como estilo.'}</span>
+                    </button>
+                  ))}
                 </div>
               </section>
             ) : null}
@@ -1137,9 +1469,18 @@ export default function VehicleAIImageWizard({
                       <h3>{activeJob ? activeJob.styleName || 'Chat guardado' : 'Nuevo chat'}</h3>
                       <span>{effectiveStyle.label} - {selectedSource?.label || 'Sin imagen base'}</span>
                     </div>
-                    <ActionButton disabled={busy || selectedOutputs.size === 0} onClick={() => void importSelectedToGallery()} variant="primary">
-                      Importar seleccionadas
-                    </ActionButton>
+                    <div className="vehicle-ai-wizard__chat-actions">
+                      <ActionButton disabled={busy || selectedOutputs.size === 0} onClick={() => void importSelectedToGallery()} variant="primary">
+                        Importar seleccionadas
+                      </ActionButton>
+                      <button
+                        className="vehicle-ai-wizard__files-toggle"
+                        onClick={() => setFilesOpen((current) => !current)}
+                        type="button"
+                      >
+                        Archivos <span>{attachedFiles.length}</span>
+                      </button>
+                    </div>
                   </div>
 
                   <ChatContainerRoot className="vehicle-ai-wizard__chat-scroll">
@@ -1164,15 +1505,38 @@ export default function VehicleAIImageWizard({
                         </MessageContent>
                       </PromptKitMessage>
 
-                      {(activeJob?.messages || []).map((message, index) => (
-                        <PromptKitMessage key={`${message.createdAt || index}-${index}`} role={message.role || 'user'}>
-                          <MessageContent>
-                            <p>{message.content}</p>
-                          </MessageContent>
-                        </PromptKitMessage>
+                      {!visibleMessages.length && outputsByTurn.legacy.map(({ output, index }) => renderOutputMessage(output, index))}
+
+                      {visibleMessages.map((message, index) => (
+                        <React.Fragment key={`${message.turnId || message.createdAt || index}-${index}`}>
+                          {index === legacyOutputInsertionIndex
+                            ? outputsByTurn.legacy.map(({ output, index: outputIndex }) => renderOutputMessage(output, outputIndex))
+                            : null}
+                          <PromptKitMessage role={message.role || 'user'}>
+                            <MessageContent>
+                              <p>{message.content}</p>
+                            </MessageContent>
+                          </PromptKitMessage>
+                          {message.turnId
+                            ? outputsByTurn.grouped
+                                .get(message.turnId)
+                                ?.map(({ output, index: outputIndex }) => renderOutputMessage(output, outputIndex))
+                            : null}
+                          {generationState && message.turnId === pendingTurnId ? (
+                            <PromptKitMessage role="assistant">
+                              <MessageContent>
+                                <ThinkingBar text={generationState} />
+                              </MessageContent>
+                            </PromptKitMessage>
+                          ) : null}
+                        </React.Fragment>
                       ))}
 
-                      {generationState ? (
+                      {visibleMessages.length && legacyOutputInsertionIndex === visibleMessages.length
+                        ? outputsByTurn.legacy.map(({ output, index }) => renderOutputMessage(output, index))
+                        : null}
+
+                      {generationState && pendingTurnId && !visibleMessages.some((message) => message.turnId === pendingTurnId) ? (
                         <PromptKitMessage role="assistant">
                           <MessageContent>
                             <ThinkingBar text={generationState} />
@@ -1181,125 +1545,121 @@ export default function VehicleAIImageWizard({
                       ) : null}
 
                       {activeJob?.error ? <div className="vehicle-ai-wizard__alert vehicle-ai-wizard__alert--error">{activeJob.error}</div> : null}
-
-                      {outputs.map((output, index) => {
-                        const id = outputKey(output, index)
-                        const url = outputUrl(output)
-                        if (!url) return null
-                        return (
-                          <PromptKitMessage key={id} role="assistant" className="vehicle-ai-wizard__result-message">
-                            <MessageContent>
-                              <article className={selectedOutputs.has(id) ? 'vehicle-ai-wizard__result is-selected' : 'vehicle-ai-wizard__result'}>
-                                <button
-                                  aria-label="Seleccionar resultado"
-                                  className="vehicle-ai-wizard__output-check"
-                                  onClick={() =>
-                                    setSelectedOutputs((prev) => {
-                                      const next = new Set(prev)
-                                      if (next.has(id)) next.delete(id)
-                                      else next.add(id)
-                                      return next
-                                    })
-                                  }
-                                  type="button"
-                                />
-                                <button
-                                  aria-label={`Editar resultado ${index + 1}`}
-                                  className="vehicle-ai-wizard__result-image"
-                                  onClick={() => {
-                                    setCropAspect('16:9')
-                                    setCropZoom(1)
-                                    setEditingOutput({ index, output })
-                                  }}
-                                  type="button"
-                                >
-                                  <PromptKitImage src={url} alt={`Resultado ${index + 1}`} />
-                                </button>
-                                <MessageActions className="vehicle-ai-wizard__result-actions">
-                                  <MessageAction disabled={busy} onClick={() => void importOutput(output, 'gallery')}>
-                                    Galeria
-                                  </MessageAction>
-                                  <MessageAction disabled={busy} onClick={() => void importOutput(output, 'hero')}>
-                                    Principal
-                                  </MessageAction>
-                                  <MessageAction disabled={busy} onClick={() => useOutputAsReference(output, index)}>
-                                    Referencia
-                                  </MessageAction>
-                                </MessageActions>
-                              </article>
-                            </MessageContent>
-                          </PromptKitMessage>
-                        )
-                      })}
-
-                      {!activeJob && !outputs.length ? (
-                        <div className="vehicle-ai-wizard__empty-chat">
-                          <strong>Listo para generar</strong>
-                          <span>Escribe una instruccion o genera con el estilo seleccionado.</span>
-                        </div>
-                      ) : null}
                       <ChatContainerScrollAnchor />
                     </ChatContainerContent>
                   </ChatContainerRoot>
 
-                  <FileUpload accept="image/*" disabled={busy} multiple onFilesAdded={(files) => void handleChatReferenceFiles(files)}>
-                    <PromptInput
-                      className="vehicle-ai-wizard__composer"
-                      isLoading={Boolean(generationState)}
-                      onSubmit={() => void submitPrompt()}
-                      onValueChange={setPrompt}
-                      value={prompt}
-                    >
-                      <PromptInputTextarea placeholder="Pide otra version, sube una referencia o ajusta detalles..." />
-                      <PromptInputActions>
-                        <PromptInputAction tooltip="Adjuntar imagen">
-                          <FileUploadTrigger asChild>
-                            <button aria-label="Adjuntar imagen" disabled={busy} type="button">
-                              +
-                            </button>
-                          </FileUploadTrigger>
-                        </PromptInputAction>
-                        <PromptInputAction tooltip={activeJob ? 'Enviar' : 'Generar'}>
-                          <button disabled={busy || !selectedSource} type="submit">
-                            {generationState ? 'Pensando' : activeJob ? 'Enviar' : 'Generar'}
-                          </button>
-                        </PromptInputAction>
-                      </PromptInputActions>
-                    </PromptInput>
-                    <FileUploadContent>
-                      {chatReferences.length ? <span>{chatReferences.length} referencia(s) en este chat</span> : <span>Arrastra imagenes aqui para adjuntarlas</span>}
-                    </FileUploadContent>
-                  </FileUpload>
+                  <PromptInput
+                    className="vehicle-ai-wizard__composer"
+                    isLoading={Boolean(generationState)}
+                    onSubmit={() => void submitPrompt()}
+                    onValueChange={setPrompt}
+                    value={prompt}
+                  >
+                    <PromptInputTextarea placeholder="Pide otra version o ajusta detalles..." />
+                    <PromptInputActions>
+                      <PromptInputAction tooltip={activeJob ? 'Enviar' : 'Generar'}>
+                        <button disabled={busy || !selectedSource} type="submit">
+                          {activeJob ? 'Enviar' : 'Generar'}
+                        </button>
+                      </PromptInputAction>
+                    </PromptInputActions>
+                  </PromptInput>
                 </div>
 
-                <aside className="vehicle-ai-wizard__files">
+                {filesOpen ? <button aria-label="Cerrar archivos" className="vehicle-ai-wizard__files-scrim" onClick={() => setFilesOpen(false)} type="button" /> : null}
+                <aside className={`vehicle-ai-wizard__files${filesOpen ? ' vehicle-ai-wizard__files--open' : ''}`}>
                   <div className="vehicle-ai-wizard__files-head">
-                    <strong>Files in chat</strong>
-                    <span>{attachedFiles.length}</span>
+                    <div>
+                      <strong>Archivos del chat</strong>
+                      <span>{attachedFiles.length} en este diseno</span>
+                    </div>
+                    <button aria-label="Cerrar archivos" onClick={() => setFilesOpen(false)} type="button">
+                      x
+                    </button>
                   </div>
                   {attachedFiles.length ? (
-                    attachedFiles.map((file) => (
-                      <button
-                        key={file.id}
-                        className="vehicle-ai-wizard__file"
-                        onClick={() => {
-                          if (file.output && typeof file.outputIndex === 'number') {
-                            setCropAspect('16:9')
-                            setCropZoom(1)
-                            setEditingOutput({ index: file.outputIndex, output: file.output })
-                          } else {
-                            setPreviewFile(file)
-                          }
-                        }}
-                        type="button"
-                      >
-                        {file.url ? <PromptKitImage src={file.url} alt="" /> : <span className="vehicle-ai-wizard__file-icon">IMG</span>}
-                        <div>
-                          <strong>{file.label}</strong>
-                          <span>{file.meta}</span>
-                        </div>
-                      </button>
-                    ))
+                    attachedFiles.map((file) => {
+                      const isRenaming = renamingFileId === file.id
+                      return (
+                        <article key={file.id} className="vehicle-ai-wizard__file">
+                          <button
+                            className="vehicle-ai-wizard__file-preview"
+                            onClick={() => {
+                              if (file.output && typeof file.outputIndex === 'number') {
+                                setCropAspect('16:9')
+                                setCropZoom(1)
+                                setEditingOutput({ index: file.outputIndex, output: file.output })
+                              } else {
+                                setPreviewFile(file)
+                              }
+                            }}
+                            type="button"
+                          >
+                            {file.url ? <PromptKitImage src={file.url} alt="" /> : <span className="vehicle-ai-wizard__file-icon">IMG</span>}
+                          </button>
+                          <div className="vehicle-ai-wizard__file-copy">
+                            {isRenaming ? (
+                              <input
+                                autoFocus
+                                disabled={busy}
+                                onChange={(event) => setRenameDraft(event.target.value)}
+                                onKeyDown={(event) => {
+                                  if (event.key === 'Enter') void renameChatFile(file)
+                                  if (event.key === 'Escape') {
+                                    setRenamingFileId('')
+                                    setRenameDraft('')
+                                  }
+                                }}
+                                value={renameDraft}
+                              />
+                            ) : (
+                              <strong>{file.label}</strong>
+                            )}
+                            <span>{file.meta}</span>
+                            <div className="vehicle-ai-wizard__file-actions">
+                              {isRenaming ? (
+                                <>
+                                  <button disabled={busy || !renameDraft.trim()} onClick={() => void renameChatFile(file)} type="button">
+                                    Guardar
+                                  </button>
+                                  <button
+                                    disabled={busy}
+                                    onClick={() => {
+                                      setRenamingFileId('')
+                                      setRenameDraft('')
+                                    }}
+                                    type="button"
+                                  >
+                                    Cancelar
+                                  </button>
+                                </>
+                              ) : (
+                                <>
+                                  {file.canRename ? (
+                                    <button
+                                      disabled={busy}
+                                      onClick={() => {
+                                        setRenamingFileId(file.id)
+                                        setRenameDraft(file.label)
+                                      }}
+                                      type="button"
+                                    >
+                                      Renombrar
+                                    </button>
+                                  ) : null}
+                                  {file.output ? (
+                                    <button disabled={busy} onClick={() => void importOutput(file.output as Output, 'gallery')} type="button">
+                                      A galeria
+                                    </button>
+                                  ) : null}
+                                </>
+                              )}
+                            </div>
+                          </div>
+                        </article>
+                      )
+                    })
                   ) : (
                     <p className="vehicle-ai-wizard__files-empty">No hay archivos adjuntos.</p>
                   )}
@@ -1343,6 +1703,22 @@ export default function VehicleAIImageWizard({
             <PromptKitImage src={previewFile.url} alt={previewFile.label} />
           </section>
         </div>
+      ) : null}
+
+      {styleModalOpen ? (
+        <StyleTemplateModal
+          busy={busy}
+          description={styleDraftDescription}
+          name={styleDraftName}
+          onClose={closeStyleEditor}
+          onDescriptionChange={setStyleDraftDescription}
+          onNameChange={setStyleDraftName}
+          onPromptChange={setStyleDraftPrompt}
+          onSave={() => void saveStyleTemplate()}
+          onSaveAndGenerate={() => void saveStyleAndGenerate()}
+          prompt={styleDraftPrompt}
+          style={editingStyle || style}
+        />
       ) : null}
 
       {editingOutput ? (

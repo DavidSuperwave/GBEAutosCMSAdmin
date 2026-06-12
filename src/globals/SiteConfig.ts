@@ -6,12 +6,12 @@ const FRONTEND_URL = process.env.NEXT_PUBLIC_FRONTEND_URL || 'http://localhost:3
 
 export const SiteConfig: GlobalConfig = {
   slug: 'site-config',
-  label: 'Site Builder',
+  label: 'Configuración del sitio',
   access: {
     read: () => true,
   },
   admin: {
-    group: 'Site Builder',
+    group: false,
     livePreview: {
       breakpoints: [
         { label: 'Mobile', name: 'mobile', width: 390, height: 844 },
@@ -55,6 +55,18 @@ export const SiteConfig: GlobalConfig = {
           name: 'mainLinks',
           type: 'array',
           fields: [
+            {
+              name: 'type',
+              type: 'select',
+              defaultValue: 'custom',
+              options: [
+                { label: 'Pagina', value: 'page' },
+                { label: 'Coleccion', value: 'collection' },
+                { label: 'Marca', value: 'brand' },
+                { label: 'Filtro de inventario', value: 'inventory' },
+                { label: 'URL personalizada', value: 'custom' },
+              ],
+            },
             { name: 'label', type: 'text', required: true },
             { name: 'href', type: 'text', required: true },
             {
@@ -65,6 +77,24 @@ export const SiteConfig: GlobalConfig = {
                 { name: 'href', type: 'text', required: true },
               ],
             },
+          ],
+        },
+        {
+          name: 'footerLinks',
+          type: 'array',
+          label: 'Links del footer',
+          fields: [
+            { name: 'label', type: 'text', required: true },
+            { name: 'href', type: 'text', required: true },
+          ],
+        },
+        {
+          name: 'legalLinks',
+          type: 'array',
+          label: 'Links legales',
+          fields: [
+            { name: 'label', type: 'text', required: true },
+            { name: 'href', type: 'text', required: true },
           ],
         },
         {
@@ -111,7 +141,13 @@ export const SiteConfig: GlobalConfig = {
           type: 'group',
           label: 'Detalle de vehiculo',
           fields: [
+            { name: 'showGallery', type: 'checkbox', defaultValue: true },
+            { name: 'showPurchaseCard', type: 'checkbox', defaultValue: true },
+            { name: 'showQuickSpecs', type: 'checkbox', defaultValue: true },
+            { name: 'showDescription', type: 'checkbox', defaultValue: true },
+            { name: 'showFeatures', type: 'checkbox', defaultValue: true },
             { name: 'showSimilarVehicles', type: 'checkbox', defaultValue: true },
+            { name: 'showMobileCta', type: 'checkbox', defaultValue: true },
             { name: 'ctaHeading', type: 'text', defaultValue: 'Aparta este vehiculo' },
             { name: 'ctaBody', type: 'textarea' },
           ],

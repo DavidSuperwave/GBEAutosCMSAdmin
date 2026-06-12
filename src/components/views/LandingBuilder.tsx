@@ -13,7 +13,11 @@ type PageDoc = {
   id: string | number
   title?: string
   slug?: string
+  status?: 'draft' | 'published' | 'archived'
   isVisible?: boolean
+  showInNavigation?: boolean
+  navLabel?: string
+  navParent?: string
   seo?: { title?: string; description?: string } | null
   sections?: Section[]
 }
@@ -132,7 +136,7 @@ export default function LandingBuilder() {
       method: 'POST',
       credentials: 'include',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ title, slug, isVisible: false, sections: [] }),
+      body: JSON.stringify({ title, slug, status: 'draft', isVisible: false, sections: [] }),
     })
     if (!res.ok) {
       const detail = await res.text()
@@ -156,7 +160,11 @@ export default function LandingBuilder() {
         body: JSON.stringify({
           title: meta.title,
           slug: meta.slug,
+          status: meta.status || (meta.isVisible ? 'published' : 'draft'),
           isVisible: meta.isVisible,
+          showInNavigation: meta.showInNavigation,
+          navLabel: meta.navLabel,
+          navParent: meta.navParent,
           seo: meta.seo || {},
         }),
       })
@@ -172,12 +180,77 @@ export default function LandingBuilder() {
     }
   }, [meta, selectedId, loadPages])
 
+  const patchSelected = useCallback(
+    async (patch: Partial<PageDoc>, success: string) => {
+      if (selectedId === null) return
+      setSavingMeta(true)
+      setMetaError(null)
+      try {
+        const res = await fetch(`/api/pages/${selectedId}`, {
+          method: 'PATCH',
+          credentials: 'include',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(patch),
+        })
+        if (!res.ok) throw new Error((await res.text()).slice(0, 180))
+        await loadPages()
+        const fresh = await fetch(`/api/pages/${selectedId}?depth=0`, { credentials: 'include' })
+        if (fresh.ok) setMeta((await fresh.json()) as PageDoc)
+        setMetaError(success)
+      } catch (err) {
+        setMetaError(err instanceof Error ? err.message : 'No se pudo actualizar la pagina.')
+      } finally {
+        setSavingMeta(false)
+      }
+    },
+    [selectedId, loadPages],
+  )
+
+  const duplicatePage = useCallback(async () => {
+    if (!meta) return
+    const title = `${meta.title || 'Pagina'} copia`
+    const slug = `${slugify(meta.slug || meta.title || 'pagina')}-copia-${Date.now().toString().slice(-4)}`
+    const res = await fetch('/api/pages', {
+      method: 'POST',
+      credentials: 'include',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        title,
+        slug,
+        status: 'draft',
+        isVisible: false,
+        seo: meta.seo || {},
+        sections: meta.sections || [],
+      }),
+    })
+    if (!res.ok) {
+      setMetaError(`No se pudo duplicar. ${(await res.text()).slice(0, 180)}`)
+      return
+    }
+    const data = (await res.json()) as { doc?: PageDoc }
+    await loadPages()
+    if (data.doc?.id) setSelectedId(data.doc.id)
+  }, [meta, loadPages])
+
+  const deletePage = useCallback(async () => {
+    if (selectedId === null) return
+    if (!window.confirm('Eliminar esta pagina? Esta accion no se puede deshacer.')) return
+    const res = await fetch(`/api/pages/${selectedId}`, { method: 'DELETE', credentials: 'include' })
+    if (!res.ok) {
+      setMetaError(`No se pudo eliminar. ${(await res.text()).slice(0, 180)}`)
+      return
+    }
+    setSelectedId(null)
+    setMeta(null)
+    await loadPages()
+  }, [selectedId, loadPages])
+
   const previewUrl = meta?.slug ? `${FRONTEND_URL}/${meta.slug}` : FRONTEND_URL
 
   const seoPanel = (
     <div className="builder__panel">
       <div className="builder__col-head">
-        <strong>Páginas landing</strong>
+        <strong>Paginas</strong>
         <button className="admin-kit-btn admin-kit-btn--secondary" type="button" onClick={() => void createPage()}>
           + Nueva
         </button>
@@ -190,7 +263,7 @@ export default function LandingBuilder() {
         {loadingList ? <option>Cargando…</option> : null}
         {pages.map((page) => (
           <option key={String(page.id)} value={String(page.id)}>
-            {page.title || '(sin título)'} {page.isVisible ? '' : '· borrador'}
+            {page.title || '(sin titulo)'} {page.status === 'published' || page.isVisible ? '' : ' - borrador'}
           </option>
         ))}
       </select>
@@ -231,6 +304,49 @@ export default function LandingBuilder() {
             <span>Visible en el sitio (publicada)</span>
           </label>
           <label className="builder__field">
+            <span>Estatus</span>
+            <select
+              value={meta.status || (meta.isVisible ? 'published' : 'draft')}
+              onChange={(e) =>
+                setMeta({
+                  ...meta,
+                  status: e.target.value as PageDoc['status'],
+                  isVisible: e.target.value === 'published',
+                })
+              }
+            >
+              <option value="draft">Borrador</option>
+              <option value="published">Publicado</option>
+              <option value="archived">Archivado</option>
+            </select>
+          </label>
+          <label className="builder__field builder__field--check">
+            <input
+              type="checkbox"
+              checked={Boolean(meta.showInNavigation)}
+              onChange={(e) => setMeta({ ...meta, showInNavigation: e.target.checked })}
+            />
+            <span>Mostrar en navegacion</span>
+          </label>
+          <label className="builder__field">
+            <span>Etiqueta nav</span>
+            <input
+              type="text"
+              value={meta.navLabel || ''}
+              onChange={(e) => setMeta({ ...meta, navLabel: e.target.value })}
+              placeholder={meta.title || 'Etiqueta'}
+            />
+          </label>
+          <label className="builder__field">
+            <span>Grupo padre nav</span>
+            <input
+              type="text"
+              value={meta.navParent || ''}
+              onChange={(e) => setMeta({ ...meta, navParent: e.target.value })}
+              placeholder="Opcional"
+            />
+          </label>
+          <label className="builder__field">
             <span>SEO · Título</span>
             <input
               type="text"
@@ -250,6 +366,35 @@ export default function LandingBuilder() {
           <ActionButton variant="primary" onClick={() => void saveMeta()} disabled={savingMeta}>
             {savingMeta ? 'Guardando…' : 'Guardar configuración y SEO'}
           </ActionButton>
+          <div className="builder__quick-actions">
+            <ActionButton
+              variant="secondary"
+              disabled={savingMeta}
+              onClick={() => void patchSelected({ status: 'published', isVisible: true }, 'Pagina publicada.')}
+            >
+              Publicar
+            </ActionButton>
+            <ActionButton
+              variant="secondary"
+              disabled={savingMeta}
+              onClick={() => void patchSelected({ status: 'draft', isVisible: false }, 'Pagina movida a borrador.')}
+            >
+              Borrador
+            </ActionButton>
+            <ActionButton
+              variant="secondary"
+              disabled={savingMeta}
+              onClick={() => void patchSelected({ status: 'archived', isVisible: false }, 'Pagina archivada.')}
+            >
+              Archivar
+            </ActionButton>
+            <ActionButton variant="secondary" disabled={savingMeta} onClick={() => void duplicatePage()}>
+              Duplicar
+            </ActionButton>
+            <ActionButton variant="danger" disabled={savingMeta} onClick={() => void deletePage()}>
+              Eliminar
+            </ActionButton>
+          </div>
         </div>
       ) : (
         <p className="builder__muted">Selecciona o crea una página para editar su contenido.</p>
@@ -268,8 +413,8 @@ export default function LandingBuilder() {
   return (
     <SectionBuilder
       key={String(selectedId)}
-      title="Constructor de páginas landing"
-      subtitle="Edita el contenido, SEO y URL de las páginas del sitio."
+      title="Paginas del sitio"
+      subtitle="Crea, publica, previsualiza y enlaza paginas con el constructor visual."
       previewUrl={previewUrl}
       library={SITE_SECTION_LIBRARY}
       load={loadSections}
