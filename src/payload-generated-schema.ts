@@ -78,6 +78,34 @@ export const enum_vehicles_source_meta_spec_source = pgEnum(
   'enum_vehicles_source_meta_spec_source',
   ['catalog', 'rapidapi', 'manual', 'none'],
 )
+export const enum_vehicles_template_overrides_gallery = pgEnum(
+  'enum_vehicles_template_overrides_gallery',
+  ['inherit', 'show', 'hide'],
+)
+export const enum_vehicles_template_overrides_purchase_card = pgEnum(
+  'enum_vehicles_template_overrides_purchase_card',
+  ['inherit', 'show', 'hide'],
+)
+export const enum_vehicles_template_overrides_quick_specs = pgEnum(
+  'enum_vehicles_template_overrides_quick_specs',
+  ['inherit', 'show', 'hide'],
+)
+export const enum_vehicles_template_overrides_description = pgEnum(
+  'enum_vehicles_template_overrides_description',
+  ['inherit', 'show', 'hide'],
+)
+export const enum_vehicles_template_overrides_features = pgEnum(
+  'enum_vehicles_template_overrides_features',
+  ['inherit', 'show', 'hide'],
+)
+export const enum_vehicles_template_overrides_similar_vehicles = pgEnum(
+  'enum_vehicles_template_overrides_similar_vehicles',
+  ['inherit', 'show', 'hide'],
+)
+export const enum_vehicles_template_overrides_mobile_cta = pgEnum(
+  'enum_vehicles_template_overrides_mobile_cta',
+  ['inherit', 'show', 'hide'],
+)
 export const enum_vehicle_tags_type = pgEnum('enum_vehicle_tags_type', [
   'manual',
   'automatic',
@@ -689,6 +717,9 @@ export const vehicles = pgTable(
     sourceId: varchar('source_id'),
     sourceImportId: varchar('source_import_id'),
     sourceDealerName: varchar('source_dealer_name'),
+    imageUrl: varchar('image_url'),
+    imagePath: varchar('image_path'),
+    imageFilename: varchar('image_filename'),
     image: integer('image_id').references(() => media.id, {
       onDelete: 'set null',
     }),
@@ -720,6 +751,27 @@ export const vehicles = pgTable(
       withTimezone: true,
       precision: 3,
     }),
+    templateOverrides_gallery: enum_vehicles_template_overrides_gallery(
+      'template_overrides_gallery',
+    ).default('inherit'),
+    templateOverrides_purchaseCard: enum_vehicles_template_overrides_purchase_card(
+      'template_overrides_purchase_card',
+    ).default('inherit'),
+    templateOverrides_quickSpecs: enum_vehicles_template_overrides_quick_specs(
+      'template_overrides_quick_specs',
+    ).default('inherit'),
+    templateOverrides_description: enum_vehicles_template_overrides_description(
+      'template_overrides_description',
+    ).default('inherit'),
+    templateOverrides_features: enum_vehicles_template_overrides_features(
+      'template_overrides_features',
+    ).default('inherit'),
+    templateOverrides_similarVehicles: enum_vehicles_template_overrides_similar_vehicles(
+      'template_overrides_similar_vehicles',
+    ).default('inherit'),
+    templateOverrides_mobileCta: enum_vehicles_template_overrides_mobile_cta(
+      'template_overrides_mobile_cta',
+    ).default('inherit'),
     updatedAt: timestamp('updated_at', { mode: 'string', withTimezone: true, precision: 3 })
       .defaultNow()
       .notNull(),
@@ -1049,7 +1101,6 @@ export const workshop_jobs_messages = pgTable(
   (columns) => [
     index('workshop_jobs_messages_order_idx').on(columns._order),
     index('workshop_jobs_messages_parent_id_idx').on(columns._parentID),
-    index('workshop_jobs_messages_turn_id_idx').on(columns.turnId),
     foreignKey({
       columns: [columns['_parentID']],
       foreignColumns: [workshop_jobs.id],
@@ -1075,7 +1126,6 @@ export const workshop_jobs_outputs = pgTable(
     index('workshop_jobs_outputs_order_idx').on(columns._order),
     index('workshop_jobs_outputs_parent_id_idx').on(columns._parentID),
     index('workshop_jobs_outputs_image_idx').on(columns.image),
-    index('workshop_jobs_outputs_turn_id_idx').on(columns.turnId),
     foreignKey({
       columns: [columns['_parentID']],
       foreignColumns: [workshop_jobs.id],
@@ -1124,7 +1174,6 @@ export const workshop_jobs = pgTable(
       .notNull(),
   },
   (columns) => [
-    index('workshop_jobs_job_type_idx').on(columns.jobType),
     index('workshop_jobs_linked_vehicle_idx').on(columns.linkedVehicle),
     index('workshop_jobs_style_template_idx').on(columns.styleTemplate),
     index('workshop_jobs_approved_output_idx').on(columns.approvedOutput),
@@ -1251,7 +1300,7 @@ export const pages_blocks_featured_vehicles = pgTable(
     _path: text('_path').notNull(),
     id: varchar('id').primaryKey(),
     eyebrow: varchar('eyebrow').default('Seminuevos'),
-    heading: varchar('heading').default('Vehiculos destacados'),
+    heading: varchar('heading').default('Vehículos destacados'),
     body: varchar('body'),
     limit: numeric('limit', { mode: 'number' }).default(6),
     source: enum_pages_blocks_featured_vehicles_source('source').default('latestUsed'),
@@ -1620,7 +1669,7 @@ export const pages_blocks_agencies = pgTable(
     _parentID: integer('_parent_id').notNull(),
     _path: text('_path').notNull(),
     id: varchar('id').primaryKey(),
-    eyebrow: varchar('eyebrow').default('Encuentranos'),
+    eyebrow: varchar('eyebrow').default('Encuéntranos'),
     heading: varchar('heading').default('Nuestras agencias'),
     body: varchar('body'),
     showMap: boolean('show_map').default(true),
@@ -2359,7 +2408,7 @@ export const site_config_blocks_featured_vehicles = pgTable(
     _path: text('_path').notNull(),
     id: varchar('id').primaryKey(),
     eyebrow: varchar('eyebrow').default('Seminuevos'),
-    heading: varchar('heading').default('Vehiculos destacados'),
+    heading: varchar('heading').default('Vehículos destacados'),
     body: varchar('body'),
     limit: numeric('limit', { mode: 'number' }).default(6),
     source: enum_site_config_blocks_featured_vehicles_source('source').default('latestUsed'),
@@ -2728,7 +2777,7 @@ export const site_config_blocks_agencies = pgTable(
     _parentID: integer('_parent_id').notNull(),
     _path: text('_path').notNull(),
     id: varchar('id').primaryKey(),
-    eyebrow: varchar('eyebrow').default('Encuentranos'),
+    eyebrow: varchar('eyebrow').default('Encuéntranos'),
     heading: varchar('heading').default('Nuestras agencias'),
     body: varchar('body'),
     showMap: boolean('show_map').default(true),
@@ -2834,11 +2883,29 @@ export const site_config = pgTable(
     templates_seminuevos_showLocationPrompt: boolean(
       'templates_seminuevos_show_location_prompt',
     ).default(true),
+    templates_vehicleDetail_showGallery: boolean('templates_vehicle_detail_show_gallery').default(
+      true,
+    ),
+    templates_vehicleDetail_showPurchaseCard: boolean(
+      'templates_vehicle_detail_show_purchase_card',
+    ).default(true),
+    templates_vehicleDetail_showQuickSpecs: boolean(
+      'templates_vehicle_detail_show_quick_specs',
+    ).default(true),
+    templates_vehicleDetail_showDescription: boolean(
+      'templates_vehicle_detail_show_description',
+    ).default(true),
+    templates_vehicleDetail_showFeatures: boolean('templates_vehicle_detail_show_features').default(
+      true,
+    ),
     templates_vehicleDetail_showSimilarVehicles: boolean(
       'templates_vehicle_detail_show_similar_vehicles',
     ).default(true),
+    templates_vehicleDetail_showMobileCta: boolean(
+      'templates_vehicle_detail_show_mobile_cta',
+    ).default(true),
     templates_vehicleDetail_ctaHeading: varchar('templates_vehicle_detail_cta_heading').default(
-      'Aparta este vehiculo',
+      'Aparta este vehículo',
     ),
     templates_vehicleDetail_ctaBody: varchar('templates_vehicle_detail_cta_body'),
     updatedAt: timestamp('updated_at', { mode: 'string', withTimezone: true, precision: 3 }),
@@ -4084,6 +4151,13 @@ type DatabaseSchema = {
   enum_vehicles_image_status: typeof enum_vehicles_image_status
   enum_vehicles_spec_status: typeof enum_vehicles_spec_status
   enum_vehicles_source_meta_spec_source: typeof enum_vehicles_source_meta_spec_source
+  enum_vehicles_template_overrides_gallery: typeof enum_vehicles_template_overrides_gallery
+  enum_vehicles_template_overrides_purchase_card: typeof enum_vehicles_template_overrides_purchase_card
+  enum_vehicles_template_overrides_quick_specs: typeof enum_vehicles_template_overrides_quick_specs
+  enum_vehicles_template_overrides_description: typeof enum_vehicles_template_overrides_description
+  enum_vehicles_template_overrides_features: typeof enum_vehicles_template_overrides_features
+  enum_vehicles_template_overrides_similar_vehicles: typeof enum_vehicles_template_overrides_similar_vehicles
+  enum_vehicles_template_overrides_mobile_cta: typeof enum_vehicles_template_overrides_mobile_cta
   enum_vehicle_tags_type: typeof enum_vehicle_tags_type
   enum_vehicle_collections_collection_type: typeof enum_vehicle_collections_collection_type
   enum_vehicle_collections_rules_condition: typeof enum_vehicle_collections_rules_condition

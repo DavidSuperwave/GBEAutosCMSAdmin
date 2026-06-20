@@ -41,12 +41,12 @@ export const Leads: CollectionConfig = {
     { name: 'lastName', type: 'text', label: 'Apellido' },
     { name: 'email', type: 'email', label: 'Correo electronico' },
     { name: 'phone', type: 'text', label: 'Telefono' },
-    { name: 'city', type: 'text', label: 'Ciudad / ubicacion' },
+    { name: 'city', type: 'text', label: 'Ciudad / ubicación' },
     { name: 'agency', type: 'relationship', relationTo: 'dealerships', label: 'Agencia enrutada' },
     { name: 'vehicleLabel', type: 'text', label: 'Vehiculo mostrado' },
     { name: 'whatsappNumber', type: 'text', label: 'WhatsApp enrutado' },
     { name: 'whatsappOpenedAt', type: 'date', label: 'WhatsApp abierto el' },
-    { name: 'sourcePage', type: 'text', label: 'Pagina de origen' },
+    { name: 'sourcePage', type: 'text', label: 'Página de origen' },
     { name: 'sourceSection', type: 'text', label: 'Seccion de origen' },
     {
       name: 'leadSource',
@@ -54,7 +54,7 @@ export const Leads: CollectionConfig = {
       label: 'Fuente del lead',
       defaultValue: 'whatsapp_vehicle_form',
       options: [
-        { label: 'Formulario WhatsApp vehiculo', value: 'whatsapp_vehicle_form' },
+        { label: 'Formulario WhatsApp vehículo', value: 'whatsapp_vehicle_form' },
         { label: 'Formulario de contacto', value: 'contact_form' },
         { label: 'Clic telefonico', value: 'phone_click' },
       ],
@@ -67,7 +67,7 @@ export const Leads: CollectionConfig = {
       options: [
         { label: 'Formulario web', value: 'website_form' },
         { label: 'WhatsApp', value: 'whatsapp' },
-        { label: 'Formulario WhatsApp vehiculo', value: 'whatsapp_vehicle_form' },
+        { label: 'Formulario WhatsApp vehículo', value: 'whatsapp_vehicle_form' },
         { label: 'Formulario de contacto', value: 'contact_form' },
         { label: 'Clic telefonico', value: 'phone_click' },
         { label: 'Telefono', value: 'phone' },

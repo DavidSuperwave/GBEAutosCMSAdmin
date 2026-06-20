@@ -32,30 +32,47 @@ function metricDescription(value: number | null, suffix: string) {
   return value === null ? 'No disponible temporalmente.' : `${fmt(value)} ${suffix}`
 }
 
+function readPositiveInt(name: string, fallback: number) {
+  const value = Number(process.env[name])
+  return Number.isInteger(value) && value > 0 ? value : fallback
+}
+
+async function runLimited<T>(tasks: Array<() => Promise<T>>, concurrency: number) {
+  const results: T[] = []
+  let index = 0
+
+  async function worker() {
+    while (index < tasks.length) {
+      const current = index
+      index += 1
+      results[current] = await tasks[current]()
+    }
+  }
+
+  await Promise.all(Array.from({ length: Math.min(concurrency, tasks.length) }, () => worker()))
+
+  return results
+}
+
 export default async function OperationsDashboard({ req }: Props) {
-  const [
-    total,
-    published,
-    drafts,
-    needsReview,
-    missingImages,
-    missingSpecs,
-    seminuevos,
-    nuevos,
-    recentImports,
-  ] = await Promise.all([
-    countVehicles(req),
-    countVehicles(req, { publishStatus: { equals: 'published' } }),
-    countVehicles(req, { publishStatus: { equals: 'draft' } }),
-    countVehicles(req, { publishStatus: { equals: 'needs_review' } }),
-    countVehicles(req, { imageStatus: { equals: 'missing' } }),
-    countVehicles(req, { specStatus: { equals: 'missing' } }),
-    countVehicles(req, { condition: { equals: 'used' } }),
-    countVehicles(req, { condition: { equals: 'new' } }),
-    req.payload
-      .find({ collection: 'import-jobs', depth: 0, limit: 3, sort: '-createdAt' })
-      .catch(() => ({ docs: [] as Array<Record<string, unknown>> })),
-  ])
+  const [total, published, drafts, needsReview, missingImages, missingSpecs, seminuevos, nuevos] =
+    await runLimited(
+      [
+        () => countVehicles(req),
+        () => countVehicles(req, { publishStatus: { equals: 'published' } }),
+        () => countVehicles(req, { publishStatus: { equals: 'draft' } }),
+        () => countVehicles(req, { publishStatus: { equals: 'needs_review' } }),
+        () => countVehicles(req, { imageStatus: { equals: 'missing' } }),
+        () => countVehicles(req, { specStatus: { equals: 'missing' } }),
+        () => countVehicles(req, { condition: { equals: 'used' } }),
+        () => countVehicles(req, { condition: { equals: 'new' } }),
+      ],
+      readPositiveInt('ADMIN_DASHBOARD_QUERY_CONCURRENCY', 2),
+    )
+
+  const recentImports = await req.payload
+    .find({ collection: 'import-jobs', depth: 0, limit: 3, sort: '-createdAt' })
+    .catch(() => ({ docs: [] as Array<Record<string, unknown>> }))
 
   const shortcuts: Array<{ href: string; title: string; desc: string; accent: string }> = [
     {
@@ -81,12 +98,6 @@ export default async function OperationsDashboard({ req }: Props) {
       title: 'Pendientes de revisión',
       desc: metricDescription(needsReview, 'esperando publicación.'),
       accent: '#7c3aed',
-    },
-    {
-      href: '/admin/globals/site-config',
-      title: 'Editar homepage',
-      desc: 'Administra las secciones del sitio.',
-      accent: '#0891b2',
     },
     {
       href: '/admin/inventory',

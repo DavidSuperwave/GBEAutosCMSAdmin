@@ -34,6 +34,9 @@ type Vehicle = {
   exteriorColor?: string
   dealership?: { name?: string; displayName?: string; city?: string } | string | number | null
   image?: { url?: string; thumbnailURL?: string } | string | null
+  imageUrl?: string | null
+  imagePath?: string | null
+  imageFilename?: string | null
 }
 
 type TabKey =
@@ -160,9 +163,18 @@ function buildQuery(tab: TabKey, search: string, page: number, sort: string): st
   return parts.join('&')
 }
 
-function imageUrl(image: Vehicle['image']): string | undefined {
+function mediaImageUrl(image: Vehicle['image']): string | undefined {
   if (!image || typeof image === 'string') return undefined
   return image.thumbnailURL || image.url
+}
+
+function vehicleImageUrl(vehicle: Vehicle): string | undefined {
+  return vehicle.imageUrl || mediaImageUrl(vehicle.image) || undefined
+}
+
+function displayedImageStatus(vehicle: Vehicle): ImageStatus {
+  if (vehicle.imageStatus === 'missing' && vehicle.imageUrl) return 'uploaded'
+  return (vehicle.imageStatus as ImageStatus) || 'missing'
 }
 
 function dealershipLabel(vehicle: Vehicle): string {
@@ -504,7 +516,8 @@ export default function InventoryManager() {
             <tbody>
               {docs.map((vehicle) => {
                 const id = String(vehicle.id)
-                const url = imageUrl(vehicle.image)
+                const url = vehicleImageUrl(vehicle)
+                const imageStatus = displayedImageStatus(vehicle)
                 return (
                   <tr key={id} className={selected.has(id) ? 'is-selected' : ''}>
                     <td>
@@ -528,6 +541,7 @@ export default function InventoryManager() {
                           {vehicle.exteriorColor ? (
                             <small>Color: {vehicle.exteriorColor}</small>
                           ) : null}
+                          {vehicle.imageFilename ? <small>Imagen: {vehicle.imageFilename}</small> : null}
                           <small>
                             {vehicle.year || 's/año'} · {vehicle.city || 'sin ciudad'}
                           </small>
@@ -552,8 +566,8 @@ export default function InventoryManager() {
                       </StatusBadge>
                     </td>
                     <td>
-                      <StatusBadge tone={vehicle.imageStatus === 'missing' ? 'danger' : 'info'}>
-                        {IMAGE_STATUS_LABELS[(vehicle.imageStatus as ImageStatus) || 'missing']}
+                      <StatusBadge tone={imageStatus === 'missing' ? 'danger' : 'info'}>
+                        {IMAGE_STATUS_LABELS[imageStatus]}
                       </StatusBadge>
                     </td>
                     <td>
@@ -582,7 +596,8 @@ export default function InventoryManager() {
           <div className="inventory__cards" aria-label="Inventario en tarjetas">
             {docs.map((vehicle) => {
               const id = String(vehicle.id)
-              const url = imageUrl(vehicle.image)
+              const url = vehicleImageUrl(vehicle)
+              const imageStatus = displayedImageStatus(vehicle)
               return (
                 <article
                   key={id}
@@ -618,6 +633,7 @@ export default function InventoryManager() {
                       <small>
                         {vehicle.year || 's/año'} · {vehicle.city || 'sin ciudad'}
                       </small>
+                      {vehicle.imageFilename ? <small>Imagen: {vehicle.imageFilename}</small> : null}
                       <small>{dealershipLabel(vehicle)}</small>
                     </div>
                   </div>
@@ -644,8 +660,8 @@ export default function InventoryManager() {
                     <StatusBadge tone={PUBLISH_TONE[vehicle.publishStatus || 'draft'] || 'neutral'}>
                       {PUBLISH_STATUS_LABELS[(vehicle.publishStatus as PublishStatus) || 'draft']}
                     </StatusBadge>
-                    <StatusBadge tone={vehicle.imageStatus === 'missing' ? 'danger' : 'info'}>
-                      {IMAGE_STATUS_LABELS[(vehicle.imageStatus as ImageStatus) || 'missing']}
+                    <StatusBadge tone={imageStatus === 'missing' ? 'danger' : 'info'}>
+                      {IMAGE_STATUS_LABELS[imageStatus]}
                     </StatusBadge>
                   </div>
                   <div className="inventory-card__completeness">

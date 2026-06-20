@@ -12,6 +12,7 @@ For deployed HTTP API checks, set `E2E_BASE_URL` to the CMS base URL before runn
 
 - Run `npm run generate:types`.
 - Run `npm run generate:importmap`.
+- Run `npm run check:admin-styles`.
 - Run `npm run lint`.
 - Run `npm run build`.
 - Run `npm run test:e2e:production`.
@@ -25,16 +26,26 @@ For deployed HTTP API checks, set `E2E_BASE_URL` to the CMS base URL before runn
 
 - Auth: create first admin on a fresh DB, log in/out, request forgot-password, reset password, and invite a user.
 - Roles: verify admin, inventory manager, content editor, sales manager, media editor, and viewer permissions against the collections they should and should not mutate.
-- Shell: open `/admin`, check dashboard metrics, analytics widgets, sidebar links, and theme toggle states.
+- Shell: open `/admin`, check dashboard metrics, analytics widgets, sidebar links, brand/home links, logout link, and light-theme consistency.
 - Inventory: open `/admin/inventory`, test search, filters, tabs, pagination, status badges, deep links, create vehicle, edit workspace, and default vehicle-list redirect.
 - Vehicle workspace: test summary, specs, images, listing page, review/publish, activity, publish blockers, review metadata, publish metadata, stable slugs, completeness score, status derivation, and price formatting.
 - Import: upload CSV/XLSX, verify column suggestions, normalization, duplicate handling, row errors, import job counts, and imported draft vehicles.
 - Specs lookup: run makes/models/generations/trims/specs path with provider configured, and verify friendly failure when provider config is absent.
-- Media: upload media with alt text, upload hero/gallery from vehicle image studio, create/reuse vehicle media assets, approve/reject images, and open media workspace with `vehicleId`/`referenceId`.
+- Media: upload media with alt text, upload hero/gallery from vehicle image studio, create/reuse vehicle media assets, and approve/reject images. The standalone media workspace is intentionally hidden/deferred; do not test `/admin/media-workspace` unless it is re-enabled in Payload views.
 - AI workshop: verify unauthenticated/unauthorized rejection, not-configured response without provider calls, configured generation job lifecycle, output persistence, save destinations, templates, messages, turn IDs, style prompt/reference, and error handling.
 - Builders: edit/save/preview home sections, pages, landing pages, vehicle template toggles, protected slugs, status visibility, section ordering, and all section block types.
 - Taxonomy: create vehicle tags, manual collections, smart collections, hidden collections, and SEO metadata.
 - Sales/analytics: edit dealerships, test routing flags, manage lead stages, and confirm dashboard metrics reflect test events.
+
+## Admin Visual QA Gate
+
+Run this gate before styling-system or admin-screen releases. Lint/build are not enough for Payload admin CSS changes.
+
+- Check `/admin`, `/admin/inventory`, one vehicle edit workspace, one vehicle Images tab with AI wizard open, home builder, landing/pages builder, vehicle template builder, a default Payload collection list, a default Payload collection edit form, login, and forgot-password.
+- Check widths near 640px, 820px, 1180px, and desktop.
+- Check loading, empty, error, disabled, focus-visible, long Spanish labels, table overflow, modal scroll lock, and AI studio files panel/style modal states.
+- Confirm the admin remains light-theme only until dark/auto is explicitly re-enabled.
+- Confirm no normal admin screen introduces raw color/layout inline styles except dynamic measurements such as chart height, progress width, crop transform, or iframe size.
 
 ## Public Site And API Walkthrough
 

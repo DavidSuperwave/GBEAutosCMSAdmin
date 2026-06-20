@@ -35,6 +35,9 @@ type VehicleLite = {
   trim?: string | null
   exteriorColor?: string | null
   image?: MediaRef
+  imageUrl?: string | null
+  imagePath?: string | null
+  imageFilename?: string | null
   gallery?: Array<{ image?: MediaRef; alt?: string | null }> | null
 }
 
@@ -89,9 +92,9 @@ type CandidateImage = {
   id: string
   label: string
   detail: string
-  mediaId: number | string
+  mediaId?: number | string
   url?: string
-  source: 'hero' | 'gallery' | 'asset' | 'upload'
+  source: 'hero' | 'sync' | 'gallery' | 'asset' | 'upload'
 }
 
 type StyleChoice = {
@@ -159,7 +162,7 @@ function vehicleTitle(vehicle: VehicleLite): string {
 function uniqueCandidates(candidates: CandidateImage[]): CandidateImage[] {
   const seen = new Set<string>()
   return candidates.filter((candidate) => {
-    const key = String(candidate.mediaId)
+    const key = String(candidate.mediaId || candidate.url || candidate.id)
     if (!key || seen.has(key)) return false
     seen.add(key)
     return true
@@ -490,13 +493,25 @@ export default function VehicleAIImageWizard({
   const sourceImages = useMemo(() => {
     const candidates: CandidateImage[] = []
     const heroId = mediaId(vehicle.image)
-    if (heroId != null) {
+    const heroUrl = mediaUrl(vehicle.image)
+    const syncedImageUrl = vehicle.imageUrl || undefined
+    if (syncedImageUrl) {
+      const syncedMatchesHero = Boolean(heroId != null && heroUrl === syncedImageUrl)
+      candidates.push({
+        id: syncedMatchesHero ? `hero-${heroId}` : `synced-${vehicle.id}`,
+        label: syncedMatchesHero ? 'Imagen principal' : 'Imagen sincronizada CMS',
+        detail: vehicle.imageFilename || 'Imagen activa del CMS',
+        mediaId: syncedMatchesHero ? heroId : undefined,
+        url: syncedImageUrl,
+        source: syncedMatchesHero ? 'hero' : 'sync',
+      })
+    } else if (heroId != null) {
       candidates.push({
         id: `hero-${heroId}`,
         label: 'Imagen principal',
-        detail: 'Referencia del vehiculo',
+        detail: 'Referencia del vehículo',
         mediaId: heroId,
-        url: mediaUrl(vehicle.image),
+        url: heroUrl,
         source: 'hero',
       })
     }
@@ -518,14 +533,14 @@ export default function VehicleAIImageWizard({
       candidates.push({
         id: `asset-${asset.id}-${id}`,
         label: asset.title || 'Biblioteca',
-        detail: asset.sourceType || asset.approvalStatus || 'Asset del vehiculo',
+        detail: asset.sourceType || asset.approvalStatus || 'Asset del vehículo',
         mediaId: id,
         url: mediaUrl(asset.media),
         source: 'asset',
       })
     })
     return uniqueCandidates([...uploadedSources, ...candidates])
-  }, [assets, uploadedSources, vehicle.gallery, vehicle.image])
+  }, [assets, uploadedSources, vehicle.gallery, vehicle.id, vehicle.image, vehicle.imageFilename, vehicle.imageUrl])
 
   const selectedSource = sourceImages.find((image) => image.id === selectedSourceId) || sourceImages[0]
   const outputs = activeJob?.outputs || []
@@ -560,10 +575,10 @@ export default function VehicleAIImageWizard({
     const files: ChatFile[] = []
     if (selectedSource) {
       files.push({
-        id: `source-${selectedSource.mediaId}`,
+        id: `source-${selectedSource.id}`,
         label: selectedSource.label,
         mediaId: selectedSource.mediaId,
-        meta: 'Vehiculo base',
+        meta: selectedSource.mediaId == null ? 'Importar a Media para generar' : 'Vehiculo base',
         url: selectedSource.url,
       })
     }
@@ -777,7 +792,10 @@ export default function VehicleAIImageWizard({
       styleForJob: StyleChoice = effectiveStyle,
       options?: { appendToActiveJob?: boolean; baseMessages?: JobMessage[]; turnId?: string },
     ) => {
-      if (!selectedSource) throw new Error('Selecciona una imagen del vehiculo.')
+      if (!selectedSource) throw new Error('Selecciona una imagen del vehículo.')
+      if (selectedSource.mediaId == null) {
+        throw new Error('Importa la imagen sincronizada a Media antes de generar con IA.')
+      }
       const inputMap = new Map<string, { image: number | string }>()
       const addInput = (id?: number | string) => {
         if (id == null) return
@@ -1411,6 +1429,7 @@ export default function VehicleAIImageWizard({
                         {image.url ? <PromptKitImage src={image.url} alt="" /> : <div />}
                         <strong>{image.label}</strong>
                         <span>{image.detail}</span>
+                        {image.mediaId == null ? <em>Importar a Media para generar</em> : null}
                       </button>
                     ))}
                   </div>
@@ -1425,7 +1444,7 @@ export default function VehicleAIImageWizard({
                 <div className="vehicle-ai-wizard__section-head">
                   <div>
                     <h3>Plantillas de imagen</h3>
-                    <span>Guarda una imagen de referencia con prompt para reutilizarla en otros vehiculos.</span>
+                    <span>Guarda una imagen de referencia con prompt para reutilizarla en otros vehículos.</span>
                   </div>
                 </div>
                 <input ref={customStyleInputRef} accept="image/*" hidden onChange={handleCustomStyleUpload} type="file" />
@@ -1446,7 +1465,7 @@ export default function VehicleAIImageWizard({
                     <button
                       key={`${option.type}-${option.templateId || option.label}`}
                       className={`vehicle-ai-wizard__image-card${style.label === option.label && style.templateId === option.templateId ? ' vehicle-ai-wizard__image-card--selected' : ''}`}
-                      disabled={busy || !selectedSource}
+                      disabled={busy || !selectedSource?.mediaId}
                       onClick={() => {
                         void startStyleChat(option)
                       }}
@@ -1559,7 +1578,7 @@ export default function VehicleAIImageWizard({
                     <PromptInputTextarea placeholder="Pide otra version o ajusta detalles..." />
                     <PromptInputActions>
                       <PromptInputAction tooltip={activeJob ? 'Enviar' : 'Generar'}>
-                        <button disabled={busy || !selectedSource} type="submit">
+                        <button disabled={busy || !selectedSource?.mediaId} type="submit">
                           {activeJob ? 'Enviar' : 'Generar'}
                         </button>
                       </PromptInputAction>
@@ -1670,13 +1689,15 @@ export default function VehicleAIImageWizard({
         </div>
 
         <footer className="vehicle-ai-wizard__footer">
-          <StatusBadge tone={selectedSource ? 'success' : 'warning'}>{selectedSource ? 'Imagen lista' : 'Falta imagen'}</StatusBadge>
+          <StatusBadge tone={selectedSource?.mediaId ? 'success' : 'warning'}>
+            {selectedSource?.mediaId ? 'Imagen lista' : selectedSource ? 'Importar a Media' : 'Falta imagen'}
+          </StatusBadge>
           <div>
             <ActionButton disabled={step <= 0 || busy} onClick={() => setStep((current) => Math.max(0, current - 1))} variant="secondary">
               Anterior
             </ActionButton>
             {step < 2 ? (
-              <ActionButton disabled={(step === 0 && !selectedSource) || busy} onClick={() => setStep((current) => Math.min(2, current + 1))} variant="primary">
+              <ActionButton disabled={(step === 0 && !selectedSource?.mediaId) || busy} onClick={() => setStep((current) => Math.min(2, current + 1))} variant="primary">
                 Siguiente
               </ActionButton>
             ) : null}

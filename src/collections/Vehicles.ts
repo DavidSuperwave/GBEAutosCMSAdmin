@@ -208,8 +208,8 @@ const VehicleFeatureGridBlock: Block = {
 const VehicleCtaBlock: Block = {
   slug: 'cta',
   labels: {
-    singular: 'Llamado a accion',
-    plural: 'Llamados a accion',
+    singular: 'Llamado a acción',
+    plural: 'Llamados a acción',
   },
   fields: [
     { name: 'heading', type: 'text', required: true, label: 'Titulo' },
@@ -309,7 +309,7 @@ export const Vehicles: CollectionConfig = {
           const hasRoutingPath = Boolean(data.dealership || data.city || data.allowFallbackRouting)
           if (!hasRoutingPath) {
             throw new Error(
-              'Asigna una agencia/ciudad o activa el fallback WhatsApp antes de publicar el vehiculo.',
+              'Asigna una agencia/ciudad o activa el fallback WhatsApp antes de publicar el vehículo.',
             )
           }
         }
@@ -554,7 +554,7 @@ export const Vehicles: CollectionConfig = {
       type: 'relationship',
       relationTo: 'vehicle-tags',
       hasMany: true,
-      label: 'Tags de catalogo',
+      label: 'Tags de catálogo',
       admin: {
         description: 'Etiquetas reutilizables para colecciones, filtros y tarjetas publicas.',
       },
@@ -714,6 +714,24 @@ export const Vehicles: CollectionConfig = {
       admin: { description: 'Nombre de agencia tal como vino en el archivo importado.' },
     },
     {
+      name: 'imageUrl',
+      type: 'text',
+      label: 'URL publica de imagen sincronizada',
+      admin: { hidden: true },
+    },
+    {
+      name: 'imagePath',
+      type: 'text',
+      label: 'Ruta de imagen sincronizada',
+      admin: { hidden: true },
+    },
+    {
+      name: 'imageFilename',
+      type: 'text',
+      label: 'Archivo de imagen sincronizada',
+      admin: { hidden: true },
+    },
+    {
       name: 'image',
       type: 'upload',
       label: 'Imagen',
@@ -767,7 +785,7 @@ export const Vehicles: CollectionConfig = {
       type: 'group',
       label: 'Origen de especificaciones',
       admin: {
-        description: 'Datos tecnicos normalizados desde catalogo interno o RapidAPI.',
+        description: 'Datos técnicos normalizados desde catálogo interno o RapidAPI.',
         hidden: true,
       },
       fields: [
@@ -813,7 +831,7 @@ export const Vehicles: CollectionConfig = {
       label: 'Bloques de contenido',
       admin: {
         description:
-          'Agrega secciones simples debajo de la pagina del vehiculo: imagen y texto, galerias, beneficios o CTA.',
+          'Agrega secciones simples debajo de la página del vehículo: imagen y texto, galerías, beneficios o CTA.',
       },
       blocks: vehicleLandingBlocks,
     },
@@ -822,7 +840,7 @@ export const Vehicles: CollectionConfig = {
       type: 'group',
       label: 'Visibilidad de plantilla',
       admin: {
-        description: 'Controla secciones fijas de la pagina de detalle para este vehiculo.',
+        description: 'Controla secciones fijas de la página de detalle para este vehículo.',
       },
       fields: [
         { name: 'gallery', type: 'select', defaultValue: 'inherit', options: templateOverrideOptions },

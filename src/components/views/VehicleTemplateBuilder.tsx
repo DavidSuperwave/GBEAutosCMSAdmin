@@ -31,7 +31,7 @@ const DETAIL_VISIBILITY_FIELDS: Array<{ key: VehicleDetailVisibilityKey; label: 
   { key: 'showQuickSpecs', label: 'Mostrar resumen de specs' },
   { key: 'showDescription', label: 'Mostrar descripcion' },
   { key: 'showFeatures', label: 'Mostrar caracteristicas' },
-  { key: 'showSimilarVehicles', label: 'Mostrar vehiculos similares' },
+  { key: 'showSimilarVehicles', label: 'Mostrar vehículos similares' },
   { key: 'showMobileCta', label: 'Mostrar CTA movil WhatsApp' },
 ]
 
@@ -89,8 +89,8 @@ export default function VehicleTemplateBuilder() {
   return (
     <div className="admin-kit-shell builder">
       <AdminPageHeader
-        title="Plantilla de paginas de vehiculo"
-        subtitle="Controles globales que aplican a la pagina de detalle de cada vehiculo y a la pagina de listado de seminuevos."
+        title="Plantilla de páginas de vehículo"
+        subtitle="Controles globales que aplican a la página de detalle de cada vehículo y a la página de listado de seminuevos."
         actions={
           <ActionButton onClick={() => void save()} variant="primary" disabled={loading || saving}>
             {saving ? 'Guardando...' : 'Guardar plantilla'}
@@ -102,7 +102,7 @@ export default function VehicleTemplateBuilder() {
 
       <div className="builder__grid">
         <div className="builder__col builder__col--list">
-          <InspectorPanel title="Pagina de detalle de vehiculo">
+          <InspectorPanel title="Página de detalle de vehículo">
             {DETAIL_VISIBILITY_FIELDS.map((field) => (
               <label className="builder__field builder__field--check" key={field.key}>
                 <input
@@ -146,7 +146,7 @@ export default function VehicleTemplateBuilder() {
             </label>
           </InspectorPanel>
 
-          <InspectorPanel title="Pagina de listado (seminuevos)">
+          <InspectorPanel title="Página de listado (seminuevos)">
             <label className="builder__field">
               <span>Titulo</span>
               <input
@@ -184,10 +184,10 @@ export default function VehicleTemplateBuilder() {
                   }))
                 }
               />
-              <span>Pedir ubicacion al visitante</span>
+              <span>Pedir ubicación al visitante</span>
             </label>
             <p className="builder__muted">
-              El contenido por vehiculo se edita en la pestana Pagina del espacio de trabajo de cada vehiculo.
+              El contenido por vehículo se edita en la pestaña Página del espacio de trabajo de cada vehículo.
             </p>
           </InspectorPanel>
         </div>

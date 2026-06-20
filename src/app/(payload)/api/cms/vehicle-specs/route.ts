@@ -1,13 +1,10 @@
 import { NextResponse } from 'next/server'
 
 /**
- * Admin-owned vehicle specs service (Phase 4 — Specs Service Migration).
+ * Admin-owned vehicle specs service.
  *
- * Previously the admin Vehicle Lookup field called the public website for spec
- * data. This route brings the integration into the admin/API project so the
- * lookup no longer depends on the public site. It proxies the RapidAPI
- * "Car Specs" API (car-specs.p.rapidapi.com) and normalizes responses into the
- * shape the admin UI expects.
+ * Proxies the RapidAPI "Car Specs" API (car-specs.p.rapidapi.com) and
+ * normalizes responses into the shape the admin UI expects.
  */
 
 const RAPIDAPI_KEY = process.env.RAPIDAPI_KEY || ''
@@ -21,9 +18,9 @@ function str(value: unknown): string {
   return String(value).trim()
 }
 
-async function rapid<T>(path: string): Promise<T> {
+async function rapid<T>(path: string, label: string): Promise<T> {
   if (!RAPIDAPI_KEY) {
-    throw new Error('RAPIDAPI_KEY no está configurada en el servidor admin.')
+    throw new Error('RAPIDAPI_KEY no esta configurada en el servidor admin.')
   }
   const response = await fetch(`${API_BASE}${path}`, {
     headers: {
@@ -34,7 +31,7 @@ async function rapid<T>(path: string): Promise<T> {
     next: { revalidate: 3600 },
   })
   if (!response.ok) {
-    throw new Error(`Car Specs API respondió ${response.status}`)
+    throw new Error(`Car Specs API respondio ${response.status} al consultar ${label}.`)
   }
   return (await response.json()) as T
 }
@@ -51,11 +48,17 @@ function asArray(data: unknown): Json[] {
 }
 
 function mapMake(item: Json) {
-  return { id: item.id ?? item.makeId ?? item.value, name: str(item.name ?? item.make ?? item.label) }
+  return {
+    id: item.id ?? item.makeId ?? item.value,
+    name: str(item.name ?? item.make ?? item.label),
+  }
 }
 
 function mapModel(item: Json) {
-  return { id: item.id ?? item.modelId ?? item.value, name: str(item.name ?? item.model ?? item.label) }
+  return {
+    id: item.id ?? item.modelId ?? item.value,
+    name: str(item.name ?? item.model ?? item.label),
+  }
 }
 
 function mapGeneration(item: Json) {
@@ -83,7 +86,9 @@ function mapTrimSpecs(raw: Json) {
   const specs = {
     tipo: str(raw.bodyType),
     motor: str(raw.engineType ?? raw.engine),
-    potencia: str(raw.engineHp ? `${raw.engineHp} hp` : raw.maxPowerKw ? `${raw.maxPowerKw} kW` : ''),
+    potencia: str(
+      raw.engineHp ? `${raw.engineHp} hp` : raw.maxPowerKw ? `${raw.maxPowerKw} kW` : '',
+    ),
     transmision: str(raw.transmission),
     combustible: str(raw.engineType ?? raw.fuelType),
     traccion: str(raw.driveWheels ?? raw.drive),
@@ -124,36 +129,46 @@ export async function GET(request: Request) {
   try {
     switch (action) {
       case 'makes': {
-        const data = await rapid<unknown>('/cars/makes')
+        const data = await rapid<unknown>('/v2/cars/makes', 'marcas')
         return NextResponse.json({ makes: asArray(data).map(mapMake) })
       }
       case 'models': {
         const makeId = searchParams.get('makeId')
         if (!makeId) return NextResponse.json({ error: 'makeId requerido' }, { status: 400 })
-        const data = await rapid<unknown>(`/cars/makes/${encodeURIComponent(makeId)}/models`)
+        const data = await rapid<unknown>(
+          `/v2/cars/makes/${encodeURIComponent(makeId)}/models`,
+          'modelos',
+        )
         return NextResponse.json({ models: asArray(data).map(mapModel) })
       }
       case 'generations': {
         const modelId = searchParams.get('modelId')
         if (!modelId) return NextResponse.json({ error: 'modelId requerido' }, { status: 400 })
-        const data = await rapid<unknown>(`/cars/models/${encodeURIComponent(modelId)}/generations`)
+        const data = await rapid<unknown>(
+          `/v2/cars/models/${encodeURIComponent(modelId)}/generations`,
+          'generaciones',
+        )
         return NextResponse.json({ generations: asArray(data).map(mapGeneration) })
       }
       case 'trims': {
         const generationId = searchParams.get('generationId')
-        if (!generationId) return NextResponse.json({ error: 'generationId requerido' }, { status: 400 })
-        const data = await rapid<unknown>(`/cars/generations/${encodeURIComponent(generationId)}/trims`)
+        if (!generationId)
+          return NextResponse.json({ error: 'generationId requerido' }, { status: 400 })
+        const data = await rapid<unknown>(
+          `/v2/cars/generations/${encodeURIComponent(generationId)}/trims`,
+          'versiones',
+        )
         return NextResponse.json({ trims: asArray(data).map(mapTrim) })
       }
       case 'trimSpecs': {
         const trimId = searchParams.get('trimId')
         if (!trimId) return NextResponse.json({ error: 'trimId requerido' }, { status: 400 })
-        const data = await rapid<Json>(`/cars/trims/${encodeURIComponent(trimId)}`)
+        const data = await rapid<Json>(`/v2/cars/trims/${encodeURIComponent(trimId)}`, 'specs')
         const payload = Array.isArray(data) ? (data[0] as Json) : data
         return NextResponse.json(mapTrimSpecs(payload || {}))
       }
       default:
-        return NextResponse.json({ error: 'Acción no soportada' }, { status: 400 })
+        return NextResponse.json({ error: 'Accion no soportada' }, { status: 400 })
     }
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Error al consultar especificaciones'

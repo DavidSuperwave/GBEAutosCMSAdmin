@@ -562,6 +562,11 @@ type ImportBody = {
   trim?: string
   matchConfidence?: string
   alt?: string
+  fileName?: string
+  sourceProvider?: string
+  sourceType?: string
+  approvalStatus?: string
+  rightsStatus?: string
 }
 
 export async function POST(request: Request) {
@@ -626,7 +631,12 @@ export async function POST(request: Request) {
   }
 
   const alt = str(body.alt) || 'Foto de vehículo'
-  const fileName = `carsxe-${Date.now()}.${extFromMime(mime)}`
+  const requestedFileName = str(body.fileName).replace(/[^\w.-]+/g, '-').replace(/^-+|-+$/g, '')
+  const fileName = requestedFileName || `vehicle-photo-${Date.now()}.${extFromMime(mime)}`
+  const sourceProvider = str(body.sourceProvider) || 'carsxe'
+  const sourceType = str(body.sourceType) || 'api_candidate'
+  const approvalStatus = str(body.approvalStatus) || 'needs_review'
+  const rightsStatus = str(body.rightsStatus) || 'unknown'
 
   try {
     const media = await payload.create({
@@ -643,8 +653,8 @@ export async function POST(request: Request) {
         title: alt,
         vehicle: body.vehicleId ?? undefined,
         media: media.id,
-        sourceType: 'api_candidate',
-        sourceProvider: 'carsxe',
+        sourceType,
+        sourceProvider,
         sourceUrl: str(body.contextLink) || url,
         matchKey,
         make,
@@ -652,8 +662,8 @@ export async function POST(request: Request) {
         year: year ? Number(year) : undefined,
         trim,
         exteriorColor: color,
-        approvalStatus: 'needs_review',
-        rightsStatus: 'unknown',
+        approvalStatus,
+        rightsStatus,
         matchConfidence: (str(body.matchConfidence) || (color ? 'same_model_color' : 'same_model')) as never,
         exteriorColorMatched: Boolean(color),
       } as never,

@@ -64,8 +64,8 @@ export const VehicleCollections: CollectionConfig = {
     listSearchableFields: ['name', 'slug', 'description'],
   },
   labels: {
-    singular: 'Coleccion de vehiculos',
-    plural: 'Colecciones de vehiculos',
+    singular: 'Colección de vehículos',
+    plural: 'Colecciones de vehículos',
   },
   fields: [
     { name: 'name', type: 'text', required: true, label: 'Nombre' },
@@ -124,7 +124,7 @@ export const VehicleCollections: CollectionConfig = {
         { name: 'dealership', type: 'relationship', relationTo: 'dealerships', label: 'Agencia' },
         { name: 'bodyType', type: 'select', options: bodyTypeOptions, label: 'Carroceria' },
         { name: 'segment', type: 'text', label: 'Segmento' },
-        { name: 'vehicleType', type: 'text', label: 'Tipo de vehiculo' },
+        { name: 'vehicleType', type: 'text', label: 'Tipo de vehículo' },
         { name: 'fuel', type: 'select', options: fuelOptions, label: 'Combustible' },
         {
           name: 'transmission',
@@ -160,7 +160,7 @@ export const VehicleCollections: CollectionConfig = {
       label: 'Orden',
       options: [
         { label: 'Mas recientes', value: 'newest' },
-        { label: 'Mas vistos', value: 'mostViewed' },
+        { label: 'Más vistos', value: 'mostViewed' },
         { label: 'Mas clics', value: 'mostClicked' },
         { label: 'Mas leads', value: 'mostLeads' },
         { label: 'Precio ascendente', value: 'priceAsc' },

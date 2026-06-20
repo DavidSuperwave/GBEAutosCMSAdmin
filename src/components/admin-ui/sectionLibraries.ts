@@ -188,9 +188,9 @@ export const SITE_SECTION_LIBRARY: LibraryEntry[] = [
   },
   {
     blockType: 'featuredVehicles',
-    label: 'Vehiculos destacados',
+    label: 'Vehículos destacados',
     description: 'Carrusel de seminuevos automaticos o seleccionados.',
-    defaults: { eyebrow: 'Seminuevos', heading: 'Vehiculos destacados', body: '', limit: 6 },
+    defaults: { eyebrow: 'Seminuevos', heading: 'Vehículos destacados', body: '', limit: 6 },
     controls: [
       {
         key: 'source',
@@ -199,7 +199,7 @@ export const SITE_SECTION_LIBRARY: LibraryEntry[] = [
         defaultValue: 'latestUsed',
         options: [
           { label: 'Ultimos seminuevos', value: 'latestUsed' },
-          { label: 'Seleccion manual', value: 'manual' },
+          { label: 'Selección manual', value: 'manual' },
           { label: 'Filtrar por ciudad', value: 'city' },
           { label: 'Filtrar por marca', value: 'brand' },
           { label: 'Filtrar por carroceria', value: 'bodyType' },
@@ -368,7 +368,7 @@ export const SITE_SECTION_LIBRARY: LibraryEntry[] = [
     blockType: 'agencies',
     label: 'Agencias',
     description: 'Listado de agencias con mapa opcional.',
-    defaults: { eyebrow: 'Encuentranos', heading: 'Nuestras agencias', body: '', showMap: true },
+    defaults: { eyebrow: 'Encuéntranos', heading: 'Nuestras agencias', body: '', showMap: true },
   },
   {
     blockType: 'mediaText',
@@ -378,7 +378,7 @@ export const SITE_SECTION_LIBRARY: LibraryEntry[] = [
   },
   {
     blockType: 'cta',
-    label: 'Llamado a la accion',
+    label: 'Llamado a la acción',
     description: 'Bloque de conversion con botones.',
     defaults: { heading: 'Titulo', body: '' },
   },
@@ -388,7 +388,7 @@ export const VEHICLE_SECTION_LIBRARY: LibraryEntry[] = [
   {
     blockType: 'imageText',
     label: 'Imagen y texto',
-    description: 'Imagen del vehiculo con texto descriptivo.',
+    description: 'Imagen del vehículo con texto descriptivo.',
     defaults: { eyebrow: '', heading: 'Titulo', body: '', imagePosition: 'left' },
     controls: [
       { key: 'eyebrow', label: 'Etiqueta', type: 'text' },
@@ -410,7 +410,7 @@ export const VEHICLE_SECTION_LIBRARY: LibraryEntry[] = [
   {
     blockType: 'gallery',
     label: 'Galeria',
-    description: 'Galeria de imagenes del vehiculo.',
+    description: 'Galería de imágenes del vehículo.',
     defaults: { heading: 'Galeria', images: [] },
     controls: [
       { key: 'heading', label: 'Titulo', type: 'text' },
@@ -467,7 +467,7 @@ export const VEHICLE_SECTION_LIBRARY: LibraryEntry[] = [
   },
   {
     blockType: 'cta',
-    label: 'Llamado a la accion',
+    label: 'Llamado a la acción',
     description: 'Boton de contacto por WhatsApp.',
     defaults: { heading: 'Titulo', body: '', buttonLabel: 'Consultar por WhatsApp' },
     controls: [

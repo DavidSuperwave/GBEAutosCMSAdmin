@@ -5,8 +5,6 @@ import { default as default_c0c65028ca40086f086a3df6ed990a00 } from '../../../co
 import { default as default_2c57d419e4239cde6325e514dd9e398d } from '../../../components/views/VehicleWorkspaceView'
 import { default as default_916bdab9d04a56686aa560cc6289e23b } from '../../../components/views/VehiclesListRedirect'
 import { default as default_a2dba6a9d6d5d51a573945e83e0403ec } from '../../../components/UserInviteLink'
-import { default as default_2110f63cda743d541c692fecb6978c9f } from '../../../components/PrismaCMSLogo'
-import { default as default_bdee4d63c163d6b8e7716aeaf476c3ce } from '../../../components/ThemeToggle'
 import { default as default_83713e492c7381d246261a91790701ab } from '../../../components/AdminBuilderNavLinks'
 import { default as default_9cb65a2e87533a71a5749919b1d70d3f } from '../../../components/AdminHomeLink'
 import { default as default_57e9cb5c2820ae34a291c14248eff778 } from '../../../components/views/VehicleCreateView'
@@ -27,8 +25,6 @@ export const importMap = {
   "./components/views/VehicleWorkspaceView#default": default_2c57d419e4239cde6325e514dd9e398d,
   "./components/views/VehiclesListRedirect#default": default_916bdab9d04a56686aa560cc6289e23b,
   "./components/UserInviteLink#default": default_a2dba6a9d6d5d51a573945e83e0403ec,
-  "./components/PrismaCMSLogo#default": default_2110f63cda743d541c692fecb6978c9f,
-  "./components/ThemeToggle#default": default_bdee4d63c163d6b8e7716aeaf476c3ce,
   "./components/AdminBuilderNavLinks#default": default_83713e492c7381d246261a91790701ab,
   "./components/AdminHomeLink#default": default_9cb65a2e87533a71a5749919b1d70d3f,
   "./components/views/VehicleCreateView#default": default_57e9cb5c2820ae34a291c14248eff778,

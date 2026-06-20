@@ -6,16 +6,24 @@
   "type": "module",
   "scripts": {
     "build": "cross-env NODE_OPTIONS=\"--no-deprecation --max-old-space-size=8000\" next build",
+    "check:admin-styles": "node scripts/check-admin-styles.mjs",
+    "cleanup:qa": "cross-env NODE_OPTIONS=--no-deprecation tsx scripts/cleanup-production-qa.ts",
     "dev": "cross-env NODE_OPTIONS=--no-deprecation next dev -p 3001",
     "devsafe": "rm -rf .next && cross-env NODE_OPTIONS=--no-deprecation next dev",
     "generate:importmap": "cross-env NODE_OPTIONS=--no-deprecation payload generate:importmap",
     "generate:types": "cross-env NODE_OPTIONS=--no-deprecation payload generate:types",
     "lint": "cross-env NODE_OPTIONS=--no-deprecation eslint .",
+    "migrate": "cross-env NODE_OPTIONS=--no-deprecation POSTGRES_POOL_MAX=1 payload migrate",
     "payload": "cross-env NODE_OPTIONS=--no-deprecation payload",
     "test:e2e:production": "cross-env NODE_OPTIONS=--no-deprecation tsx scripts/production-e2e-smoke.ts",
     "seed": "cross-env NODE_OPTIONS=--no-deprecation tsx src/seed/seed.ts",
     "seed:collections": "cross-env NODE_OPTIONS=--no-deprecation tsx src/seed/seedCollections.ts",
-    "start": "cross-env NODE_OPTIONS=--no-deprecation next start"
+    "start": "cross-env NODE_OPTIONS=--no-deprecation next start",
+    "sync:vehicle-images": "node scripts/sync-vehicle-images.mjs",
+    "verify:vehicle-images": "node scripts/sync-vehicle-images.mjs --verify-only",
+    "upload:vehicle-images": "node scripts/sync-vehicle-images.mjs --upload-only",
+    "update:vehicle-image-urls": "node scripts/sync-vehicle-images.mjs --db-only",
+    "dry-run:vehicle-images": "node scripts/sync-vehicle-images.mjs --dry-run"
   },
   "dependencies": {
     "@payloadcms/db-postgres": "^3.84.1",
@@ -23,7 +31,10 @@
     "@payloadcms/next": "^3.84.1",
     "@payloadcms/richtext-lexical": "^3.84.1",
     "@payloadcms/ui": "^3.84.1",
+    "@supabase/supabase-js": "^2.108.2",
+    "adm-zip": "^0.5.17",
     "cross-env": "10.1.0",
+    "csv-parse": "^7.0.0",
     "dotenv": "16.4.7",
     "graphql": "^16.8.1",
     "next": "^16.2.2",
@@ -45,6 +56,6 @@
     "vite-tsconfig-paths": "6.0.5"
   },
   "engines": {
-    "node": ">=22.0.0"
+    "node": "22.x"
   }
 }

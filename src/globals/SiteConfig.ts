@@ -25,7 +25,7 @@ export const SiteConfig: GlobalConfig = {
     {
       name: 'general',
       type: 'group',
-      label: 'Configuracion general',
+      label: 'Configuración general',
       fields: [
         { name: 'siteName', type: 'text', defaultValue: 'GB Automotriz' },
         { name: 'companyName', type: 'text' },
@@ -49,7 +49,7 @@ export const SiteConfig: GlobalConfig = {
     {
       name: 'navigation',
       type: 'group',
-      label: 'Navegacion',
+      label: 'Navegación',
       fields: [
         {
           name: 'mainLinks',
@@ -60,8 +60,8 @@ export const SiteConfig: GlobalConfig = {
               type: 'select',
               defaultValue: 'custom',
               options: [
-                { label: 'Pagina', value: 'page' },
-                { label: 'Coleccion', value: 'collection' },
+                { label: 'Página', value: 'page' },
+                { label: 'Colección', value: 'collection' },
                 { label: 'Marca', value: 'brand' },
                 { label: 'Filtro de inventario', value: 'inventory' },
                 { label: 'URL personalizada', value: 'custom' },
@@ -123,7 +123,7 @@ export const SiteConfig: GlobalConfig = {
     {
       name: 'templates',
       type: 'group',
-      label: 'Plantillas dinamicas',
+      label: 'Plantillas dinámicas',
       fields: [
         {
           name: 'seminuevos',
@@ -139,7 +139,7 @@ export const SiteConfig: GlobalConfig = {
         {
           name: 'vehicleDetail',
           type: 'group',
-          label: 'Detalle de vehiculo',
+          label: 'Detalle de vehículo',
           fields: [
             { name: 'showGallery', type: 'checkbox', defaultValue: true },
             { name: 'showPurchaseCard', type: 'checkbox', defaultValue: true },
@@ -148,7 +148,7 @@ export const SiteConfig: GlobalConfig = {
             { name: 'showFeatures', type: 'checkbox', defaultValue: true },
             { name: 'showSimilarVehicles', type: 'checkbox', defaultValue: true },
             { name: 'showMobileCta', type: 'checkbox', defaultValue: true },
-            { name: 'ctaHeading', type: 'text', defaultValue: 'Aparta este vehiculo' },
+            { name: 'ctaHeading', type: 'text', defaultValue: 'Aparta este vehículo' },
             { name: 'ctaBody', type: 'textarea' },
           ],
         },

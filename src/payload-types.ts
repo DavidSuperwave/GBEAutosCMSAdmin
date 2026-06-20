@@ -247,6 +247,9 @@ export interface Vehicle {
    * Nombre de agencia tal como vino en el archivo importado.
    */
   sourceDealerName?: string | null;
+  imageUrl?: string | null;
+  imagePath?: string | null;
+  imageFilename?: string | null;
   image?: (number | null) | Media;
   gallery?:
     | {
@@ -281,7 +284,7 @@ export interface Vehicle {
     fuelTankCapacityL?: string | null;
   };
   /**
-   * Datos tecnicos normalizados desde catalogo interno o RapidAPI.
+   * Datos técnicos normalizados desde catálogo interno o RapidAPI.
    */
   sourceMeta?: {
     specSource?: ('catalog' | 'rapidapi' | 'manual' | 'none') | null;
@@ -302,7 +305,7 @@ export interface Vehicle {
       }[]
     | null;
   /**
-   * Agrega secciones simples debajo de la pagina del vehiculo: imagen y texto, galerias, beneficios o CTA.
+   * Agrega secciones simples debajo de la página del vehículo: imagen y texto, galerías, beneficios o CTA.
    */
   landing?:
     | (
@@ -366,7 +369,7 @@ export interface Vehicle {
       )[]
     | null;
   /**
-   * Controla secciones fijas de la pagina de detalle para este vehiculo.
+   * Controla secciones fijas de la página de detalle para este vehículo.
    */
   templateOverrides?: {
     gallery?: ('inherit' | 'show' | 'hide') | null;
@@ -1244,6 +1247,9 @@ export interface VehiclesSelect<T extends boolean = true> {
   sourceId?: T;
   sourceImportId?: T;
   sourceDealerName?: T;
+  imageUrl?: T;
+  imagePath?: T;
+  imageFilename?: T;
   image?: T;
   gallery?:
     | T

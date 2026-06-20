@@ -28,8 +28,8 @@ export const VehicleTags: CollectionConfig = {
     listSearchableFields: ['name', 'slug', 'label', 'description'],
   },
   labels: {
-    singular: 'Tag de vehiculo',
-    plural: 'Tags de vehiculos',
+    singular: 'Tag de vehículo',
+    plural: 'Tags de vehículos',
   },
   fields: [
     { name: 'name', type: 'text', required: true, label: 'Nombre' },

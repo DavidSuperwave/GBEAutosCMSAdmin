@@ -69,6 +69,9 @@ type Vehicle = Omit<VehicleLike, 'gallery' | 'dealership'> & {
   publishedAt?: string | null
   lastReviewedAt?: string | null
   sourceDealerName?: string | null
+  imageUrl?: string | null
+  imagePath?: string | null
+  imageFilename?: string | null
   interiorColor?: string | null
   trim?: string | null
   bodyType?: string | null
@@ -132,7 +135,7 @@ const SPEC_LABELS: Record<string, string> = {
   potencia: 'Potencia',
   transmision: 'Transmision',
   combustible: 'Combustible',
-  traccion: 'Traccion',
+  traccion: 'Tracción',
   cylinders: 'Cilindros',
   seats: 'Asientos',
   doors: 'Puertas',
@@ -181,7 +184,7 @@ const TABS = [
   { key: 'overview', label: 'Resumen' },
   { key: 'specs', label: 'Detalles y etiquetas' },
   { key: 'images', label: 'Imagenes' },
-  { key: 'listing', label: 'Pagina' },
+  { key: 'listing', label: 'Página' },
   { key: 'review', label: 'Revisar y publicar' },
 ] as const
 
@@ -202,6 +205,15 @@ type TabKey = (typeof TABS)[number]['key']
 function mediaUrl(media: MediaRef): string | undefined {
   if (!media || typeof media === 'string' || typeof media === 'number') return undefined
   return media.thumbnailURL || media.url
+}
+
+function vehicleImageUrl(vehicle: Vehicle): string | undefined {
+  return vehicle.imageUrl || mediaUrl(vehicle.image) || undefined
+}
+
+function displayedImageStatus(vehicle: Vehicle): ImageStatus {
+  if (vehicle.imageStatus === 'missing' && vehicle.imageUrl) return 'uploaded'
+  return (vehicle.imageStatus as ImageStatus) || 'missing'
 }
 
 function text(value: unknown): string {
@@ -463,7 +475,7 @@ export default function VehicleWorkspaceTab() {
     setError(null)
     try {
       const res = await fetch(`/api/vehicles/${id}?depth=1`, { credentials: 'include' })
-      if (!res.ok) throw new Error('No se pudo cargar el vehiculo.')
+      if (!res.ok) throw new Error('No se pudo cargar el vehículo.')
       const nextVehicle = (await res.json()) as Vehicle
       setVehicle(nextVehicle)
       setDraft(createDraft(nextVehicle))
@@ -543,6 +555,8 @@ export default function VehicleWorkspaceTab() {
     () => (vehicle ? getVehiclePublishIssues(vehicle) : { critical: [], warnings: [] }),
     [vehicle],
   )
+  const primaryImageUrl = vehicle ? vehicleImageUrl(vehicle) : undefined
+  const imageStatus = vehicle ? displayedImageStatus(vehicle) : 'missing'
 
   const selectedTagIds = useMemo(() => new Set((vehicle?.tags || []).map(relationId).filter(Boolean)), [vehicle?.tags])
   const dealershipOptions = useMemo(() => {
@@ -575,11 +589,11 @@ export default function VehicleWorkspaceTab() {
     need('Marca, modelo y ano', Boolean(vehicle.brand && vehicle.model && vehicle.year))
     need('Condicion', Boolean(vehicle.condition))
     need('Agencia y ciudad', Boolean(vehicle.dealership && dealershipCity(vehicle)))
-    need('Imagen principal', Boolean(mediaUrl(vehicle.image)))
+    need('Imagen principal', Boolean(vehicleImageUrl(vehicle)))
     need('Estatus', Boolean(vehicle.inventoryStatus))
     items.push({
       label: 'Imagen aprobada',
-      status: vehicle.imageStatus === 'approved' ? 'ok' : vehicle.image ? 'warn' : 'bad',
+      status: vehicle.imageStatus === 'approved' ? 'ok' : vehicleImageUrl(vehicle) ? 'warn' : 'bad',
     })
     items.push({ label: 'Precio', status: vehicle.price ? 'ok' : 'warn' })
     items.push({
@@ -666,7 +680,7 @@ export default function VehicleWorkspaceTab() {
         const detail = await res.text()
         throw new Error(`No se pudieron guardar los cambios. ${detail.slice(0, 160)}`)
       }
-      setNotice('Cambios guardados en el vehiculo.')
+      setNotice('Cambios guardados en el vehículo.')
       await load()
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Error al guardar.')
@@ -832,8 +846,8 @@ export default function VehicleWorkspaceTab() {
     return (
       <AdminPageShell className="workspace">
         <EmptyState
-          title="Guarda el vehiculo primero"
-          message="El espacio de trabajo esta disponible despues de crear el vehiculo."
+          title="Guarda el vehículo primero"
+          message="El espacio de trabajo está disponible después de crear el vehículo."
         />
       </AdminPageShell>
     )
@@ -850,7 +864,7 @@ export default function VehicleWorkspaceTab() {
   if (!vehicle || !draft) {
     return (
       <AdminPageShell className="workspace">
-        <div className="builder__error">{error || 'No se encontro el vehiculo.'}</div>
+        <div className="builder__error">{error || 'No se encontró el vehículo.'}</div>
       </AdminPageShell>
     )
   }
@@ -926,7 +940,7 @@ export default function VehicleWorkspaceTab() {
           <div className="workspace__grid">
             <div>
               <VehicleSummaryCard
-                imageUrl={mediaUrl(vehicle.image)}
+                imageUrl={primaryImageUrl}
                 title={title}
                 subtitle={`${vehicle.condition === 'used' ? 'Seminuevo' : 'Nuevo'} - ${
                   agencyCity || 'Sin ciudad'
@@ -958,9 +972,21 @@ export default function VehicleWorkspaceTab() {
                   <dt>Actualizado</dt>
                   <dd>{formatDate(vehicle.updatedAt)}</dd>
                 </div>
+                <div>
+                  <dt>Imagen sync</dt>
+                  <dd>
+                    {vehicle.imageUrl ? (
+                      <a href={vehicle.imageUrl} rel="noreferrer" target="_blank">
+                        {vehicle.imageFilename || vehicle.imagePath || 'Abrir imagen'}
+                      </a>
+                    ) : (
+                      '-'
+                    )}
+                  </dd>
+                </div>
               </dl>
               <div className="workspace__section-head">
-                <h3>Demanda del vehiculo</h3>
+                <h3>Demanda del vehículo</h3>
                 <StatusBadge tone={analytics.leads ? 'success' : 'neutral'}>
                   {analytics.conversionRate}% conversion
                 </StatusBadge>
@@ -1171,7 +1197,7 @@ export default function VehicleWorkspaceTab() {
             </div>
 
             <div className="workspace__section-head">
-              <h3>Tags de catalogo</h3>
+              <h3>Tags de catálogo</h3>
               <StatusBadge tone="neutral">{selectedTagIds.size}</StatusBadge>
             </div>
             <div className="workspace__tag-tools">
@@ -1217,14 +1243,14 @@ export default function VehicleWorkspaceTab() {
               <h3>Imagenes</h3>
               <StatusBadge
                 tone={
-                  vehicle.imageStatus === 'approved'
+                  imageStatus === 'approved'
                     ? 'success'
-                    : vehicle.imageStatus === 'missing'
+                    : imageStatus === 'missing'
                       ? 'danger'
                       : 'warning'
                 }
               >
-                {IMAGE_STATUS_LABELS[(vehicle.imageStatus as ImageStatus) || 'missing']}
+                {IMAGE_STATUS_LABELS[imageStatus]}
               </StatusBadge>
             </div>
             <VehicleImageStudio vehicle={vehicle} onChanged={() => void load()} />
@@ -1233,8 +1259,8 @@ export default function VehicleWorkspaceTab() {
 
         {tab === 'listing' ? (
           <SectionBuilder
-            title="Pagina del vehiculo"
-            subtitle="Controla la plantilla fija y agrega secciones personalizadas bajo la ficha del vehiculo."
+            title="Página del vehículo"
+            subtitle="Controla la plantilla fija y agrega secciones personalizadas bajo la ficha del vehículo."
             previewUrl={previewUrl}
             library={VEHICLE_SECTION_LIBRARY}
             load={loadSections}
@@ -1276,7 +1302,7 @@ export default function VehicleWorkspaceTab() {
             <div>
               <h3>Problemas criticos</h3>
               {issues.critical.length === 0 ? (
-                <p className="workspace__ok">OK. Sin bloqueos. Este vehiculo se puede publicar.</p>
+                <p className="workspace__ok">OK. Sin bloqueos. Este vehículo se puede publicar.</p>
               ) : (
                 <ul className="workspace__issues workspace__issues--critical">
                   {issues.critical.map((issue) => (
@@ -1302,7 +1328,7 @@ export default function VehicleWorkspaceTab() {
               disabled={busy || issues.critical.length > 0}
               onClick={() => void setStatus('published', { guard: true })}
             >
-              Publicar vehiculo
+              Publicar vehículo
             </ActionButton>
           </div>
         ) : null}

@@ -521,7 +521,7 @@ export function SectionBuilder({
           <aside className="builder-settings-drawer__panel">
             <div className="builder-settings-drawer__head">
               <div>
-                <p>Configuracion de plantilla</p>
+                <p>Configuración de plantilla</p>
                 <h3>{settingsLabel}</h3>
               </div>
               <button type="button" onClick={() => setSettingsOpen(false)} aria-label="Cerrar">

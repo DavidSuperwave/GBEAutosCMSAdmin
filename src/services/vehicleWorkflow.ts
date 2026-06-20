@@ -27,6 +27,9 @@ export type VehicleLike = {
   price?: string | null
   mileage?: number | null
   image?: unknown
+  imageUrl?: string | null
+  imagePath?: string | null
+  imageFilename?: string | null
   gallery?: unknown[] | null
   description?: string | null
   features?: unknown[] | null
@@ -68,6 +71,10 @@ function hasValue(value: unknown): boolean {
   return Boolean(value)
 }
 
+function hasVehicleImage(vehicle: VehicleLike): boolean {
+  return hasValue(vehicle.image) || hasValue(vehicle.imageUrl)
+}
+
 export function countFilledSpecs(vehicle: VehicleLike): number {
   const specs = vehicle.specs || {}
   return SPEC_KEYS.reduce((count, key) => (hasValue(specs[key]) ? count + 1 : count), 0)
@@ -84,7 +91,7 @@ export function calculateVehicleCompleteness(vehicle: VehicleLike): number {
     { done: hasValue(vehicle.condition), weight: 6 },
     { done: hasValue(vehicle.dealership), weight: 12 },
     { done: hasValue(vehicle.price), weight: 10 },
-    { done: hasValue(vehicle.image), weight: 14 },
+    { done: hasVehicleImage(vehicle), weight: 14 },
     { done: (vehicle.gallery?.length ?? 0) > 0, weight: 6 },
     { done: hasValue(vehicle.description), weight: 8 },
     { done: (vehicle.features?.length ?? 0) > 0, weight: 4 },
@@ -110,7 +117,7 @@ export function deriveImageStatus(vehicle: VehicleLike): ImageStatus {
   ) {
     return explicit
   }
-  return hasValue(vehicle.image) ? 'uploaded' : 'missing'
+  return hasVehicleImage(vehicle) ? 'uploaded' : 'missing'
 }
 
 /**
@@ -148,7 +155,7 @@ export function getVehiclePublishIssues(vehicle: VehicleLike): PublishIssues {
   if (!hasValue(vehicle.condition)) critical.push('Falta la condición (nuevo / seminuevo).')
   if (!hasValue(vehicle.inventoryStatus)) critical.push('Falta el estatus de inventario.')
   if (!hasValue(vehicle.slug)) critical.push('Falta el slug de la página.')
-  if (!hasValue(vehicle.image)) {
+  if (!hasVehicleImage(vehicle)) {
     critical.push('Falta la imagen principal aprobada.')
   } else if (vehicle.imageStatus !== 'approved') {
     warnings.push('La imagen principal aún no está aprobada.')

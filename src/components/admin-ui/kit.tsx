@@ -100,8 +100,10 @@ type ActionButtonProps = {
   className?: string
   disabled?: boolean
   href?: string
+  rel?: string
   onClick?: React.MouseEventHandler<HTMLButtonElement>
   size?: ButtonSize
+  target?: React.HTMLAttributeAnchorTarget
   type?: 'button' | 'submit'
   variant?: ButtonVariant
 }
@@ -111,15 +113,23 @@ export function ActionButton({
   className,
   disabled,
   href,
+  rel,
   onClick,
   size = 'md',
+  target,
   type = 'button',
   variant = 'secondary',
 }: ActionButtonProps) {
   const buttonClassName = cx('admin-kit-btn', `admin-kit-btn--${variant}`, `admin-kit-btn--${size}`, className)
   if (href) {
     return (
-      <a aria-disabled={disabled || undefined} className={buttonClassName} href={disabled ? undefined : href}>
+      <a
+        aria-disabled={disabled || undefined}
+        className={buttonClassName}
+        href={disabled ? undefined : href}
+        rel={rel}
+        target={target}
+      >
         {children}
       </a>
     )

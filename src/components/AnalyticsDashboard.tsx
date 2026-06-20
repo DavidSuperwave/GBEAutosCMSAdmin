@@ -12,11 +12,15 @@ type AnalyticsEvent = {
   pageTitle?: string
   sourceSection?: string
   targetLabel?: string
-  vehicle?: {
-    brand?: string
-    model?: string
-    year?: number
-  } | string | number | null
+  vehicle?:
+    | {
+        brand?: string
+        model?: string
+        year?: number
+      }
+    | string
+    | number
+    | null
   vehicleLabel?: string
 }
 
@@ -33,6 +37,7 @@ type Vehicle = {
   city?: string
   dealership?: unknown
   image?: unknown
+  imageUrl?: string | null
   imageStatus?: string
   inventoryStatus?: string
   model?: string
@@ -43,6 +48,11 @@ type Vehicle = {
 
 type Props = {
   req: PayloadRequest
+}
+
+type PayloadFindResult<T> = {
+  docs: T[]
+  unavailable?: boolean
 }
 
 const formatter = new Intl.NumberFormat('es-MX')
@@ -88,32 +98,86 @@ function getInventoryStatus(vehicle: Vehicle) {
   return vehicle.inventoryStatus || vehicle.status || 'available'
 }
 
+function readPositiveInt(name: string, fallback: number) {
+  const value = Number(process.env[name])
+  return Number.isInteger(value) && value > 0 ? value : fallback
+}
+
+async function runLimited<T>(tasks: Array<() => Promise<T>>, concurrency: number) {
+  const results: T[] = []
+  let index = 0
+
+  async function worker() {
+    while (index < tasks.length) {
+      const current = index
+      index += 1
+      results[current] = await tasks[current]()
+    }
+  }
+
+  await Promise.all(Array.from({ length: Math.min(concurrency, tasks.length) }, () => worker()))
+
+  return results
+}
+
+function emptyResult<T>(): PayloadFindResult<T> {
+  return { docs: [], unavailable: true }
+}
+
 export default async function AnalyticsDashboard({ req }: Props) {
   const now = new Date()
   const currentStart = new Date(now)
   currentStart.setDate(now.getDate() - 30)
 
-  const [eventsResult, vehiclesResult, leadsResult] = await Promise.all([
-    req.payload.find({
-      collection: 'analytics-events',
-      depth: 1,
-      limit: 2000,
-      sort: '-createdAt',
-      where: { createdAt: { greater_than_equal: currentStart.toISOString() } },
-    }),
-    req.payload.find({ collection: 'vehicles', depth: 1, limit: 2000, sort: '-createdAt' }),
-    req.payload.find({
-      collection: 'leads',
-      depth: 1,
-      limit: 2000,
-      sort: '-createdAt',
-      where: { createdAt: { greater_than_equal: currentStart.toISOString() } },
-    }),
-  ])
+  async function safeFind<T>(label: string, task: () => Promise<PayloadFindResult<T>>) {
+    try {
+      return await task()
+    } catch (error) {
+      console.error(`Analytics dashboard query failed: ${label}`, error)
+      return emptyResult<T>()
+    }
+  }
+
+  const [eventsResult, vehiclesResult, leadsResult] = (await runLimited<PayloadFindResult<unknown>>(
+    [
+      () =>
+        safeFind('analytics-events', () =>
+          req.payload.find({
+            collection: 'analytics-events',
+            depth: 1,
+            limit: 2000,
+            sort: '-createdAt',
+            where: { createdAt: { greater_than_equal: currentStart.toISOString() } },
+          }),
+        ),
+      () =>
+        safeFind('vehicles', () =>
+          req.payload.find({ collection: 'vehicles', depth: 1, limit: 2000, sort: '-createdAt' }),
+        ),
+      () =>
+        safeFind('leads', () =>
+          req.payload.find({
+            collection: 'leads',
+            depth: 1,
+            limit: 2000,
+            sort: '-createdAt',
+            where: { createdAt: { greater_than_equal: currentStart.toISOString() } },
+          }),
+        ),
+    ],
+    readPositiveInt('ADMIN_DASHBOARD_QUERY_CONCURRENCY', 2),
+  )) as unknown as [
+    PayloadFindResult<AnalyticsEvent>,
+    PayloadFindResult<Vehicle>,
+    PayloadFindResult<Lead>,
+  ]
 
   const events = eventsResult.docs as AnalyticsEvent[]
   const vehicles = vehiclesResult.docs as Vehicle[]
   const leads = leadsResult.docs as Lead[]
+  const hasUnavailableData = Boolean(
+    eventsResult.unavailable || vehiclesResult.unavailable || leadsResult.unavailable,
+  )
 
   const pageViews = events.filter((event) => event.eventType === 'page_view')
   const vehicleViews = events.filter((event) => event.eventType === 'vehicle_view')
@@ -124,22 +188,34 @@ export default async function AnalyticsDashboard({ req }: Props) {
   const collectionViews = events.filter((event) => event.eventType === 'collection_view')
   const filterEvents = events.filter((event) => event.eventType === 'filter_used')
 
-  const availableVehicles = vehicles.filter((vehicle) => getInventoryStatus(vehicle) === 'available').length
+  const availableVehicles = vehicles.filter(
+    (vehicle) => getInventoryStatus(vehicle) === 'available',
+  ).length
   const soldVehicles = vehicles.filter((vehicle) => getInventoryStatus(vehicle) === 'sold').length
-  const reservedVehicles = vehicles.filter((vehicle) => getInventoryStatus(vehicle) === 'reserved').length
-  const withoutImage = vehicles.filter((vehicle) => !vehicle.image || vehicle.imageStatus === 'missing').length
+  const reservedVehicles = vehicles.filter(
+    (vehicle) => getInventoryStatus(vehicle) === 'reserved',
+  ).length
+  const withoutImage = vehicles.filter((vehicle) => !vehicle.image && !vehicle.imageUrl).length
   const withoutAgency = vehicles.filter((vehicle) => !vehicle.dealership).length
   const drafts = vehicles.filter((vehicle) => vehicle.publishStatus === 'draft').length
   const needsReview = vehicles.filter((vehicle) => vehicle.publishStatus === 'needs_review').length
 
   const vehicleViewCounts = topEntries(groupCount(vehicleViews, formatVehicleName))
-  const vehicleLeadCounts = topEntries(groupCount(leads, (lead) => lead.vehicleLabel || 'Vehiculo sin identificar'))
+  const vehicleLeadCounts = topEntries(
+    groupCount(leads, (lead) => lead.vehicleLabel || 'Vehiculo sin identificar'),
+  )
   const agencyLeadCounts = topEntries(groupCount(leads, (lead) => agencyName(lead.agency)))
   const cityLeadCounts = topEntries(groupCount(leads, (lead) => lead.city || 'Sin ciudad'))
   const cityViewCounts = topEntries(groupCount(events, (event) => event.city || 'Sin ciudad'))
-  const clickTargetCounts = topEntries(groupCount([...vehicleClicks, ...whatsappOpens], (event) => event.targetLabel || 'Clic'))
-  const collectionCounts = topEntries(groupCount(collectionViews, (event) => event.pageTitle || event.pagePath || 'Coleccion'))
-  const filterCounts = topEntries(groupCount(filterEvents, (event) => event.targetLabel || event.sourceSection || 'Filtro'))
+  const clickTargetCounts = topEntries(
+    groupCount([...vehicleClicks, ...whatsappOpens], (event) => event.targetLabel || 'Clic'),
+  )
+  const collectionCounts = topEntries(
+    groupCount(collectionViews, (event) => event.pageTitle || event.pagePath || 'Coleccion'),
+  )
+  const filterCounts = topEntries(
+    groupCount(filterEvents, (event) => event.targetLabel || event.sourceSection || 'Filtro'),
+  )
 
   const dailyLeads = Array.from({ length: 7 }, (_, index) => {
     const date = new Date(now)
@@ -163,13 +239,27 @@ export default async function AnalyticsDashboard({ req }: Props) {
         <a href="/admin/collections/analytics-events">Ver eventos</a>
       </div>
 
+      {hasUnavailableData ? (
+        <p className="analytics-dashboard__empty">
+          Algunos datos del tablero no estan disponibles temporalmente. El admin sigue operativo.
+        </p>
+      ) : null}
+
       <div className="analytics-dashboard__metrics">
         <Metric label="Vistas web" value={pageViews.length} detail="Paginas visitadas" />
         <Metric label="Vistas de autos" value={vehicleViews.length} detail="Fichas vistas" />
         <Metric label="Formularios abiertos" value={formOpens.length} detail="Intento WhatsApp" />
-        <Metric label="Leads WhatsApp" value={leads.length || formSubmits.length} detail={`${formatPercent(leads.length || formSubmits.length, formOpens.length)} conversion`} />
+        <Metric
+          label="Leads WhatsApp"
+          value={leads.length || formSubmits.length}
+          detail={`${formatPercent(leads.length || formSubmits.length, formOpens.length)} conversion`}
+        />
         <Metric label="WhatsApp abiertos" value={whatsappOpens.length} detail="Click de salida" />
-        <Metric label="Disponibles" value={availableVehicles} detail={`${reservedVehicles} apartados, ${soldVehicles} vendidos`} />
+        <Metric
+          label="Disponibles"
+          value={availableVehicles}
+          detail={`${reservedVehicles} apartados, ${soldVehicles} vendidos`}
+        />
       </div>
 
       <div className="analytics-dashboard__grid">
@@ -184,7 +274,11 @@ export default async function AnalyticsDashboard({ req }: Props) {
                 <span style={{ height: `${Math.max((day.views / maxTrend) * 100, 6)}%` }} />
                 <span style={{ height: `${Math.max((day.leads / maxTrend) * 100, 6)}%` }} />
                 <span style={{ height: `${Math.max((day.opens / maxTrend) * 100, 6)}%` }} />
-                <small>{new Date(`${day.key}T12:00:00`).toLocaleDateString('es-MX', { weekday: 'short' })}</small>
+                <small>
+                  {new Date(`${day.key}T12:00:00`).toLocaleDateString('es-MX', {
+                    weekday: 'short',
+                  })}
+                </small>
               </div>
             ))}
           </div>
@@ -196,21 +290,64 @@ export default async function AnalyticsDashboard({ req }: Props) {
             <span>{formatNumber(vehicles.length)} unidades</span>
           </div>
           <div className="analytics-dashboard__inventory">
-            <div><strong>{formatNumber(withoutImage)}</strong><span>Sin imagen</span></div>
-            <div><strong>{formatNumber(withoutAgency)}</strong><span>Sin agencia</span></div>
-            <div><strong>{formatNumber(drafts + needsReview)}</strong><span>Por revisar</span></div>
+            <div>
+              <strong>{formatNumber(withoutImage)}</strong>
+              <span>Sin imagen</span>
+            </div>
+            <div>
+              <strong>{formatNumber(withoutAgency)}</strong>
+              <span>Sin agencia</span>
+            </div>
+            <div>
+              <strong>{formatNumber(drafts + needsReview)}</strong>
+              <span>Por revisar</span>
+            </div>
           </div>
-          <a className="analytics-dashboard__link" href="/admin/inventory?tab=missing_images">Atender inventario</a>
+          <a className="analytics-dashboard__link" href="/admin/inventory?tab=missing_images">
+            Atender inventario
+          </a>
         </article>
 
-        <Leaderboard title="Autos mas vistos" entries={vehicleViewCounts} empty="Aun no hay vistas de autos." />
-        <Leaderboard title="Autos con mas leads" entries={vehicleLeadCounts} empty="Aun no hay leads por auto." />
-        <Leaderboard title="Leads por agencia" entries={agencyLeadCounts} empty="Aun no hay leads por agencia." />
-        <Leaderboard title="Leads por ciudad" entries={cityLeadCounts} empty="Aun no hay leads por ciudad." />
-        <Leaderboard title="Vistas por ciudad" entries={cityViewCounts} empty="Aun no hay vistas con ciudad." />
-        <Leaderboard title="Colecciones vistas" entries={collectionCounts} empty="Aun no hay vistas de colecciones." />
-        <Leaderboard title="Filtros usados" entries={filterCounts} empty="Aun no hay filtros registrados." />
-        <Leaderboard title="Clics e intencion" entries={clickTargetCounts} empty="Aun no hay clics registrados." />
+        <Leaderboard
+          title="Autos mas vistos"
+          entries={vehicleViewCounts}
+          empty="Aun no hay vistas de autos."
+        />
+        <Leaderboard
+          title="Autos con mas leads"
+          entries={vehicleLeadCounts}
+          empty="Aun no hay leads por auto."
+        />
+        <Leaderboard
+          title="Leads por agencia"
+          entries={agencyLeadCounts}
+          empty="Aun no hay leads por agencia."
+        />
+        <Leaderboard
+          title="Leads por ciudad"
+          entries={cityLeadCounts}
+          empty="Aun no hay leads por ciudad."
+        />
+        <Leaderboard
+          title="Vistas por ciudad"
+          entries={cityViewCounts}
+          empty="Aun no hay vistas con ciudad."
+        />
+        <Leaderboard
+          title="Colecciones vistas"
+          entries={collectionCounts}
+          empty="Aun no hay vistas de colecciones."
+        />
+        <Leaderboard
+          title="Filtros usados"
+          entries={filterCounts}
+          empty="Aun no hay filtros registrados."
+        />
+        <Leaderboard
+          title="Clics e intencion"
+          entries={clickTargetCounts}
+          empty="Aun no hay clics registrados."
+        />
       </div>
     </section>
   )

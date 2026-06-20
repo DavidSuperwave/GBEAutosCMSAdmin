@@ -2,7 +2,13 @@
 
 import React, { useCallback, useEffect, useMemo, useState } from 'react'
 
-import { ActionButton, AdminPageHeader, AdminPageShell, PrimaryActionBar, StatusBadge } from '../admin-ui/kit'
+import {
+  ActionButton,
+  AdminPageHeader,
+  AdminPageShell,
+  PrimaryActionBar,
+  StatusBadge,
+} from '../admin-ui/kit'
 import VehicleSpecsLookup, { type AppliedVehicleSpecs } from './VehicleSpecsLookup'
 
 type Dealership = {
@@ -135,6 +141,44 @@ export default function VehicleCreateFlow() {
     [dealerships, draft.dealership],
   )
 
+  const specsChecklist = useMemo(
+    () => [
+      {
+        done: Boolean(draft.brand.trim() && draft.model.trim() && draft.year.trim()),
+        hint: 'Marca, modelo y año',
+        label: 'Identificación',
+      },
+      {
+        done: Boolean(draft.trim.trim()),
+        hint: 'Versión comercial o paquete',
+        label: 'Versión / trim',
+      },
+      {
+        done: Boolean(draft.bodyType && draft.transmission && draft.fuel),
+        hint: 'Carrocería, transmisión y combustible',
+        label: 'Specs visibles',
+      },
+      {
+        done: Boolean(draft.price.trim() && draft.mileage.trim()),
+        hint: 'Precio y kilometraje',
+        label: 'Datos de venta',
+      },
+      {
+        done: Boolean(draft.exteriorColor.trim() && draft.interiorColor.trim()),
+        hint: 'Color exterior e interior',
+        label: 'Colores',
+      },
+      {
+        done: Boolean(draft.description.trim()),
+        hint: 'Notas relevantes para publicar',
+        label: 'Descripción',
+      },
+    ],
+    [draft],
+  )
+
+  const completedSpecsCount = specsChecklist.filter((item) => item.done).length
+
   function setField(key: keyof Draft, value: string) {
     setDraft((current) => ({ ...current, [key]: value }))
   }
@@ -166,7 +210,8 @@ export default function VehicleCreateFlow() {
       const year = draft.year.trim() ? Number(draft.year) : null
       const mileage = draft.mileage.trim() ? Number(draft.mileage) : null
       if (draft.year.trim() && !Number.isFinite(year)) throw new Error('El año debe ser numérico.')
-      if (draft.mileage.trim() && !Number.isFinite(mileage)) throw new Error('El kilometraje debe ser numérico.')
+      if (draft.mileage.trim() && !Number.isFinite(mileage))
+        throw new Error('El kilometraje debe ser numérico.')
 
       const body = {
         brand: draft.brand.trim(),
@@ -199,7 +244,10 @@ export default function VehicleCreateFlow() {
       })
       const data = await res.json().catch(() => null)
       if (!res.ok) {
-        throw new Error((data as { errors?: unknown; message?: string })?.message || 'No se pudo crear el vehículo.')
+        throw new Error(
+          (data as { errors?: unknown; message?: string })?.message ||
+            'No se pudo crear el vehículo.',
+        )
       }
       const id = extractCreatedId(data)
       if (!id) throw new Error('El vehículo se creó sin ID.')
@@ -231,35 +279,56 @@ export default function VehicleCreateFlow() {
       {notice ? <div className="builder__notice">{notice}</div> : null}
 
       <form className="vehicle-create__layout" onSubmit={submit}>
-        <section className="vehicle-create__panel">
+        <section className="vehicle-create__main">
           <h3>Datos principales</h3>
           <div className="vehicle-create__grid">
             <label className="builder__field">
               <span>Marca</span>
-              <input value={draft.brand} onChange={(event) => setField('brand', event.target.value)} required />
+              <input
+                value={draft.brand}
+                onChange={(event) => setField('brand', event.target.value)}
+                required
+              />
             </label>
             <label className="builder__field">
               <span>Modelo</span>
-              <input value={draft.model} onChange={(event) => setField('model', event.target.value)} required />
+              <input
+                value={draft.model}
+                onChange={(event) => setField('model', event.target.value)}
+                required
+              />
             </label>
             <label className="builder__field">
               <span>Año</span>
-              <input inputMode="numeric" value={draft.year} onChange={(event) => setField('year', event.target.value)} />
+              <input
+                inputMode="numeric"
+                value={draft.year}
+                onChange={(event) => setField('year', event.target.value)}
+              />
             </label>
             <label className="builder__field">
               <span>Versión / trim</span>
-              <input value={draft.trim} onChange={(event) => setField('trim', event.target.value)} />
+              <input
+                value={draft.trim}
+                onChange={(event) => setField('trim', event.target.value)}
+              />
             </label>
             <label className="builder__field">
               <span>Condición</span>
-              <select value={draft.condition} onChange={(event) => setField('condition', event.target.value)}>
+              <select
+                value={draft.condition}
+                onChange={(event) => setField('condition', event.target.value)}
+              >
                 <option value="used">Seminuevo</option>
                 <option value="new">Nuevo</option>
               </select>
             </label>
             <label className="builder__field">
               <span>Estatus</span>
-              <select value={draft.inventoryStatus} onChange={(event) => setField('inventoryStatus', event.target.value)}>
+              <select
+                value={draft.inventoryStatus}
+                onChange={(event) => setField('inventoryStatus', event.target.value)}
+              >
                 <option value="available">Disponible</option>
                 <option value="reserved">Apartado</option>
                 <option value="sold">Vendido</option>
@@ -267,18 +336,28 @@ export default function VehicleCreateFlow() {
             </label>
             <label className="builder__field">
               <span>Precio</span>
-              <input value={draft.price} onChange={(event) => setField('price', event.target.value)} placeholder="345000" />
+              <input
+                value={draft.price}
+                onChange={(event) => setField('price', event.target.value)}
+                placeholder="345000"
+              />
             </label>
             <label className="builder__field">
               <span>Kilometraje</span>
-              <input inputMode="numeric" value={draft.mileage} onChange={(event) => setField('mileage', event.target.value)} />
+              <input
+                inputMode="numeric"
+                value={draft.mileage}
+                onChange={(event) => setField('mileage', event.target.value)}
+              />
             </label>
             <label className="builder__field">
               <span>Agencia</span>
               <select
                 value={draft.dealership}
                 onChange={(event) => {
-                  const dealership = dealerships.find((item) => String(item.id) === event.target.value)
+                  const dealership = dealerships.find(
+                    (item) => String(item.id) === event.target.value,
+                  )
                   setDraft((current) => ({
                     ...current,
                     dealership: event.target.value,
@@ -297,64 +376,114 @@ export default function VehicleCreateFlow() {
             </label>
             <label className="builder__field">
               <span>Ciudad</span>
-              <input value={draft.city} onChange={(event) => setField('city', event.target.value)} />
+              <input
+                value={draft.city}
+                onChange={(event) => setField('city', event.target.value)}
+              />
             </label>
             <label className="builder__field">
               <span>Color exterior</span>
-              <input value={draft.exteriorColor} onChange={(event) => setField('exteriorColor', event.target.value)} />
+              <input
+                value={draft.exteriorColor}
+                onChange={(event) => setField('exteriorColor', event.target.value)}
+              />
             </label>
             <label className="builder__field">
               <span>Color interior</span>
-              <input value={draft.interiorColor} onChange={(event) => setField('interiorColor', event.target.value)} />
+              <input
+                value={draft.interiorColor}
+                onChange={(event) => setField('interiorColor', event.target.value)}
+              />
             </label>
           </div>
           <label className="builder__field">
             <span>Descripción</span>
-            <textarea rows={4} value={draft.description} onChange={(event) => setField('description', event.target.value)} />
+            <textarea
+              rows={4}
+              value={draft.description}
+              onChange={(event) => setField('description', event.target.value)}
+            />
           </label>
         </section>
 
-        <section className="vehicle-create__panel">
-          <h3>Especificaciones visibles</h3>
-          <div className="vehicle-create__grid vehicle-create__grid--three">
-            <label className="builder__field">
-              <span>Tipo de carrocería</span>
-              <select value={draft.bodyType} onChange={(event) => setField('bodyType', event.target.value)}>
-                {BODY_TYPES.map(([value, label]) => (
-                  <option key={value} value={value}>
-                    {label}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label className="builder__field">
-              <span>Transmisión</span>
-              <select value={draft.transmission} onChange={(event) => setField('transmission', event.target.value)}>
-                {TRANSMISSIONS.map(([value, label]) => (
-                  <option key={value} value={value}>
-                    {label}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label className="builder__field">
-              <span>Combustible</span>
-              <select value={draft.fuel} onChange={(event) => setField('fuel', event.target.value)}>
-                {FUELS.map(([value, label]) => (
-                  <option key={value} value={value}>
-                    {label}
-                  </option>
-                ))}
-              </select>
-            </label>
+        <aside className="vehicle-create__aside">
+          <div className="vehicle-create__guide">
+            <div className="vehicle-create__guide-head">
+              <h3>Specs necesarias</h3>
+              <StatusBadge
+                tone={completedSpecsCount === specsChecklist.length ? 'success' : 'neutral'}
+              >
+                {completedSpecsCount}/{specsChecklist.length}
+              </StatusBadge>
+            </div>
+            <ol
+              className="vehicle-create__requirements"
+              aria-label="Campos necesarios para completar specs"
+            >
+              {specsChecklist.map((item) => (
+                <li className={item.done ? 'is-complete' : undefined} key={item.label}>
+                  <span aria-hidden="true" />
+                  <div>
+                    <strong>{item.label}</strong>
+                    <small>{item.hint}</small>
+                  </div>
+                </li>
+              ))}
+            </ol>
           </div>
+
+          <div className="vehicle-create__visible-specs">
+            <h3>Especificaciones visibles</h3>
+            <div className="vehicle-create__grid vehicle-create__grid--aside">
+              <label className="builder__field">
+                <span>Tipo de carrocería</span>
+                <select
+                  value={draft.bodyType}
+                  onChange={(event) => setField('bodyType', event.target.value)}
+                >
+                  {BODY_TYPES.map(([value, label]) => (
+                    <option key={value} value={value}>
+                      {label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className="builder__field">
+                <span>Transmisión</span>
+                <select
+                  value={draft.transmission}
+                  onChange={(event) => setField('transmission', event.target.value)}
+                >
+                  {TRANSMISSIONS.map(([value, label]) => (
+                    <option key={value} value={value}>
+                      {label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className="builder__field">
+                <span>Combustible</span>
+                <select
+                  value={draft.fuel}
+                  onChange={(event) => setField('fuel', event.target.value)}
+                >
+                  {FUELS.map(([value, label]) => (
+                    <option key={value} value={value}>
+                      {label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            </div>
+          </div>
+
           <VehicleSpecsLookup
             defaultMake={draft.brand}
             defaultModel={draft.model}
             defaultYear={draft.year}
             onApply={applySpecs}
           />
-        </section>
+        </aside>
 
         <PrimaryActionBar>
           <ActionButton href="/admin/inventory" variant="secondary">

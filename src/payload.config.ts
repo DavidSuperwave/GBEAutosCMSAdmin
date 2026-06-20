@@ -28,11 +28,18 @@ const dirname = path.dirname(filename)
 const smtpPort = Number(process.env.SMTP_PORT || 587)
 const hasSMTPConfig = Boolean(
   process.env.SMTP_HOST &&
-    process.env.SMTP_FROM_EMAIL &&
-    process.env.SMTP_PASS &&
-    process.env.SMTP_USER &&
-    Number.isFinite(smtpPort),
+  process.env.SMTP_FROM_EMAIL &&
+  process.env.SMTP_PASS &&
+  process.env.SMTP_USER &&
+  Number.isFinite(smtpPort),
 )
+
+function readPositiveInt(name: string, fallback: number) {
+  const value = Number(process.env[name])
+  return Number.isInteger(value) && value > 0 ? value : fallback
+}
+
+const defaultPoolMax = process.env.NODE_ENV === 'production' ? 5 : 3
 
 export default buildConfig({
   admin: {
@@ -42,12 +49,8 @@ export default buildConfig({
       baseDir: path.resolve(dirname),
     },
     components: {
-      actions: ['./components/ThemeToggle'],
       beforeNavLinks: ['./components/AdminHomeLink'],
       afterNavLinks: ['./components/AdminBuilderNavLinks'],
-      graphics: {
-        Logo: './components/PrismaCMSLogo',
-      },
       views: {
         vehicleCreate: {
           Component: './components/views/VehicleCreateView',
@@ -141,6 +144,16 @@ export default buildConfig({
   db: postgresAdapter({
     pool: {
       connectionString: process.env.DATABASE_URI || '',
+      connectionTimeoutMillis: readPositiveInt('POSTGRES_CONNECTION_TIMEOUT_MS', 5000),
+      idleTimeoutMillis: readPositiveInt(
+        'POSTGRES_IDLE_TIMEOUT_MS',
+        process.env.NODE_ENV === 'production' ? 30000 : 10000,
+      ),
+      max: readPositiveInt('POSTGRES_POOL_MAX', defaultPoolMax),
+      maxLifetimeSeconds: readPositiveInt('POSTGRES_MAX_LIFETIME_SECONDS', 300),
+      min: 0,
+      application_name:
+        process.env.POSTGRES_APPLICATION_NAME || `gbe-autos-cms-${process.env.NODE_ENV || 'dev'}`,
     },
     push: false,
   }),

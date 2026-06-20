@@ -12,6 +12,7 @@ import * as migration_20260611_090000_vehicle_create_preview_template_controls f
 import * as migration_20260611_150000_workshop_job_style_fields from './20260611_150000_workshop_job_style_fields';
 import * as migration_20260611_160000_workshop_job_turn_ids from './20260611_160000_workshop_job_turn_ids';
 import * as migration_20260611_170000_general_media_workspace from './20260611_170000_general_media_workspace';
+import * as migration_20260611_180000_vehicle_image_sync_columns from './20260611_180000_vehicle_image_sync_columns';
 
 export const migrations = [
   {
@@ -83,5 +84,10 @@ export const migrations = [
     up: migration_20260611_170000_general_media_workspace.up,
     down: migration_20260611_170000_general_media_workspace.down,
     name: '20260611_170000_general_media_workspace'
+  },
+  {
+    up: migration_20260611_180000_vehicle_image_sync_columns.up,
+    down: migration_20260611_180000_vehicle_image_sync_columns.down,
+    name: '20260611_180000_vehicle_image_sync_columns'
   },
 ];

@@ -4,17 +4,19 @@ Esta guía explica cada pantalla personalizada del panel de administración de G
 para qué sirve, cómo abrirla y sus acciones principales. Al final hay un mapa de
 qué pantalla nueva reemplazará a qué flujo anterior.
 
-> Todas las pantallas nuevas usan las variables de tema (`--theme-*`), así que
-> respetan el interruptor de tema (Claro / Oscuro / Auto) de la barra superior.
+> El admin está fijado en tema claro por ahora. Las pantallas nuevas deben usar
+> variables de Payload/admin-kit (`--theme-*` / `--admin-kit-*`) para que una
+> futura reactivación de tema oscuro no requiera rediseñar cada pantalla.
 
 ---
 
-## Barra superior: interruptor de tema
+## Tema visual
 
-- **Dónde**: esquina superior derecha del admin (junto a la cuenta).
-- **Qué hace**: alterna entre **Auto** (sigue el sistema operativo, valor por
-  defecto), **Claro** y **Oscuro**. La elección se guarda automáticamente.
-- **Uso**: haz clic para ciclar `Auto → Claro → Oscuro → Auto`.
+- **Estado actual**: tema claro único (`admin.theme = 'light'`).
+- **Motivo**: el shell de Payload tiene personalizaciones de marca y navegación
+  que todavía no están auditadas para oscuro/auto.
+- **Regla para nuevas pantallas**: no hard-codear colores fuera de tokens; usar
+  `--theme-*` / `--admin-kit-*` para mantener la ruta abierta a tema oscuro.
 
 ---
 

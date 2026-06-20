@@ -208,7 +208,7 @@ export default function LandingBuilder() {
 
   const duplicatePage = useCallback(async () => {
     if (!meta) return
-    const title = `${meta.title || 'Pagina'} copia`
+    const title = `${meta.title || 'Página'} copia`
     const slug = `${slugify(meta.slug || meta.title || 'pagina')}-copia-${Date.now().toString().slice(-4)}`
     const res = await fetch('/api/pages', {
       method: 'POST',
@@ -234,7 +234,7 @@ export default function LandingBuilder() {
 
   const deletePage = useCallback(async () => {
     if (selectedId === null) return
-    if (!window.confirm('Eliminar esta pagina? Esta accion no se puede deshacer.')) return
+    if (!window.confirm('Eliminar esta página? Esta acción no se puede deshacer.')) return
     const res = await fetch(`/api/pages/${selectedId}`, { method: 'DELETE', credentials: 'include' })
     if (!res.ok) {
       setMetaError(`No se pudo eliminar. ${(await res.text()).slice(0, 180)}`)
@@ -250,7 +250,7 @@ export default function LandingBuilder() {
   const seoPanel = (
     <div className="builder__panel">
       <div className="builder__col-head">
-        <strong>Paginas</strong>
+        <strong>Páginas</strong>
         <button className="admin-kit-btn admin-kit-btn--secondary" type="button" onClick={() => void createPage()}>
           + Nueva
         </button>
@@ -370,21 +370,21 @@ export default function LandingBuilder() {
             <ActionButton
               variant="secondary"
               disabled={savingMeta}
-              onClick={() => void patchSelected({ status: 'published', isVisible: true }, 'Pagina publicada.')}
+              onClick={() => void patchSelected({ status: 'published', isVisible: true }, 'Página publicada.')}
             >
               Publicar
             </ActionButton>
             <ActionButton
               variant="secondary"
               disabled={savingMeta}
-              onClick={() => void patchSelected({ status: 'draft', isVisible: false }, 'Pagina movida a borrador.')}
+              onClick={() => void patchSelected({ status: 'draft', isVisible: false }, 'Página movida a borrador.')}
             >
               Borrador
             </ActionButton>
             <ActionButton
               variant="secondary"
               disabled={savingMeta}
-              onClick={() => void patchSelected({ status: 'archived', isVisible: false }, 'Pagina archivada.')}
+              onClick={() => void patchSelected({ status: 'archived', isVisible: false }, 'Página archivada.')}
             >
               Archivar
             </ActionButton>
@@ -413,7 +413,7 @@ export default function LandingBuilder() {
   return (
     <SectionBuilder
       key={String(selectedId)}
-      title="Paginas del sitio"
+      title="Páginas del sitio"
       subtitle="Crea, publica, previsualiza y enlaza paginas con el constructor visual."
       previewUrl={previewUrl}
       library={SITE_SECTION_LIBRARY}

@@ -1,5 +1,6 @@
 'use client'
 
+import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 
 /**
@@ -16,9 +17,9 @@ export default function AdminBuilderNavLinks() {
   }
 
   const link = (href: string, label: string, icon: string) => (
-    <a aria-current={isActive(href) ? 'page' : undefined} data-icon={icon} href={href}>
+    <Link aria-current={isActive(href) ? 'page' : undefined} data-icon={icon} href={href}>
       {label}
-    </a>
+    </Link>
   )
 
   return (
@@ -27,14 +28,6 @@ export default function AdminBuilderNavLinks() {
         <span className="admin-builder-nav__label">Operación</span>
         {link('/admin/inventory', 'Inventario', 'dashboard')}
         {link('/admin/collections/leads', 'Leads', 'users')}
-      </div>
-
-      <div className="admin-builder-nav__group">
-        <span className="admin-builder-nav__label">Sitio</span>
-        {link('/admin/builder/home', 'Constructor de portada', 'home')}
-        {link('/admin/pages-builder', 'Páginas', 'page')}
-        {link('/admin/collections/vehicle-collections', 'Colecciones', 'layers')}
-        {link('/admin/builder/vehicle-template', 'Plantilla de vehículos', 'car')}
       </div>
 
       <div className="admin-builder-nav__group">

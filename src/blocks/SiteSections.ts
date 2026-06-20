@@ -47,10 +47,10 @@ export const PromoStripSection: Block = {
 
 export const FeaturedVehiclesSection: Block = {
   slug: 'featuredVehicles',
-  labels: { singular: 'Vehiculos destacados', plural: 'Vehiculos destacados' },
+  labels: { singular: 'Vehículos destacados', plural: 'Vehículos destacados' },
   fields: [
     { name: 'eyebrow', type: 'text', defaultValue: 'Seminuevos' },
-    { name: 'heading', type: 'text', defaultValue: 'Vehiculos destacados' },
+    { name: 'heading', type: 'text', defaultValue: 'Vehículos destacados' },
     { name: 'body', type: 'textarea' },
     { name: 'limit', type: 'number', defaultValue: 6 },
     {
@@ -59,7 +59,7 @@ export const FeaturedVehiclesSection: Block = {
       defaultValue: 'latestUsed',
       options: [
         { label: 'Ultimos seminuevos', value: 'latestUsed' },
-        { label: 'Seleccion manual', value: 'manual' },
+        { label: 'Selección manual', value: 'manual' },
         { label: 'Filtrar por ciudad', value: 'city' },
         { label: 'Filtrar por marca', value: 'brand' },
         { label: 'Filtrar por carroceria', value: 'bodyType' },
@@ -385,7 +385,7 @@ export const AgenciesSection: Block = {
   slug: 'agencies',
   labels: { singular: 'Agencias', plural: 'Agencias' },
   fields: [
-    { name: 'eyebrow', type: 'text', defaultValue: 'Encuentranos' },
+    { name: 'eyebrow', type: 'text', defaultValue: 'Encuéntranos' },
     { name: 'heading', type: 'text', defaultValue: 'Nuestras agencias' },
     { name: 'body', type: 'textarea' },
     { name: 'showMap', type: 'checkbox', defaultValue: true },

@@ -36,6 +36,9 @@ type VehicleLite = {
   trim?: string | null
   exteriorColor?: string | null
   image?: MediaRef
+  imageUrl?: string | null
+  imagePath?: string | null
+  imageFilename?: string | null
   gallery?: Array<{ image?: MediaRef; alt?: string | null }> | null
 }
 
@@ -76,10 +79,22 @@ type PreviewImage = {
   id: number | string
   url: string
   label: string
+  index?: number
+}
+
+type GalleryPreviewImage = PreviewImage & {
+  index: number
 }
 
 type CropTarget = PreviewImage & {
   source?: string
+}
+
+type GalleryItem = NonNullable<VehicleLite['gallery']>[number]
+
+type GalleryPatchItem = {
+  image: number | string
+  alt?: string | null
 }
 
 /** Strip a leading brand from the model ("Mazda CX-50" -> "CX-50"). */
@@ -138,6 +153,22 @@ function mediaUrl(ref: MediaRef): string | undefined {
   return undefined
 }
 
+function galleryPatchItems(items: GalleryItem[]): GalleryPatchItem[] {
+  const patchItems: GalleryPatchItem[] = []
+  items.forEach((item) => {
+    const image = mediaId(item.image)
+    if (image == null) return
+    const nextItem: GalleryPatchItem = { image }
+    if (item.alt != null) nextItem.alt = item.alt
+    patchItems.push(nextItem)
+  })
+  return patchItems
+}
+
+function isGalleryPreviewImage(item: GalleryPreviewImage | null): item is GalleryPreviewImage {
+  return item !== null
+}
+
 function normalizeToken(value: unknown): string {
   return String(value ?? '')
     .normalize('NFD')
@@ -188,6 +219,9 @@ export default function VehicleImageStudio({
   const [previewImage, setPreviewImage] = useState<PreviewImage | null>(null)
   const [galleryItems, setGalleryItems] = useState(() => vehicle.gallery || [])
   const [cropTarget, setCropTarget] = useState<CropTarget | null>(null)
+  const [draggedGalleryIndex, setDraggedGalleryIndex] = useState<number | null>(null)
+  const [dragOverGalleryIndex, setDragOverGalleryIndex] = useState<number | null>(null)
+  const [openGalleryMenu, setOpenGalleryMenu] = useState<string | null>(null)
 
   useEffect(() => {
     setGalleryItems(vehicle.gallery || [])
@@ -285,11 +319,9 @@ export default function VehicleImageStudio({
 
   const addToGallery = useCallback(
     async (media: number | string) => {
-      const existing = galleryItems
-        .map((g) => mediaId(g.image))
-        .filter((x): x is number | string => x != null)
-        .map((image) => ({ image }))
-      const nextGallery = [...existing, { image: media }]
+      const existing = galleryPatchItems(galleryItems)
+      const alreadyExists = existing.some((item) => String(item.image) === String(media))
+      const nextGallery = alreadyExists ? existing : [...existing, { image: media }]
       const res = await fetch(`/api/vehicles/${vehicleId}`, {
         method: 'PATCH',
         credentials: 'include',
@@ -319,13 +351,8 @@ export default function VehicleImageStudio({
   const removeFromGallery = useCallback(
     async (media: number | string) => {
       await withBusy(async () => {
-        const gallery = galleryItems
-          .filter((g) => String(mediaId(g.image)) !== String(media))
-          .map((g) => {
-            const image = mediaId(g.image)
-            return image == null ? null : { image, alt: g.alt }
-          })
-          .filter((g): g is { image: number | string; alt: string | null | undefined } => g !== null)
+        const nextItems = galleryItems.filter((g) => String(mediaId(g.image)) !== String(media))
+        const gallery = galleryPatchItems(nextItems)
         const res = await fetch(`/api/vehicles/${vehicleId}`, {
           method: 'PATCH',
           credentials: 'include',
@@ -333,13 +360,56 @@ export default function VehicleImageStudio({
           body: JSON.stringify({ gallery }),
         })
         if (!res.ok) throw new Error((await res.text()).slice(0, 160))
-        setGalleryItems(gallery)
+        setGalleryItems(nextItems)
         if (String(previewImage?.id) === String(media)) setPreviewImage(null)
+        setOpenGalleryMenu(null)
         onChanged()
       }, 'Imagen eliminada de la galeria.')
     },
     [galleryItems, onChanged, previewImage?.id, vehicleId, withBusy],
   )
+
+  const reorderGallery = useCallback(
+    async (fromIndex: number, toIndex: number) => {
+      if (fromIndex === toIndex || fromIndex < 0 || toIndex < 0) return
+      if (fromIndex >= galleryItems.length || toIndex >= galleryItems.length) return
+
+      await withBusy(async () => {
+        const nextItems = [...galleryItems]
+        const [moved] = nextItems.splice(fromIndex, 1)
+        nextItems.splice(toIndex, 0, moved)
+        const gallery = galleryPatchItems(nextItems)
+        const res = await fetch(`/api/vehicles/${vehicleId}`, {
+          method: 'PATCH',
+          credentials: 'include',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ gallery }),
+        })
+        if (!res.ok) throw new Error((await res.text()).slice(0, 160))
+        setGalleryItems(nextItems)
+        setPreviewImage((current) => {
+          if (!current) return current
+          const nextIndex = nextItems.findIndex((item) => String(mediaId(item.image)) === String(current.id))
+          return nextIndex >= 0 ? { ...current, label: current.label, index: nextIndex } : current
+        })
+        onChanged()
+      }, 'Orden de galeria actualizado.')
+    },
+    [galleryItems, onChanged, vehicleId, withBusy],
+  )
+
+  const startGalleryDrag = useCallback((event: React.DragEvent, index: number) => {
+    setDraggedGalleryIndex(index)
+    setDragOverGalleryIndex(index)
+    setOpenGalleryMenu(null)
+    event.dataTransfer.effectAllowed = 'move'
+    event.dataTransfer.setData('text/plain', String(index))
+  }, [])
+
+  const clearGalleryDrag = useCallback(() => {
+    setDraggedGalleryIndex(null)
+    setDragOverGalleryIndex(null)
+  }, [])
 
   // ---- Upload actions ----------------------------------------------------
   const handleUpload = useCallback(
@@ -460,6 +530,71 @@ export default function VehicleImageStudio({
     [vehicleId, vehicle.trim, searchColor, searchMake, searchModel, searchYear, setHero, addToGallery, loadAssets, onChanged],
   )
 
+  const importSyncedImage = useCallback(
+    async (then: 'hero' | 'gallery' = 'hero') => {
+      if (!vehicle.imageUrl) return
+      setImportingUrl(vehicle.imageUrl)
+      setError('')
+      setNotice('')
+      try {
+        const res = await fetch('/api/cms/vehicle-photos', {
+          method: 'POST',
+          credentials: 'include',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            action: 'import',
+            vehicleId,
+            url: vehicle.imageUrl,
+            contextLink: vehicle.imageUrl,
+            make: vehicle.brand,
+            model: normalizeModel(vehicle.brand || '', vehicle.model || ''),
+            year: vehicle.year ? String(vehicle.year) : '',
+            trim: vehicle.trim,
+            color: vehicle.exteriorColor,
+            alt: vehicle.imageFilename || `${vehicle.brand || ''} ${vehicle.model || ''} ${vehicle.year || ''}`.trim(),
+            fileName: vehicle.imageFilename,
+            sourceProvider: 'supabase-storage',
+            sourceType: 'dealer_photo',
+            approvalStatus: 'approved',
+            rightsStatus: 'owned',
+            matchConfidence: 'exact_vehicle',
+          }),
+        })
+        const data = (await res.json().catch(() => ({}))) as {
+          ok?: boolean
+          mediaId?: number | string
+          error?: string
+        }
+        if (!res.ok || !data.ok || data.mediaId == null) {
+          throw new Error(data.error || 'No se pudo importar la imagen sincronizada.')
+        }
+        if (then === 'hero') await setHero(data.mediaId)
+        else await addToGallery(data.mediaId)
+        await loadAssets()
+        onChanged()
+        setNotice(then === 'hero' ? 'Imagen sincronizada importada como principal.' : 'Imagen sincronizada agregada a la galeria.')
+      } catch (e) {
+        setError((e as Error).message)
+      } finally {
+        setImportingUrl(null)
+      }
+    },
+    [
+      addToGallery,
+      loadAssets,
+      onChanged,
+      setHero,
+      vehicle.brand,
+      vehicle.exteriorColor,
+      vehicle.imageFilename,
+      vehicle.imageUrl,
+      vehicle.model,
+      vehicle.trim,
+      vehicle.year,
+      vehicleId,
+    ],
+  )
+
   const useLocalAsset = useCallback(
     async (asset: Asset, then: 'hero' | 'gallery' | 'reference') => {
       const id = mediaId(asset.media)
@@ -516,22 +651,32 @@ export default function VehicleImageStudio({
     ],
   )
 
-  const heroUrl = mediaUrl(vehicle.image)
-  const galleryImages = useMemo(
+  const syncedImageUrl = vehicle.imageUrl || undefined
+  const heroMediaUrl = mediaUrl(vehicle.image)
+  const heroUrl = syncedImageUrl || heroMediaUrl
+  const galleryImages = useMemo<GalleryPreviewImage[]>(
     () =>
       galleryItems
-        .map((g, index) => {
+        .map((g, index): GalleryPreviewImage | null => {
           const url = mediaUrl(g.image)
           const id = mediaId(g.image)
           if (!url || id == null) return null
-          return { id, url, label: g.alt || `Galeria ${index + 1}` }
+          return { id, url, label: g.alt || `Galeria ${index + 1}`, index }
         })
-        .filter((item): item is PreviewImage => item !== null),
+        .filter(isGalleryPreviewImage),
     [galleryItems],
   )
   const heroId = mediaId(vehicle.image)
+  const showSyncedImportActions = Boolean(syncedImageUrl && syncedImageUrl !== heroMediaUrl)
   const displayImage =
-    previewImage || (heroUrl && heroId != null ? { id: heroId, url: heroUrl, label: 'Imagen principal' } : null)
+    previewImage ||
+    (heroUrl
+      ? {
+          id: syncedImageUrl ? `synced-${vehicle.id}` : heroId ?? `synced-${vehicle.id}`,
+          url: heroUrl,
+          label: syncedImageUrl ? 'Imagen sincronizada CMS' : 'Imagen principal',
+        }
+      : null)
   useEffect(() => {
     if (!previewImage?.id) return
     if (!galleryImages.some((image) => String(image.id) === String(previewImage.id))) {
@@ -588,6 +733,24 @@ export default function VehicleImageStudio({
           <ActionButton variant="secondary" disabled={busy} onClick={() => setSearchOpen((v) => !v)}>
             {searchOpen ? 'Cerrar búsqueda' : 'Buscar fotos'}
           </ActionButton>
+          {showSyncedImportActions ? (
+            <>
+              <ActionButton
+                variant="secondary"
+                disabled={busy || importingUrl === syncedImageUrl}
+                onClick={() => void importSyncedImage('hero')}
+              >
+                {importingUrl === syncedImageUrl ? 'Importando...' : 'Importar CMS a Media'}
+              </ActionButton>
+              <ActionButton
+                variant="secondary"
+                disabled={busy || importingUrl === syncedImageUrl}
+                onClick={() => void importSyncedImage('gallery')}
+              >
+                CMS a galeria
+              </ActionButton>
+            </>
+          ) : null}
           <ActionButton variant="primary" disabled={busy} onClick={() => setAiWizardOpen(true)}>
             Crear con IA
           </ActionButton>
@@ -609,39 +772,99 @@ export default function VehicleImageStudio({
 
       {galleryImages.length ? (
         <div className="studio__gallery">
-          {galleryImages.map((image) => (
+          {galleryImages.map((image, index) => {
+            const imageKey = String(image.id)
+            const menuOpen = openGalleryMenu === imageKey
+
+            return (
             <figure
-              key={String(image.id)}
-              className={`studio__gallery-item${String(previewImage?.id) === String(image.id) ? ' studio__gallery-item--active' : ''}`}
+              key={imageKey}
+              className={`studio__gallery-item${String(previewImage?.id) === imageKey ? ' studio__gallery-item--active' : ''}${
+                draggedGalleryIndex === index ? ' studio__gallery-item--dragging' : ''
+              }${dragOverGalleryIndex === index && draggedGalleryIndex !== index ? ' studio__gallery-item--drop-target' : ''}${
+                draggedGalleryIndex !== null ? ' studio__gallery-item--drag-active' : ''
+              }${menuOpen ? ' studio__gallery-item--menu-open' : ''}`}
+              draggable={!busy}
+              onDragEnd={clearGalleryDrag}
+              onDragEnter={() => setDragOverGalleryIndex(index)}
+              onDragOver={(event) => {
+                event.preventDefault()
+                event.dataTransfer.dropEffect = 'move'
+              }}
+              onDragStart={(event) => startGalleryDrag(event, index)}
+              onDrop={(event) => {
+                event.preventDefault()
+                const transferIndex = event.dataTransfer.getData('text/plain')
+                const fromIndex = draggedGalleryIndex ?? (transferIndex ? Number(transferIndex) : NaN)
+                clearGalleryDrag()
+                if (Number.isInteger(fromIndex)) void reorderGallery(fromIndex, index)
+              }}
+              onMouseLeave={() => setOpenGalleryMenu((current) => (current === imageKey ? null : current))}
             >
+              <button
+                aria-label={`Mover ${image.label}`}
+                className="studio__gallery-drag-handle"
+                disabled={busy}
+                draggable={!busy}
+                onClick={(event) => {
+                  event.preventDefault()
+                  event.stopPropagation()
+                }}
+                onDragStart={(event) => startGalleryDrag(event, index)}
+                title="Arrastrar"
+                type="button"
+              />
+              <span className="studio__gallery-index">{index + 1}</span>
               <button
                 aria-label={`Ver ${image.label}`}
                 className="studio__gallery-preview"
                 onClick={() => setPreviewImage(image)}
                 type="button"
               >
-                <img src={image.url} alt={image.label} />
+                <img draggable={false} src={image.url} alt={image.label} />
               </button>
-              <button
-                aria-label={`Eliminar ${image.label}`}
-                className="studio__gallery-delete"
-                disabled={busy}
-                onClick={() => void removeFromGallery(image.id as number | string)}
-                type="button"
-              >
-                Eliminar
-              </button>
-              <button
-                aria-label={`Recortar ${image.label}`}
-                className="studio__gallery-crop"
-                disabled={busy}
-                onClick={() => setCropTarget({ ...image, source: 'gallery' })}
-                type="button"
-              >
-                Recortar
-              </button>
+              <div className="studio__gallery-menu">
+                <button
+                  aria-expanded={menuOpen}
+                  aria-label={`Opciones de ${image.label}`}
+                  className="studio__gallery-menu-trigger"
+                  disabled={busy}
+                  onClick={(event) => {
+                    event.stopPropagation()
+                    setOpenGalleryMenu(menuOpen ? null : imageKey)
+                  }}
+                  type="button"
+                >
+                  ...
+                </button>
+                <div className="studio__gallery-menu-popover">
+                  <button
+                    disabled={busy}
+                    onClick={(event) => {
+                      event.stopPropagation()
+                      setOpenGalleryMenu(null)
+                      setCropTarget({ ...image, source: 'gallery' })
+                    }}
+                    type="button"
+                  >
+                    Recortar
+                  </button>
+                  <button
+                    className="studio__gallery-menu-danger"
+                    disabled={busy}
+                    onClick={(event) => {
+                      event.stopPropagation()
+                      void removeFromGallery(image.id as number | string)
+                    }}
+                    type="button"
+                  >
+                    Eliminar
+                  </button>
+                </div>
+              </div>
             </figure>
-          ))}
+            )
+          })}
         </div>
       ) : null}
 
