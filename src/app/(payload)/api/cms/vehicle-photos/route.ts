@@ -164,6 +164,38 @@ function extFromMime(mime: string): string {
   return 'jpg'
 }
 
+function relationId(value: unknown): string | number | undefined {
+  if (typeof value === 'string' || typeof value === 'number') return value
+  if (value && typeof value === 'object') {
+    const id = (value as { id?: unknown }).id
+    if (typeof id === 'string' || typeof id === 'number') return id
+  }
+  return undefined
+}
+
+async function findExistingVehicleSourceAsset(
+  payload: Awaited<ReturnType<typeof getPayload>>,
+  vehicleId: string,
+  sourceUrl: string,
+): Promise<{ assetId: string | number; mediaId: string | number; mediaUrl?: string } | null> {
+  if (!vehicleId || !sourceUrl) return null
+  const result = await payload.find({
+    collection: 'vehicle-media-assets',
+    depth: 1,
+    limit: 1,
+    sort: '-updatedAt',
+    where: {
+      and: [{ vehicle: { equals: vehicleId } }, { sourceUrl: { equals: sourceUrl } }],
+    },
+  })
+  const asset = result.docs[0] as { id?: string | number; media?: unknown } | undefined
+  const mediaId = relationId(asset?.media)
+  if (!asset?.id || mediaId == null) return null
+  const mediaUrl =
+    asset.media && typeof asset.media === 'object' ? str((asset.media as { url?: unknown }).url) || undefined : undefined
+  return { assetId: asset.id, mediaId, mediaUrl }
+}
+
 function identityFromParts(make: string, model: string, year: string, trim: string, color: string): VehicleImageIdentity {
   return {
     brand: make,
@@ -604,6 +636,24 @@ export async function POST(request: Request) {
   const color = str(body.color) || str(vehicleIdentity.exteriorColor)
   const identity = identityFromParts(make, model, year, trim, color)
   const matchKey = hasUsableVehicleImageIdentity(identity) ? buildVehicleImageMatchKey(identity) : ''
+  const sourceUrl = str(body.contextLink) || url
+  const sourceProvider = str(body.sourceProvider) || 'carsxe'
+  const sourceType = str(body.sourceType) || 'api_candidate'
+  const approvalStatus = str(body.approvalStatus) || 'needs_review'
+  const rightsStatus = str(body.rightsStatus) || 'unknown'
+  const alt = str(body.alt) || 'Foto de vehiculo'
+  const requestedFileName = str(body.fileName).replace(/[^\w.-]+/g, '-').replace(/^-+|-+$/g, '')
+
+  const existing = await findExistingVehicleSourceAsset(payload, str(body.vehicleId), sourceUrl)
+  if (existing) {
+    return NextResponse.json({
+      ok: true,
+      reused: true,
+      assetId: existing.assetId,
+      mediaId: existing.mediaId,
+      mediaUrl: existing.mediaUrl,
+    })
+  }
 
   // Download the candidate so we host it ourselves (third-party URLs rot and
   // their rights are unknown — we keep our own approved copy).
@@ -630,13 +680,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: message }, { status: 502 })
   }
 
-  const alt = str(body.alt) || 'Foto de vehículo'
-  const requestedFileName = str(body.fileName).replace(/[^\w.-]+/g, '-').replace(/^-+|-+$/g, '')
   const fileName = requestedFileName || `vehicle-photo-${Date.now()}.${extFromMime(mime)}`
-  const sourceProvider = str(body.sourceProvider) || 'carsxe'
-  const sourceType = str(body.sourceType) || 'api_candidate'
-  const approvalStatus = str(body.approvalStatus) || 'needs_review'
-  const rightsStatus = str(body.rightsStatus) || 'unknown'
 
   try {
     const media = await payload.create({
@@ -655,7 +699,7 @@ export async function POST(request: Request) {
         media: media.id,
         sourceType,
         sourceProvider,
-        sourceUrl: str(body.contextLink) || url,
+        sourceUrl,
         matchKey,
         make,
         model,

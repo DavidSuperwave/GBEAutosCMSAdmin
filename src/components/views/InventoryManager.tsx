@@ -169,11 +169,10 @@ function mediaImageUrl(image: Vehicle['image']): string | undefined {
 }
 
 function vehicleImageUrl(vehicle: Vehicle): string | undefined {
-  return vehicle.imageUrl || mediaImageUrl(vehicle.image) || undefined
+  return mediaImageUrl(vehicle.image) || undefined
 }
 
 function displayedImageStatus(vehicle: Vehicle): ImageStatus {
-  if (vehicle.imageStatus === 'missing' && vehicle.imageUrl) return 'uploaded'
   return (vehicle.imageStatus as ImageStatus) || 'missing'
 }
 
@@ -251,19 +250,21 @@ export default function InventoryManager() {
   }, [fetchList])
 
   const fetchCounts = useCallback(async () => {
-    const entries = await Promise.all(
-      TABS.map(async (t) => {
-        const q = [`limit=1`, `depth=0`, ...t.where('where')].join('&')
-        try {
-          const res = await fetch(`/api/vehicles?${q}`, { credentials: 'include' })
-          if (!res.ok) return [t.key, 0] as const
-          const data = (await res.json()) as { totalDocs: number }
-          return [t.key, data.totalDocs || 0] as const
-        } catch {
-          return [t.key, 0] as const
+    const entries: Array<readonly [TabKey, number]> = []
+    for (const t of TABS) {
+      const q = [`limit=1`, `depth=0`, ...t.where('where')].join('&')
+      try {
+        const res = await fetch(`/api/vehicles?${q}`, { credentials: 'include' })
+        if (!res.ok) {
+          entries.push([t.key, 0] as const)
+          continue
         }
-      }),
-    )
+        const data = (await res.json()) as { totalDocs: number }
+        entries.push([t.key, data.totalDocs || 0] as const)
+      } catch {
+        entries.push([t.key, 0] as const)
+      }
+    }
     setCounts(Object.fromEntries(entries))
   }, [])
 

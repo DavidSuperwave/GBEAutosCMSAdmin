@@ -208,11 +208,10 @@ function mediaUrl(media: MediaRef): string | undefined {
 }
 
 function vehicleImageUrl(vehicle: Vehicle): string | undefined {
-  return vehicle.imageUrl || mediaUrl(vehicle.image) || undefined
+  return mediaUrl(vehicle.image) || undefined
 }
 
 function displayedImageStatus(vehicle: Vehicle): ImageStatus {
-  if (vehicle.imageStatus === 'missing' && vehicle.imageUrl) return 'uploaded'
   return (vehicle.imageStatus as ImageStatus) || 'missing'
 }
 

@@ -2124,6 +2124,54 @@
   gap: 8px;
 }
 
+.studio__synced-source {
+  align-items: center;
+  background: var(--theme-elevation-50);
+  border: 1px dashed var(--theme-elevation-200);
+  border-radius: var(--gbe-radius);
+  display: grid;
+  gap: 12px;
+  grid-template-columns: 132px minmax(0, 1fr) auto;
+  padding: 12px;
+}
+
+.studio__synced-source img {
+  aspect-ratio: 16 / 10;
+  background: var(--theme-elevation-0);
+  border: 1px solid var(--theme-elevation-150);
+  border-radius: var(--gbe-radius-sm);
+  object-fit: contain;
+  width: 132px;
+}
+
+.studio__synced-source strong,
+.studio__synced-source p {
+  margin: 0;
+}
+
+.studio__synced-source p,
+.studio__synced-source small {
+  color: var(--theme-elevation-550);
+  line-height: 1.35;
+}
+
+.studio__synced-source small {
+  display: block;
+  margin-top: 4px;
+  max-width: 68ch;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.studio__synced-actions {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
 .studio__gallery {
   display: flex;
   flex-wrap: wrap;
@@ -2559,6 +2607,7 @@
 /* ---- Browser crop tool ------------------------------------------- */
 
 .studio__crop-button,
+.studio__clear-hero-button,
 .studio__gallery-crop {
   background: rgb(8 8 12 / 82%);
   border: 1px solid rgb(255 255 255 / 32%);
@@ -2572,6 +2621,10 @@
   position: absolute;
   right: 12px;
   top: 12px;
+}
+
+.studio__clear-hero-button {
+  top: 50px;
 }
 
 .studio__gallery-crop {
@@ -2677,6 +2730,18 @@
 }
 
 @media (max-width: 760px) {
+  .studio__synced-source {
+    grid-template-columns: 1fr;
+  }
+
+  .studio__synced-source img {
+    width: min(100%, 220px);
+  }
+
+  .studio__synced-actions {
+    justify-content: flex-start;
+  }
+
   .studio-crop__body,
   .workspace__feature-row {
     grid-template-columns: 1fr;

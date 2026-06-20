@@ -46,6 +46,8 @@ type Asset = {
   id: number | string
   title?: string
   sourceType?: string
+  sourceUrl?: string
+  sourceProvider?: string
   approvalStatus?: string
   matchKey?: string
   matchConfidence?: string
@@ -165,6 +167,10 @@ function galleryPatchItems(items: GalleryItem[]): GalleryPatchItem[] {
   return patchItems
 }
 
+function sourceIdentity(value?: string | null): string {
+  return normalizeToken(value || '')
+}
+
 function isGalleryPreviewImage(item: GalleryPreviewImage | null): item is GalleryPreviewImage {
   return item !== null
 }
@@ -240,12 +246,23 @@ export default function VehicleImageStudio({
   )
 
   const visibleAssets = useMemo(
-    () =>
-      assets.filter((asset) => {
+    () => {
+      const seen = new Set<string>()
+      return assets.filter((asset) => {
         if (asset.matchKey && asset.matchKey !== vehicleMatchKey) return false
         if (asset.make && normalizeToken(asset.make) !== normalizeToken(vehicle.brand)) return false
-        return !mentionsOtherMake([asset.title, asset.make, asset.model].filter(Boolean).join(' '), vehicle.brand)
-      }),
+        if (mentionsOtherMake([asset.title, asset.make, asset.model].filter(Boolean).join(' '), vehicle.brand)) {
+          return false
+        }
+
+        const id = mediaId(asset.media)
+        const key = sourceIdentity(asset.sourceUrl) || (id == null ? '' : `media:${id}`)
+        if (!key) return true
+        if (seen.has(key)) return false
+        seen.add(key)
+        return true
+      })
+    },
     [assets, vehicle.brand, vehicleMatchKey],
   )
 
@@ -304,6 +321,20 @@ export default function VehicleImageStudio({
     [vehicleId, vehicle.brand, vehicle.model, vehicle.year, vehicle.trim, vehicle.exteriorColor, vehicleMatchKey],
   )
 
+  const withBusy = useCallback(async (fn: () => Promise<void>, okMessage?: string) => {
+    setBusy(true)
+    setError('')
+    setNotice('')
+    try {
+      await fn()
+      if (okMessage) setNotice(okMessage)
+    } catch (e) {
+      setError((e as Error).message)
+    } finally {
+      setBusy(false)
+    }
+  }, [])
+
   const setHero = useCallback(
     async (media: number | string) => {
       const res = await fetch(`/api/vehicles/${vehicleId}`, {
@@ -316,6 +347,20 @@ export default function VehicleImageStudio({
     },
     [vehicleId],
   )
+
+  const clearHero = useCallback(async () => {
+    await withBusy(async () => {
+      const res = await fetch(`/api/vehicles/${vehicleId}`, {
+        method: 'PATCH',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ image: null, imageStatus: 'missing' }),
+      })
+      if (!res.ok) throw new Error((await res.text()).slice(0, 160))
+      setPreviewImage(null)
+      onChanged()
+    }, 'Imagen principal quitada del vehiculo.')
+  }, [onChanged, vehicleId, withBusy])
 
   const addToGallery = useCallback(
     async (media: number | string) => {
@@ -333,20 +378,6 @@ export default function VehicleImageStudio({
     },
     [galleryItems, vehicleId],
   )
-
-  const withBusy = useCallback(async (fn: () => Promise<void>, okMessage?: string) => {
-    setBusy(true)
-    setError('')
-    setNotice('')
-    try {
-      await fn()
-      if (okMessage) setNotice(okMessage)
-    } catch (e) {
-      setError((e as Error).message)
-    } finally {
-      setBusy(false)
-    }
-  }, [])
 
   const removeFromGallery = useCallback(
     async (media: number | string) => {
@@ -533,6 +564,21 @@ export default function VehicleImageStudio({
   const importSyncedImage = useCallback(
     async (then: 'hero' | 'gallery' = 'hero') => {
       if (!vehicle.imageUrl) return
+      const existingAsset = assets.find(
+        (asset) =>
+          sourceIdentity(asset.sourceUrl) === sourceIdentity(vehicle.imageUrl) && mediaId(asset.media) != null,
+      )
+      const existingMedia = mediaId(existingAsset?.media)
+      if (existingMedia != null) {
+        await withBusy(async () => {
+          if (then === 'hero') await setHero(existingMedia)
+          else await addToGallery(existingMedia)
+          await loadAssets()
+          onChanged()
+        }, then === 'hero' ? 'Imagen importada usada como principal.' : 'Imagen importada agregada a la galeria.')
+        return
+      }
+
       setImportingUrl(vehicle.imageUrl)
       setError('')
       setNotice('')
@@ -581,9 +627,11 @@ export default function VehicleImageStudio({
     },
     [
       addToGallery,
+      assets,
       loadAssets,
       onChanged,
       setHero,
+      withBusy,
       vehicle.brand,
       vehicle.exteriorColor,
       vehicle.imageFilename,
@@ -653,7 +701,7 @@ export default function VehicleImageStudio({
 
   const syncedImageUrl = vehicle.imageUrl || undefined
   const heroMediaUrl = mediaUrl(vehicle.image)
-  const heroUrl = syncedImageUrl || heroMediaUrl
+  const heroUrl = heroMediaUrl
   const galleryImages = useMemo<GalleryPreviewImage[]>(
     () =>
       galleryItems
@@ -667,14 +715,25 @@ export default function VehicleImageStudio({
     [galleryItems],
   )
   const heroId = mediaId(vehicle.image)
-  const showSyncedImportActions = Boolean(syncedImageUrl && syncedImageUrl !== heroMediaUrl)
+  const syncedAsset = visibleAssets.find(
+    (asset) =>
+      sourceIdentity(asset.sourceUrl) === sourceIdentity(syncedImageUrl) ||
+      sourceIdentity(asset.title) === sourceIdentity(vehicle.imageFilename),
+  )
+  const syncedMediaId = mediaId(syncedAsset?.media)
+  const galleryMediaIds = new Set(galleryPatchItems(galleryItems).map((item) => String(item.image)))
+  const syncedIsHero = syncedMediaId != null && String(mediaId(vehicle.image)) === String(syncedMediaId)
+  const syncedIsInGallery = syncedMediaId != null && galleryMediaIds.has(String(syncedMediaId))
+  const canUseSyncedAsHero = Boolean(syncedImageUrl && !syncedIsHero)
+  const canAddSyncedToGallery = Boolean(syncedImageUrl && !syncedIsInGallery)
+  const showSyncedReference = Boolean(syncedImageUrl)
   const displayImage =
     previewImage ||
     (heroUrl
       ? {
-          id: syncedImageUrl ? `synced-${vehicle.id}` : heroId ?? `synced-${vehicle.id}`,
+          id: heroId ?? `hero-${vehicle.id}`,
           url: heroUrl,
-          label: syncedImageUrl ? 'Imagen sincronizada CMS' : 'Imagen principal',
+          label: 'Imagen principal',
         }
       : null)
   useEffect(() => {
@@ -705,6 +764,11 @@ export default function VehicleImageStudio({
             >
               Recortar
             </button>
+            {heroId != null ? (
+              <button className="studio__clear-hero-button" disabled={busy} onClick={() => void clearHero()} type="button">
+                Quitar como principal
+              </button>
+            ) : null}
           </div>
         ) : (
           <EmptyState title="Sin imagen principal" message="Sube una imagen o créala con IA." />
@@ -733,28 +797,45 @@ export default function VehicleImageStudio({
           <ActionButton variant="secondary" disabled={busy} onClick={() => setSearchOpen((v) => !v)}>
             {searchOpen ? 'Cerrar búsqueda' : 'Buscar fotos'}
           </ActionButton>
-          {showSyncedImportActions ? (
-            <>
-              <ActionButton
-                variant="secondary"
-                disabled={busy || importingUrl === syncedImageUrl}
-                onClick={() => void importSyncedImage('hero')}
-              >
-                {importingUrl === syncedImageUrl ? 'Importando...' : 'Importar CMS a Media'}
-              </ActionButton>
-              <ActionButton
-                variant="secondary"
-                disabled={busy || importingUrl === syncedImageUrl}
-                onClick={() => void importSyncedImage('gallery')}
-              >
-                CMS a galeria
-              </ActionButton>
-            </>
-          ) : null}
           <ActionButton variant="primary" disabled={busy} onClick={() => setAiWizardOpen(true)}>
             Crear con IA
           </ActionButton>
         </div>
+        {showSyncedReference ? (
+          <div className="studio__synced-source">
+            <img src={syncedImageUrl} alt={vehicle.imageFilename || 'Imagen importada'} />
+            <div>
+              <strong>Imagen importada disponible</strong>
+              <p>
+                Esta foto es una referencia del inventario sincronizado. Solo aparece publicamente si la usas como
+                principal o la agregas a la galeria.
+              </p>
+              <small>{vehicle.imageFilename || vehicle.imagePath || syncedImageUrl}</small>
+            </div>
+            <div className="studio__synced-actions">
+              {syncedIsHero ? <StatusBadge tone="success">Principal</StatusBadge> : null}
+              {syncedIsInGallery ? <StatusBadge tone="success">En galeria</StatusBadge> : null}
+              {canUseSyncedAsHero ? (
+                <ActionButton
+                  variant="secondary"
+                  disabled={busy || importingUrl === syncedImageUrl}
+                  onClick={() => void importSyncedImage('hero')}
+                >
+                  {importingUrl === syncedImageUrl ? 'Importando...' : 'Usar imagen importada como principal'}
+                </ActionButton>
+              ) : null}
+              {canAddSyncedToGallery ? (
+                <ActionButton
+                  variant="secondary"
+                  disabled={busy || importingUrl === syncedImageUrl}
+                  onClick={() => void importSyncedImage('gallery')}
+                >
+                  Agregar imagen importada a galeria
+                </ActionButton>
+              ) : null}
+            </div>
+          </div>
+        ) : null}
       </div>
 
       <VehicleAIImageWizard
@@ -858,7 +939,7 @@ export default function VehicleImageStudio({
                     }}
                     type="button"
                   >
-                    Eliminar
+                    Quitar de galeria
                   </button>
                 </div>
               </div>

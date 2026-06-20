@@ -243,8 +243,6 @@ export function toPublicVehicleCard(vehicle: JsonRecord): PublicVehicleCard {
     vehicle.inventoryStatus === 'reserved' || vehicle.inventoryStatus === 'sold'
       ? vehicle.inventoryStatus
       : 'available'
-  const syncedImageUrl = text(vehicle.imageUrl)
-  const syncedImageAlt = text(vehicle.imageFilename || titleForVehicle(vehicle))
 
   return {
     id: String(vehicle.id),
@@ -267,7 +265,7 @@ export function toPublicVehicleCard(vehicle: JsonRecord): PublicVehicleCard {
     fuel: text(vehicle.fuel) || undefined,
     transmission: text(vehicle.transmission) || undefined,
     tags: tagLabels(vehicle),
-    image: syncedImageUrl ? { url: syncedImageUrl, alt: syncedImageAlt || undefined } : toPublicImage(vehicle.image as RelationValue),
+    image: toPublicImage(vehicle.image as RelationValue),
   }
 }
 

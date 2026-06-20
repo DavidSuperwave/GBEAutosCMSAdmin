@@ -499,8 +499,8 @@ export default function VehicleAIImageWizard({
       const syncedMatchesHero = Boolean(heroId != null && heroUrl === syncedImageUrl)
       candidates.push({
         id: syncedMatchesHero ? `hero-${heroId}` : `synced-${vehicle.id}`,
-        label: syncedMatchesHero ? 'Imagen principal' : 'Imagen sincronizada CMS',
-        detail: vehicle.imageFilename || 'Imagen activa del CMS',
+        label: syncedMatchesHero ? 'Imagen principal' : 'Imagen importada disponible',
+        detail: vehicle.imageFilename || 'Referencia de inventario sincronizado',
         mediaId: syncedMatchesHero ? heroId : undefined,
         url: syncedImageUrl,
         source: syncedMatchesHero ? 'hero' : 'sync',

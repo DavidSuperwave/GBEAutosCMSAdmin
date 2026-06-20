@@ -109,6 +109,8 @@ For production, use the deployed CMS URL instead.
 ## Production Notes
 
 - Use Supabase Postgres for `DATABASE_URI`.
+  - On Vercel/serverless, use the Supabase transaction pooler connection string on port `6543`, not session mode on port `5432`.
+  - Keep `POSTGRES_POOL_MAX=1` for production deployments.
 - Set a strong `PAYLOAD_SECRET`.
 - Set `NEXT_PUBLIC_SERVER_URL` to the deployed CMS URL.
 - Configure the `SMTP_*` variables so invite and password reset emails can be delivered.

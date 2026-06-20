@@ -39,7 +39,9 @@ function readPositiveInt(name: string, fallback: number) {
   return Number.isInteger(value) && value > 0 ? value : fallback
 }
 
-const defaultPoolMax = process.env.NODE_ENV === 'production' ? 5 : 3
+const defaultPoolMax = process.env.NODE_ENV === 'production' ? 1 : 3
+const configuredPoolMax = readPositiveInt('POSTGRES_POOL_MAX', defaultPoolMax)
+const poolMax = process.env.NODE_ENV === 'production' ? Math.min(configuredPoolMax, 1) : configuredPoolMax
 
 export default buildConfig({
   admin: {
@@ -144,12 +146,13 @@ export default buildConfig({
   db: postgresAdapter({
     pool: {
       connectionString: process.env.DATABASE_URI || '',
+      allowExitOnIdle: true,
       connectionTimeoutMillis: readPositiveInt('POSTGRES_CONNECTION_TIMEOUT_MS', 5000),
       idleTimeoutMillis: readPositiveInt(
         'POSTGRES_IDLE_TIMEOUT_MS',
         process.env.NODE_ENV === 'production' ? 30000 : 10000,
       ),
-      max: readPositiveInt('POSTGRES_POOL_MAX', defaultPoolMax),
+      max: poolMax,
       maxLifetimeSeconds: readPositiveInt('POSTGRES_MAX_LIFETIME_SECONDS', 300),
       min: 0,
       application_name:

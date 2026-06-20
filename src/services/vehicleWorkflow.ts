@@ -72,7 +72,7 @@ function hasValue(value: unknown): boolean {
 }
 
 function hasVehicleImage(vehicle: VehicleLike): boolean {
-  return hasValue(vehicle.image) || hasValue(vehicle.imageUrl)
+  return hasValue(vehicle.image)
 }
 
 export function countFilledSpecs(vehicle: VehicleLike): number {
