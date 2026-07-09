@@ -1,5 +1,7 @@
 import { NextResponse } from 'next/server'
 
+import { requireCmsRole } from '../../../../../services/cmsRequestAuth'
+
 /**
  * Admin-owned vehicle specs service.
  *
@@ -123,6 +125,9 @@ function mapTrimSpecs(raw: Json) {
 }
 
 export async function GET(request: Request) {
+  const auth = await requireCmsRole(request, ['inventory_manager'], 'Sin permisos para consultar especificaciones.')
+  if (auth.response) return auth.response
+
   const { searchParams } = new URL(request.url)
   const action = searchParams.get('action')
 

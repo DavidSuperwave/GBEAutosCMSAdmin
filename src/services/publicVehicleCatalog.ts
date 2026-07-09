@@ -1,5 +1,9 @@
 import type { Payload, Where } from 'payload'
 
+import { approvedVehicleMediaMap } from './vehicleMediaPolicy'
+import { relationId, relationIds } from './relations'
+import { SPEC_KEYS } from './vehicleWorkflow'
+
 type JsonRecord = Record<string, unknown>
 type RelationValue = string | number | JsonRecord | null | undefined
 
@@ -35,11 +39,42 @@ export type PublicVehicleDetail = PublicVehicleCard & {
   description?: string
   features: string[]
   gallery: Array<{ url: string; alt?: string }>
-  landing: unknown[]
+  landing: PublicLandingBlock[]
   specs?: Record<string, unknown>
-  sourceMeta?: Record<string, unknown>
   templateOverrides?: Record<string, unknown>
 }
+
+export type PublicLandingBlock =
+  | {
+      blockType: 'imageText'
+      eyebrow?: string
+      heading: string
+      body?: string
+      image?: { url: string; alt?: string }
+      imagePosition?: 'left' | 'right'
+    }
+  | {
+      blockType: 'gallery'
+      heading?: string
+      images: Array<{ image: { url: string; alt?: string }; alt?: string }>
+    }
+  | {
+      blockType: 'highlightList'
+      heading: string
+      body?: string
+      items: Array<{ label: string; description?: string }>
+    }
+  | {
+      blockType: 'featureGrid'
+      heading: string
+      items: string[]
+    }
+  | {
+      blockType: 'cta'
+      heading: string
+      body?: string
+      buttonLabel?: string
+    }
 
 export type PublicVehicleListOptions = {
   page?: number
@@ -75,6 +110,10 @@ type PublicVehicleListResult = {
   hasPrevPage: boolean
 }
 
+type PublicSerializationOptions = {
+  approvedMediaIds?: Set<string>
+}
+
 function text(value: unknown): string {
   return String(value ?? '').trim()
 }
@@ -84,22 +123,8 @@ function numberValue(value: unknown): number | undefined {
   return Number.isFinite(numeric) ? numeric : undefined
 }
 
-function relationId(value: RelationValue): string | number | undefined {
-  if (typeof value === 'string' || typeof value === 'number') return value
-  if (value && typeof value === 'object') {
-    const id = value.id
-    if (typeof id === 'string' || typeof id === 'number') return id
-  }
-  return undefined
-}
-
 function relationDoc(value: unknown): JsonRecord | undefined {
   return value && typeof value === 'object' ? (value as JsonRecord) : undefined
-}
-
-function relationIds(values: unknown): Array<string | number> {
-  if (!Array.isArray(values)) return []
-  return values.map((value) => relationId(value as RelationValue)).filter(Boolean) as Array<string | number>
 }
 
 export function toPublicImage(value: unknown): PublicVehicleCard['image'] {
@@ -236,13 +261,19 @@ async function buildVehicleWhere(payload: Payload, options: PublicVehicleListOpt
   return (and.length === 1 ? and[0] : { and }) as Where
 }
 
-export function toPublicVehicleCard(vehicle: JsonRecord): PublicVehicleCard {
+export function toPublicVehicleCard(
+  vehicle: JsonRecord,
+  options: PublicSerializationOptions = {},
+): PublicVehicleCard {
   const dealership = relationDoc(vehicle.dealership)
   const condition = vehicle.condition === 'used' ? 'used' : 'new'
   const inventoryStatus =
     vehicle.inventoryStatus === 'reserved' || vehicle.inventoryStatus === 'sold'
       ? vehicle.inventoryStatus
       : 'available'
+  const heroMediaId = relationId(vehicle.image)
+  const approvedHero =
+    heroMediaId !== undefined && Boolean(options.approvedMediaIds?.has(String(heroMediaId)))
 
   return {
     id: String(vehicle.id),
@@ -265,7 +296,10 @@ export function toPublicVehicleCard(vehicle: JsonRecord): PublicVehicleCard {
     fuel: text(vehicle.fuel) || undefined,
     transmission: text(vehicle.transmission) || undefined,
     tags: tagLabels(vehicle),
-    image: toPublicImage(vehicle.image as RelationValue),
+    image:
+      vehicle.imageStatus === 'approved' && approvedHero
+        ? toPublicImage(vehicle.image as RelationValue)
+        : undefined,
   }
 }
 
@@ -277,25 +311,201 @@ function featureLabels(vehicle: JsonRecord): string[] {
     : []
 }
 
-function galleryImages(vehicle: JsonRecord): PublicVehicleDetail['gallery'] {
+function galleryImages(
+  vehicle: JsonRecord,
+  options: PublicSerializationOptions = {},
+): PublicVehicleDetail['gallery'] {
   return Array.isArray(vehicle.gallery)
     ? vehicle.gallery
-        .map((item) => (item && typeof item === 'object' ? toPublicImage((item as JsonRecord).image) : undefined))
+        .map((item) => {
+          if (!item || typeof item !== 'object') return undefined
+          const mediaId = relationId((item as JsonRecord).image)
+          if (mediaId === undefined || !options.approvedMediaIds?.has(String(mediaId))) return undefined
+          return toPublicImage((item as JsonRecord).image)
+        })
         .filter((item): item is { url: string; alt?: string } => Boolean(item?.url))
     : []
 }
 
-export function toPublicVehicleDetail(vehicle: JsonRecord): PublicVehicleDetail {
+function approvedPublicImage(
+  value: unknown,
+  options: PublicSerializationOptions = {},
+): PublicVehicleCard['image'] {
+  const mediaId = relationId(value)
+  if (mediaId === undefined || !options.approvedMediaIds?.has(String(mediaId))) return undefined
+  return toPublicImage(value)
+}
+
+function stringItems(values: unknown, key: string): string[] {
+  if (!Array.isArray(values)) return []
+  return values
+    .map((value) => (value && typeof value === 'object' ? text((value as JsonRecord)[key]) : text(value)))
+    .filter(Boolean)
+}
+
+export function serializePublicLandingBlocks(
+  landing: unknown,
+  options: PublicSerializationOptions = {},
+): PublicLandingBlock[] {
+  if (!Array.isArray(landing)) return []
+
+  return landing
+    .map((block): PublicLandingBlock | undefined => {
+      if (!block || typeof block !== 'object') return undefined
+      const record = block as JsonRecord
+      const blockType = text(record.blockType)
+      const heading = text(record.heading)
+      const body = text(record.body)
+
+      if (blockType === 'imageText') {
+        if (!heading) return undefined
+        const image = approvedPublicImage(record.image, options)
+        return {
+          blockType: 'imageText',
+          eyebrow: text(record.eyebrow) || undefined,
+          heading,
+          body: body || undefined,
+          image,
+          imagePosition: record.imagePosition === 'right' ? 'right' : 'left',
+        }
+      }
+
+      if (blockType === 'gallery') {
+        const images = Array.isArray(record.images)
+          ? record.images
+              .map((item) => {
+                if (!item || typeof item !== 'object') return undefined
+                const itemRecord = item as JsonRecord
+                const image = approvedPublicImage(itemRecord.image, options)
+                if (!image) return undefined
+                const alt = text(itemRecord.alt) || image.alt || undefined
+                return {
+                  image,
+                  ...(alt ? { alt } : {}),
+                }
+              })
+              .filter((item): item is { image: { url: string; alt?: string }; alt?: string } => Boolean(item))
+          : []
+        return images.length ? { blockType: 'gallery', heading: heading || undefined, images } : undefined
+      }
+
+      if (blockType === 'highlightList') {
+        const items = Array.isArray(record.items)
+          ? record.items
+              .map((item) => {
+                const itemRecord = relationDoc(item) || {}
+                const label = text(itemRecord.label)
+                const description = text(itemRecord.description) || undefined
+                return label
+                  ? {
+                      label,
+                      ...(description ? { description } : {}),
+                    }
+                  : undefined
+              })
+              .filter((item): item is { label: string; description?: string } => Boolean(item))
+          : []
+        return heading || body || items.length
+          ? { blockType: 'highlightList', heading: heading || 'Puntos clave', body: body || undefined, items }
+          : undefined
+      }
+
+      if (blockType === 'featureGrid') {
+        const items = stringItems(record.items, 'feature')
+        return heading || items.length
+          ? { blockType: 'featureGrid', heading: heading || 'Beneficios', items }
+          : undefined
+      }
+
+      if (blockType === 'cta') {
+        return heading
+          ? {
+              blockType: 'cta',
+              heading,
+              body: body || undefined,
+              buttonLabel: text(record.buttonLabel) || undefined,
+            }
+          : undefined
+      }
+
+      return undefined
+    })
+    .filter((block): block is PublicLandingBlock => Boolean(block))
+}
+
+function publicSpecs(value: unknown): Record<string, unknown> | undefined {
+  const specs = relationDoc(value)
+  if (!specs) return undefined
+  const result = Object.fromEntries(SPEC_KEYS.map((key) => [key, specs[key]]).filter(([, value]) => text(value)))
+  return Object.keys(result).length ? result : undefined
+}
+
+function publicTemplateOverrides(value: unknown): Record<string, unknown> | undefined {
+  const overrides = relationDoc(value)
+  if (!overrides) return undefined
+  const allowed = [
+    'gallery',
+    'purchaseCard',
+    'quickSpecs',
+    'description',
+    'features',
+    'similarVehicles',
+    'mobileCta',
+  ]
+  const result = Object.fromEntries(
+    allowed
+      .map((key) => [key, overrides[key]])
+      .filter(([, value]) => value === 'inherit' || value === 'show' || value === 'hide'),
+  )
+  return Object.keys(result).length ? result : undefined
+}
+
+export async function toPublicVehicleDetail(
+  payload: Payload,
+  vehicle: JsonRecord,
+): Promise<PublicVehicleDetail> {
+  const approved = await approvedVehicleMediaMap(payload, [
+    {
+      id: relationId(vehicle.id),
+      image: vehicle.image as RelationValue,
+      gallery: vehicle.gallery,
+      landing: vehicle.landing,
+    },
+  ])
+  const options = { approvedMediaIds: approved.get(String(relationId(vehicle.id))) }
+
   return {
-    ...toPublicVehicleCard(vehicle),
+    ...toPublicVehicleCard(vehicle, options),
     description: text(vehicle.description) || undefined,
     features: featureLabels(vehicle),
-    gallery: galleryImages(vehicle),
-    landing: Array.isArray(vehicle.landing) ? vehicle.landing : [],
-    specs: relationDoc(vehicle.specs),
-    sourceMeta: relationDoc(vehicle.sourceMeta),
-    templateOverrides: relationDoc(vehicle.templateOverrides),
+    gallery: galleryImages(vehicle, options),
+    landing: serializePublicLandingBlocks(vehicle.landing, options),
+    specs: publicSpecs(vehicle.specs),
+    templateOverrides: publicTemplateOverrides(vehicle.templateOverrides),
   }
+}
+
+/**
+ * Fetch one publicly-visible vehicle by slug, applying the same base
+ * visibility rules as the public list (published, not sold). Returns the
+ * fully serialized public detail or null when not visible.
+ */
+export async function findPublicVehicleBySlug(
+  payload: Payload,
+  slug: string,
+): Promise<PublicVehicleDetail | null> {
+  const visibility = await buildVehicleWhere(payload, {})
+  const result = await payload.find({
+    collection: 'vehicles',
+    depth: 2,
+    limit: 1,
+    overrideAccess: true,
+    where: { and: [{ slug: { equals: slug } }, visibility] } as Where,
+  })
+
+  const vehicle = result.docs[0] as unknown as JsonRecord | undefined
+  if (!vehicle) return null
+  return toPublicVehicleDetail(payload, vehicle)
 }
 
 export async function findPublicVehicles(
@@ -310,13 +520,25 @@ export async function findPublicVehicles(
     collection: 'vehicles',
     depth: 2,
     limit,
+    overrideAccess: true,
     page,
     sort: sortToPayload(options.sort),
     where,
   })
+  const vehicles = result.docs as unknown as JsonRecord[]
+  const approved = await approvedVehicleMediaMap(
+    payload,
+    vehicles.map((vehicle) => ({
+      id: relationId(vehicle.id),
+      image: vehicle.image as RelationValue,
+      gallery: vehicle.gallery,
+    })),
+  )
 
   return {
-    docs: result.docs.map((doc) => toPublicVehicleCard(doc as unknown as JsonRecord)),
+    docs: vehicles.map((doc) =>
+      toPublicVehicleCard(doc, { approvedMediaIds: approved.get(String(relationId(doc.id))) }),
+    ),
     totalDocs: result.totalDocs,
     totalPages: result.totalPages,
     page: result.page || page,
@@ -361,6 +583,7 @@ export async function resolveVehicleCollection(
     collection: 'vehicle-collections',
     depth: 2,
     limit: 1,
+    overrideAccess: true,
     where: {
       and: [{ or: collectionLookup }, { isVisible: { equals: true } }],
     },
@@ -375,15 +598,25 @@ export async function resolveVehicleCollection(
       .filter((vehicle): vehicle is JsonRecord => Boolean(vehicle && typeof vehicle === 'object'))
       .filter((vehicle) => vehicle.publishStatus === 'published' && vehicle.inventoryStatus !== 'sold')
       .slice(0, options.limit || numberValue(collection.limit) || 12)
-      .map(toPublicVehicleCard)
+    const approved = await approvedVehicleMediaMap(
+      payload,
+      docs.map((vehicle) => ({
+        id: relationId(vehicle.id),
+        image: vehicle.image as RelationValue,
+        gallery: vehicle.gallery,
+      })),
+    )
+    const cards = docs.map((vehicle) =>
+      toPublicVehicleCard(vehicle, { approvedMediaIds: approved.get(String(relationId(vehicle.id))) }),
+    )
 
     return {
       collection: publicCollectionMeta(collection),
-      docs,
-      totalDocs: docs.length,
+      docs: cards,
+      totalDocs: cards.length,
       totalPages: 1,
       page: 1,
-      limit: docs.length,
+      limit: cards.length,
       hasNextPage: false,
       hasPrevPage: false,
     }
@@ -411,6 +644,7 @@ export async function findPublicCollections(
     collection: 'vehicle-collections',
     depth: 2,
     limit,
+    overrideAccess: true,
     page,
     sort: 'name',
     where: {

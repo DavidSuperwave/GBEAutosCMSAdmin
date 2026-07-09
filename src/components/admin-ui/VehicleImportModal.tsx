@@ -2,6 +2,7 @@
 
 import React, { useEffect, useMemo, useRef, useState } from "react"
 import { createPortal } from "react-dom"
+import * as XLSX from "xlsx"
 
 import { suggestFieldForHeader } from "../../services/importNormalize"
 
@@ -108,27 +109,11 @@ function parseCSV(text: string) {
   return rowsToObjects(best?.rows ?? [])
 }
 
-let xlsxPromise: Promise<unknown> | null = null
-function loadXLSX(): Promise<{ read: (data: ArrayBuffer, opts: unknown) => unknown; utils: { sheet_to_json: (sheet: unknown, opts: unknown) => string[][] } }> {
-  const existing = (window as unknown as { XLSX?: unknown }).XLSX
-  if (existing) return Promise.resolve(existing as never)
-  if (xlsxPromise) return xlsxPromise as never
-  xlsxPromise = new Promise((resolve, reject) => {
-    const script = document.createElement("script")
-    script.src = "https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"
-    script.onload = () => resolve((window as unknown as { XLSX: unknown }).XLSX)
-    script.onerror = () => reject(new Error("No se pudo cargar el lector de XLSX."))
-    document.head.appendChild(script)
-  })
-  return xlsxPromise as never
-}
-
 async function parseXLSX(file: File) {
-  const xlsx = await loadXLSX()
   const buffer = await file.arrayBuffer()
-  const workbook = xlsx.read(buffer, { type: "array" }) as { SheetNames: string[]; Sheets: Record<string, unknown> }
+  const workbook = XLSX.read(buffer, { type: "array" })
   const firstSheet = workbook.Sheets[workbook.SheetNames[0]]
-  const matrix = xlsx.utils.sheet_to_json(firstSheet, { header: 1, blankrows: false, defval: "" }) as string[][]
+  const matrix = XLSX.utils.sheet_to_json(firstSheet, { header: 1, blankrows: false, defval: "" }) as string[][]
   return rowsToObjects(matrix.map((row) => row.map((value) => String(value ?? ""))))
 }
 
@@ -228,12 +213,16 @@ export default function VehicleImportModal({
         `${data.updatedCount} actualizados`,
         `${data.skippedCount} duplicados omitidos`,
         `${data.reviewCount} requieren revisión`,
+        `${data.warningCount || 0} con advertencias`,
         `${data.errorCount} con error`,
       ]
+      const warningLines = (data.warnings || [])
+        .slice(0, 20)
+        .map((item: { row: number; message: string }) => `Fila ${item.row}: ${item.message}`)
       const errorLines = (data.errors || [])
         .slice(0, 20)
         .map((item: { row: number; message: string }) => `Fila ${item.row}: ${item.message}`)
-      setResults([...summaryLines, ...errorLines])
+      setResults([...summaryLines, ...warningLines, ...errorLines])
       onComplete?.()
     } catch (importError) {
       setError(importError instanceof Error ? importError.message : "No se pudo importar.")

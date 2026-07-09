@@ -88,6 +88,8 @@ type Job = {
   outputs?: Output[]
 }
 
+const AI_IMAGE_WIZARD_ENABLED = process.env.NEXT_PUBLIC_ENABLE_AI_IMAGE_WIZARD === 'true'
+
 type CandidateImage = {
   id: string
   label: string
@@ -337,16 +339,16 @@ function ImageEditorModal({
             </label>
             <div className="vehicle-ai-editor__actions">
               <button disabled={busy} onClick={() => onCropImport('gallery')} type="button">
-                Recortar a galeria
+                Recortar y enviar a revision para galeria
               </button>
               <button disabled={busy} onClick={() => onCropImport('hero')} type="button">
-                Recortar principal
+                Recortar y enviar a revision como principal
               </button>
               <button disabled={busy} onClick={() => onImportOriginal('gallery')} type="button">
-                Original a galeria
+                Original a revision para galeria
               </button>
               <button disabled={busy} onClick={() => onImportOriginal('hero')} type="button">
-                Original principal
+                Original a revision como principal
               </button>
               <button disabled={busy} onClick={onUseReference} type="button">
                 Usar como referencia
@@ -448,6 +450,29 @@ export default function VehicleAIImageWizard({
   templates: Template[]
   vehicle: VehicleLite
 }) {
+  if (!AI_IMAGE_WIZARD_ENABLED) {
+    if (!open) return null
+    return (
+      <div className="vehicle-ai-wizard vehicle-ai-wizard--disabled" role="dialog" aria-modal="true">
+        <div className="vehicle-ai-wizard__panel">
+          <div className="vehicle-ai-wizard__topbar">
+            <div>
+              <p className="eyebrow">Crear con IA - proximamente</p>
+              <h3>Generacion IA en pausa</h3>
+            </div>
+            <button type="button" onClick={onClose} aria-label="Cerrar">
+              Cerrar
+            </button>
+          </div>
+          <EmptyState
+            title="Pausada para produccion v1"
+            message="Por ahora usa fotos propias, imagenes sincronizadas o candidatas revisadas. Los resultados IA requeriran aprobacion antes de publicarse."
+          />
+        </div>
+      </div>
+    )
+  }
+
   const sourceUploadInputRef = useRef<HTMLInputElement>(null)
   const customStyleInputRef = useRef<HTMLInputElement>(null)
 
@@ -471,6 +496,7 @@ export default function VehicleAIImageWizard({
   const [error, setError] = useState('')
   const [notice, setNotice] = useState('')
   const [selectedOutputs, setSelectedOutputs] = useState<Set<string>>(new Set())
+  const [savedOutputTargets, setSavedOutputTargets] = useState<Record<string, 'hero' | 'gallery'>>({})
   const [previewFile, setPreviewFile] = useState<ChatFile | null>(null)
   const [editingOutput, setEditingOutput] = useState<{ index: number; output: Output } | null>(null)
   const [styleModalOpen, setStyleModalOpen] = useState(false)
@@ -499,7 +525,7 @@ export default function VehicleAIImageWizard({
       const syncedMatchesHero = Boolean(heroId != null && heroUrl === syncedImageUrl)
       candidates.push({
         id: syncedMatchesHero ? `hero-${heroId}` : `synced-${vehicle.id}`,
-        label: syncedMatchesHero ? 'Imagen principal' : 'Imagen importada disponible',
+        label: syncedMatchesHero ? 'Imagen principal' : 'Imagen sincronizada pendiente de publicar',
         detail: vehicle.imageFilename || 'Referencia de inventario sincronizado',
         mediaId: syncedMatchesHero ? heroId : undefined,
         url: syncedImageUrl,
@@ -691,7 +717,7 @@ export default function VehicleAIImageWizard({
 
   const recordAsset = useCallback(
     async (media: number | string, usage: 'vehicle_hero' | 'vehicle_gallery' | 'reference' = 'reference') => {
-      await fetch('/api/vehicle-media-assets', {
+      const res = await fetch('/api/vehicle-media-assets', {
         method: 'POST',
         credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
@@ -702,8 +728,8 @@ export default function VehicleAIImageWizard({
           sourceType: usage === 'reference' ? 'uploaded' : 'ai_generated',
           sourceProvider: usage === 'reference' ? 'admin-upload' : 'openrouter:grok-imagine-image-quality',
           usage,
-          approvalStatus: usage === 'vehicle_hero' ? 'approved' : 'needs_review',
-          rightsStatus: 'owned',
+          approvalStatus: usage === 'reference' ? 'draft' : 'needs_review',
+          rightsStatus: 'unknown',
           matchConfidence: usage === 'reference' ? 'manual_reference' : 'generated',
           matchKey: buildVehicleImageMatchKey({
             brand: vehicle.brand,
@@ -718,7 +744,11 @@ export default function VehicleAIImageWizard({
           trim: vehicle.trim,
           exteriorColor: vehicle.exteriorColor,
         }),
-      }).catch(() => {})
+      })
+      const data = (await res.json().catch(() => ({}))) as { error?: string; message?: string }
+      if (!res.ok) {
+        throw new Error(data.error || data.message || 'No se pudo registrar la imagen IA para revision.')
+      }
     },
     [vehicle],
   )
@@ -985,6 +1015,7 @@ export default function VehicleAIImageWizard({
       const targetJob = findMatchingStyleJob(saved)
       setActiveJob(targetJob || null)
       setSelectedOutputs(new Set())
+      setSavedOutputTargets({})
       setChatReferences([])
       setOptimisticMessages([])
       setPendingTurnId('')
@@ -1022,6 +1053,7 @@ export default function VehicleAIImageWizard({
         setStyle(nextStyle)
         setActiveJob(targetJob || null)
         setSelectedOutputs(new Set())
+        setSavedOutputTargets({})
         setChatReferences([])
         setOptimisticMessages([])
         setFilesOpen(false)
@@ -1041,40 +1073,8 @@ export default function VehicleAIImageWizard({
     [findMatchingStyleJob, runGeneration],
   )
 
-  const addToGallery = useCallback(
-    async (media: number | string) => {
-      const existing = (vehicle.gallery || [])
-        .map((g) => mediaId(g.image))
-        .filter((x): x is number | string => x != null)
-        .map((image) => ({ image }))
-      const alreadyExists = existing.some((item) => String(item.image) === String(media))
-      const gallery = alreadyExists ? existing : [...existing, { image: media }]
-      const res = await fetch(`/api/vehicles/${vehicle.id}`, {
-        method: 'PATCH',
-        credentials: 'include',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ gallery }),
-      })
-      if (!res.ok) throw new Error((await res.text()).slice(0, 180))
-    },
-    [vehicle.gallery, vehicle.id],
-  )
-
-  const setHero = useCallback(
-    async (media: number | string) => {
-      const res = await fetch(`/api/vehicles/${vehicle.id}`, {
-        method: 'PATCH',
-        credentials: 'include',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ image: media, imageStatus: 'approved' }),
-      })
-      if (!res.ok) throw new Error((await res.text()).slice(0, 180))
-    },
-    [vehicle.id],
-  )
-
   const importOutput = useCallback(
-    async (output: Output, target: 'hero' | 'gallery') => {
+    async (output: Output, target: 'hero' | 'gallery', index = 0) => {
       const id = mediaId(output.image)
       if (id == null) {
         setError('Este resultado no tiene una imagen guardada en Media.')
@@ -1084,10 +1084,13 @@ export default function VehicleAIImageWizard({
       setError('')
       setNotice('')
       try {
-        if (target === 'hero') await setHero(id)
-        else await addToGallery(id)
         await recordAsset(id, target === 'hero' ? 'vehicle_hero' : 'vehicle_gallery')
-        setNotice(target === 'hero' ? 'Imagen principal actualizada.' : 'Imagen agregada a la galeria.')
+        setSavedOutputTargets((current) => ({ ...current, [outputKey(output, index)]: target }))
+        setNotice(
+          target === 'hero'
+            ? 'Imagen enviada a revision como principal. No se publica en la web hasta que se apruebe y se publique.'
+            : 'Imagen enviada a revision para galeria. No se publica en la web hasta que se apruebe y se publique.',
+        )
         onChanged()
       } catch (err) {
         setError(err instanceof Error ? err.message : 'No se pudo importar la imagen.')
@@ -1095,7 +1098,7 @@ export default function VehicleAIImageWizard({
         setBusy(false)
       }
     },
-    [addToGallery, onChanged, recordAsset, setHero],
+    [onChanged, recordAsset],
   )
 
   const cropAndImportOutput = useCallback(
@@ -1130,11 +1133,14 @@ export default function VehicleAIImageWizard({
           canvas.toBlob((nextBlob) => (nextBlob ? resolve(nextBlob) : reject(new Error('No se pudo guardar el recorte.'))), 'image/jpeg', 0.94)
         })
         const media = await uploadMedia(blob, `${vehicleTitle(vehicle)} recorte IA.jpg`)
-        if (target === 'hero') await setHero(media.id)
-        else await addToGallery(media.id)
         await recordAsset(media.id, target === 'hero' ? 'vehicle_hero' : 'vehicle_gallery')
+        setSavedOutputTargets((current) => ({ ...current, [outputKey(output, 0)]: target }))
         setEditingOutput(null)
-        setNotice(target === 'hero' ? 'Recorte guardado como principal.' : 'Recorte agregado a la galeria.')
+        setNotice(
+          target === 'hero'
+            ? 'Recorte enviado a revision como principal. No se publica en la web hasta que se apruebe y se publique.'
+            : 'Recorte enviado a revision para galeria. No se publica en la web hasta que se apruebe y se publique.',
+        )
         onChanged()
       } catch (err) {
         setError(err instanceof Error ? err.message : 'No se pudo recortar la imagen.')
@@ -1142,7 +1148,7 @@ export default function VehicleAIImageWizard({
         setBusy(false)
       }
     },
-    [addToGallery, cropAspect, cropZoom, onChanged, recordAsset, setHero, uploadMedia, vehicle],
+    [cropAspect, cropZoom, onChanged, recordAsset, uploadMedia, vehicle],
   )
 
   const importSelectedToGallery = useCallback(async () => {
@@ -1153,20 +1159,21 @@ export default function VehicleAIImageWizard({
     setNotice('')
     try {
       for (const output of chosen) {
+        const index = outputs.indexOf(output)
         const id = mediaId(output.image)
         if (id == null) continue
-        await addToGallery(id)
         await recordAsset(id, 'vehicle_gallery')
+        setSavedOutputTargets((current) => ({ ...current, [outputKey(output, index)]: 'gallery' }))
       }
       setSelectedOutputs(new Set())
-      setNotice(`${chosen.length} imagen(es) agregada(s) a la galeria.`)
+      setNotice(`${chosen.length} imagen(es) enviada(s) a revision para galeria. No se publican hasta aprobarlas.`)
       onChanged()
     } catch (err) {
       setError(err instanceof Error ? err.message : 'No se pudieron importar las imagenes.')
     } finally {
       setBusy(false)
     }
-  }, [addToGallery, onChanged, outputs, recordAsset, selectedOutputs])
+  }, [onChanged, outputs, recordAsset, selectedOutputs])
 
   const useOutputAsReference = useCallback((output: Output, index: number) => {
     const id = mediaId(output.image)
@@ -1274,6 +1281,7 @@ export default function VehicleAIImageWizard({
     setPendingTurnId('')
     setPrompt('')
     setSelectedOutputs(new Set())
+    setSavedOutputTargets({})
     setError('')
     setNotice('')
     setPreviewFile(null)
@@ -1288,6 +1296,7 @@ export default function VehicleAIImageWizard({
     const id = outputKey(output, index)
     const url = outputUrl(output)
     if (!url) return null
+    const savedTarget = savedOutputTargets[id]
     return (
       <PromptKitMessage key={`output-${id}`} role="assistant" className="vehicle-ai-wizard__result-message">
         <MessageContent>
@@ -1317,12 +1326,21 @@ export default function VehicleAIImageWizard({
             >
               <PromptKitImage src={url} alt={`Resultado ${index + 1}`} />
             </button>
+            <div className="vehicle-ai-wizard__result-status">
+              <StatusBadge tone={savedTarget ? 'info' : 'warning'}>
+                {savedTarget ? (savedTarget === 'hero' ? 'En revision como principal' : 'En revision para galeria') : 'IA - No revisada'}
+              </StatusBadge>
+              <StatusBadge tone="neutral">No publicada</StatusBadge>
+            </div>
+            <p className="vehicle-ai-wizard__result-note">
+              No se publica en la web hasta que se apruebe y se publique.
+            </p>
             <MessageActions className="vehicle-ai-wizard__result-actions">
-              <MessageAction disabled={busy} onClick={() => void importOutput(output, 'gallery')}>
-                Galeria
+              <MessageAction disabled={busy || savedTarget === 'gallery'} onClick={() => void importOutput(output, 'gallery', index)}>
+                {savedTarget === 'gallery' ? 'En revision para galeria' : 'Enviar a revision para galeria'}
               </MessageAction>
-              <MessageAction disabled={busy} onClick={() => void importOutput(output, 'hero')}>
-                Principal
+              <MessageAction disabled={busy || savedTarget === 'hero'} onClick={() => void importOutput(output, 'hero', index)}>
+                {savedTarget === 'hero' ? 'En revision como principal' : 'Enviar a revision como principal'}
               </MessageAction>
               <MessageAction disabled={busy} onClick={() => useOutputAsReference(output, index)}>
                 Referencia
@@ -1394,6 +1412,7 @@ export default function VehicleAIImageWizard({
                     setOptimisticMessages([])
                     setPendingTurnId('')
                     setSelectedOutputs(new Set())
+                    setSavedOutputTargets({})
                   }}
                   type="button"
                 >
@@ -1490,7 +1509,7 @@ export default function VehicleAIImageWizard({
                     </div>
                     <div className="vehicle-ai-wizard__chat-actions">
                       <ActionButton disabled={busy || selectedOutputs.size === 0} onClick={() => void importSelectedToGallery()} variant="primary">
-                        Importar seleccionadas
+                        Enviar seleccionadas a revision
                       </ActionButton>
                       <button
                         className="vehicle-ai-wizard__files-toggle"
@@ -1668,8 +1687,8 @@ export default function VehicleAIImageWizard({
                                     </button>
                                   ) : null}
                                   {file.output ? (
-                                    <button disabled={busy} onClick={() => void importOutput(file.output as Output, 'gallery')} type="button">
-                                      A galeria
+                                    <button disabled={busy} onClick={() => void importOutput(file.output as Output, 'gallery', file.outputIndex || 0)} type="button">
+                                      Enviar a revision para galeria
                                     </button>
                                   ) : null}
                                 </>

@@ -13,6 +13,7 @@ import {
   deriveSpecStatus,
   getVehiclePublishIssues,
 } from '../src/services/vehicleWorkflow'
+import { serializePublicLandingBlocks } from '../src/services/publicVehicleCatalog'
 import {
   normalizeImportRow,
   normalizeImportedBrand,
@@ -307,16 +308,52 @@ function checkBusinessRules() {
     fail('Vehicle completeness scoring ranks complete records higher')
   }
 
-  if (deriveImageStatus({ image: 1 }) === 'uploaded' && deriveImageStatus({ imageStatus: 'approved' }) === 'approved') {
-    pass('Vehicle image status derivation preserves explicit approvals')
+  if (
+    deriveImageStatus({ image: 1 }) === 'uploaded' &&
+    deriveImageStatus({ image: 1, imageStatus: 'approved' }) === 'approved' &&
+    deriveImageStatus({ imageStatus: 'approved' }) === 'missing'
+  ) {
+    pass('Vehicle image status derivation requires media for explicit approvals')
   } else {
-    fail('Vehicle image status derivation preserves explicit approvals')
+    fail('Vehicle image status derivation requires media for explicit approvals')
   }
 
   if (deriveSpecStatus(completeVehicle) === 'manual' || deriveSpecStatus(completeVehicle) === 'partial') {
     pass('Vehicle spec status derivation handles manual specs')
   } else {
     fail('Vehicle spec status derivation handles manual specs')
+  }
+
+  const landing = serializePublicLandingBlocks(
+    [
+      {
+        blockType: 'imageText',
+        heading: 'Interior',
+        image: { id: 1, url: '/approved.jpg', alt: 'Aprobada' },
+      },
+      {
+        blockType: 'gallery',
+        heading: 'Galeria',
+        images: [
+          { image: { id: 1, url: '/approved.jpg', alt: 'Aprobada' } },
+          { image: { id: 2, url: '/unapproved.jpg', alt: 'Sin aprobar' } },
+        ],
+      },
+    ],
+    { approvedMediaIds: new Set(['1']) },
+  )
+  const imageText = landing.find((block) => block.blockType === 'imageText')
+  const gallery = landing.find((block) => block.blockType === 'gallery')
+  if (
+    imageText?.blockType === 'imageText' &&
+    imageText.image?.url === '/approved.jpg' &&
+    gallery?.blockType === 'gallery' &&
+    gallery.images.length === 1 &&
+    gallery.images[0]?.image.url === '/approved.jpg'
+  ) {
+    pass('Public landing serialization omits unapproved media')
+  } else {
+    fail('Public landing serialization omits unapproved media', JSON.stringify(landing))
   }
 
   const normalized = normalizeImportRow(
@@ -380,16 +417,54 @@ async function checkHttpContracts() {
   const timeout = setTimeout(() => controller.abort(), 10_000)
 
   try {
+    const expectRawDenied = async (path: string, name: string) => {
+      const response = await fetch(`${cleanBase}${path}`, {
+        cache: 'no-store',
+        signal: controller.signal,
+      })
+      if (response.status === 401 || response.status === 403) {
+        pass(name, `${response.status} unauthenticated.`)
+      } else {
+        fail(name, `Expected 401/403, received ${response.status}.`)
+      }
+    }
+
+    await expectRawDenied('/api/vehicles?limit=1', 'HTTP raw vehicles endpoint rejects public reads')
+    await expectRawDenied(
+      '/api/vehicle-media-assets?limit=1',
+      'HTTP raw vehicle media assets endpoint rejects public reads',
+    )
+    await expectRawDenied(
+      '/api/vehicle-collections?limit=1',
+      'HTTP raw vehicle collections endpoint rejects public reads',
+    )
+
     const vehicles = await fetch(`${cleanBase}/api/public/vehicles?limit=101`, {
       cache: 'no-store',
       signal: controller.signal,
     })
     if (vehicles.ok) {
-      const data = (await vehicles.json()) as { limit?: unknown; docs?: unknown }
+      const data = (await vehicles.json()) as { limit?: unknown; docs?: Array<{ slug?: unknown }> }
       if (numberValue(data.limit) === 100 && Array.isArray(data.docs)) {
         pass('HTTP public vehicles endpoint responds', `${cleanBase}/api/public/vehicles`)
       } else {
         fail('HTTP public vehicles endpoint responds', 'Unexpected response shape.')
+      }
+      const slug = data.docs?.find((doc) => typeof doc.slug === 'string')?.slug
+      if (typeof slug === 'string') {
+        const detail = await fetch(`${cleanBase}/api/public/vehicles/${slug}`, {
+          cache: 'no-store',
+          signal: controller.signal,
+        })
+        if (detail.ok) {
+          const detailData = (await detail.json()) as Record<string, unknown>
+          if (!('sourceMeta' in detailData)) pass('HTTP public vehicle detail excludes internal source metadata')
+          else fail('HTTP public vehicle detail excludes internal source metadata')
+        } else {
+          fail('HTTP public vehicle detail responds', `${detail.status} ${detail.statusText}`)
+        }
+      } else {
+        warn('HTTP public vehicle detail excludes internal source metadata', 'No public vehicle slug available.')
       }
     } else {
       fail('HTTP public vehicles endpoint responds', `${vehicles.status} ${vehicles.statusText}`)

@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server"
-import config from "@payload-config"
-import { getPayload } from "payload"
+
+import { requireCmsRole } from "../../../../../services/cmsRequestAuth"
 
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 
@@ -44,15 +44,11 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Ingresa un correo electronico valido." }, { status: 400 })
   }
 
-  const payload = await getPayload({ config })
-  const authResult = await payload.auth({
-    canSetHeaders: false,
-    headers: request.headers,
-  })
-
-  if (!authResult.user) {
-    return NextResponse.json({ error: "Sesion invalida. Inicia sesion de nuevo." }, { status: 401 })
-  }
+  // Admin-only: mirrors Users.access.create, which the overrideAccess calls
+  // below would otherwise bypass.
+  const auth = await requireCmsRole(request, [], "Solo administradores pueden invitar usuarios.")
+  if (auth.response) return auth.response
+  const { payload, user } = auth
 
   let created = true
   try {
@@ -62,7 +58,7 @@ export async function POST(request: Request) {
       overrideAccess: true,
       req: {
         headers: request.headers,
-        user: authResult.user,
+        user,
       },
     })
   } catch (error) {
@@ -80,7 +76,7 @@ export async function POST(request: Request) {
       overrideAccess: true,
       req: {
         headers: request.headers,
-        user: authResult.user,
+        user,
       },
     })
   } catch (error) {

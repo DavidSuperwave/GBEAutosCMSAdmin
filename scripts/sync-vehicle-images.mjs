@@ -36,6 +36,7 @@ const config = {
   inventoryImageFilenameColumn: envString('INVENTORY_IMAGE_FILENAME_COLUMN', 'image_filename'),
   inventoryImageStatusColumn: envString('INVENTORY_IMAGE_STATUS_COLUMN', 'image_status'),
   inventoryImageStatusValue: envString('INVENTORY_IMAGE_STATUS_VALUE', 'uploaded'),
+  allowDirectDbUpdate: envBool('ALLOW_DIRECT_VEHICLE_IMAGE_DB_UPDATE', false),
   publicUrlBase: envString('PUBLIC_URL_BASE', ''),
   uploadConcurrency: envInt('UPLOAD_BATCH_CONCURRENCY', 4),
   updateConcurrency: envInt('UPDATE_BATCH_CONCURRENCY', 8),
@@ -318,6 +319,13 @@ async function uploadImages(supabase, zipImages) {
 }
 
 async function updateInventoryRows(supabase, rowsToUpdate) {
+  if (!config.allowDirectDbUpdate && !dryRun) {
+    console.warn(
+      'Skipping direct vehicle table image updates. Import uploaded images through Payload Media, or set ALLOW_DIRECT_VEHICLE_IMAGE_DB_UPDATE=true for a one-off legacy backfill.',
+    )
+    return { updated: 0, unmatched: rowsToUpdate.length, failed: 0 }
+  }
+
   let updated = 0
   let unmatched = 0
   let failed = 0

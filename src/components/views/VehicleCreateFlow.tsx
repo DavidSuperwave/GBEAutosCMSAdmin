@@ -232,7 +232,6 @@ export default function VehicleCreateFlow() {
         transmission: draft.transmission || null,
         fuel: draft.fuel || null,
         specs: draft.specs,
-        specStatus: draft.sourceMeta ? 'matched' : 'manual',
         sourceMeta: draft.sourceMeta || { specSource: 'manual' },
       }
 

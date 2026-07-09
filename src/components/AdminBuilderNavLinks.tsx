@@ -4,8 +4,8 @@ import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 
 /**
- * Curated admin sidebar links. Raw Payload collection routes remain reachable
- * directly, but the visible nav focuses on the daily CMS workflows.
+ * Curated admin sidebar links. Inventario is the primary vehicle workflow;
+ * native Payload vehicle routes stay hidden but reachable as a fallback.
  */
 export default function AdminBuilderNavLinks() {
   const pathname = usePathname()

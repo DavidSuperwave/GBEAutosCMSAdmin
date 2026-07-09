@@ -53,6 +53,9 @@ export default buildConfig({
     components: {
       beforeNavLinks: ['./components/AdminHomeLink'],
       afterNavLinks: ['./components/AdminBuilderNavLinks'],
+      graphics: {
+        Logo: './components/PrismaCMSLogo',
+      },
       views: {
         vehicleCreate: {
           Component: './components/views/VehicleCreateView',

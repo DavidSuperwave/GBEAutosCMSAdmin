@@ -4,9 +4,15 @@ import {
   calculateVehicleCompleteness,
   deriveImageStatus,
   deriveSpecStatus,
+  getVehiclePublishIssues,
   type VehicleLike,
 } from '../services/vehicleWorkflow'
-import { canManageInventory } from '../access/roles'
+import { canManageInventory, isAuthenticated } from '../access/roles'
+import {
+  approvedVehicleMediaMap,
+  relationId,
+  sameRelationId,
+} from '../services/vehicleMediaPolicy'
 
 const FRONTEND_URL = process.env.NEXT_PUBLIC_FRONTEND_URL || 'http://localhost:3000'
 
@@ -235,7 +241,7 @@ const templateOverrideOptions = [
 export const Vehicles: CollectionConfig = {
   slug: 'vehicles',
   access: {
-    read: () => true,
+    read: isAuthenticated,
     create: canManageInventory,
     update: canManageInventory,
     delete: canManageInventory,
@@ -266,14 +272,16 @@ export const Vehicles: CollectionConfig = {
       },
     ],
     beforeValidate: [
-      async ({ data, operation, req }) => {
+      async ({ data, operation, originalDoc, req }) => {
         if (!data) return data
+
+        const original = originalDoc ? ({ ...originalDoc } as Record<string, unknown>) : {}
 
         if (!data.inventoryStatus && data.status) {
           data.inventoryStatus = data.status
         }
 
-        if (!data.publishStatus) {
+        if (operation === 'create' && !data.publishStatus) {
           data.publishStatus = 'draft'
         }
 
@@ -305,28 +313,63 @@ export const Vehicles: CollectionConfig = {
           if (dealershipCity) data.city = dealershipCity
         }
 
-        if (data.publishStatus === 'published') {
-          const hasRoutingPath = Boolean(data.dealership || data.city || data.allowFallbackRouting)
-          if (!hasRoutingPath) {
-            throw new Error(
-              'Asigna una agencia/ciudad o activa el fallback WhatsApp antes de publicar el vehículo.',
-            )
+        // Derive completeness and lifecycle statuses from the assembled data.
+        const vehicleLike = { ...original, ...data } as VehicleLike
+        const vehicleId = relationId(data.id ?? original.id)
+        const imageChanged =
+          operation === 'create'
+            ? relationId(vehicleLike.image) !== undefined
+            : Object.prototype.hasOwnProperty.call(data, 'image') &&
+              !sameRelationId(original.image, data.image)
+        const approvedMedia =
+          vehicleId === undefined
+            ? new Set<string>()
+            : (await approvedVehicleMediaMap(req.payload, [
+                {
+                  id: vehicleId,
+                  image: vehicleLike.image,
+                  gallery: vehicleLike.gallery,
+                  landing: vehicleLike.landing,
+                },
+              ])).get(String(vehicleId)) || new Set<string>()
+        const heroMediaId = relationId(vehicleLike.image)
+        const heroIsApproved =
+          heroMediaId !== undefined && approvedMedia.has(String(heroMediaId))
+
+        const derivedImageStatus = deriveImageStatus(
+          imageChanged && !heroIsApproved
+            ? ({ ...vehicleLike, imageStatus: undefined } as VehicleLike)
+            : vehicleLike,
+        )
+        data.imageStatus =
+          derivedImageStatus === 'approved' && !heroIsApproved
+            ? heroMediaId === undefined
+              ? 'missing'
+              : 'uploaded'
+            : derivedImageStatus
+        data.specStatus = deriveSpecStatus(vehicleLike)
+        const derivedVehicleLike = {
+          ...vehicleLike,
+          imageStatus: data.imageStatus,
+          specStatus: data.specStatus,
+        } as VehicleLike
+        data.completenessScore = calculateVehicleCompleteness(derivedVehicleLike)
+
+        if (derivedVehicleLike.publishStatus === 'published') {
+          const issues = getVehiclePublishIssues(derivedVehicleLike, { approvedMediaIds: approvedMedia })
+          if (issues.critical.length > 0) {
+            throw new Error(`No se puede publicar el vehiculo: ${issues.critical.join(' ')}`)
           }
         }
-
-        // Derive completeness and lifecycle statuses from the assembled data.
-        const vehicleLike = data as VehicleLike
-        data.imageStatus = deriveImageStatus(vehicleLike)
-        data.specStatus = deriveSpecStatus(vehicleLike)
-        data.completenessScore = calculateVehicleCompleteness(vehicleLike)
 
         return data
       },
     ],
   },
   admin: {
-    // Hidden from the sidebar nav: the custom Inventario manager at
-    // /admin/inventory is the primary inventory UI. Routes stay accessible.
+    // Inventario (/admin/inventory) is the primary operator UI and the
+    // collection stays hidden from nav. Native Payload vehicle routes remain
+    // directly reachable as an emergency/schema fallback, not the daily flow.
     group: false,
     useAsTitle: 'model',
     defaultColumns: [
@@ -351,18 +394,7 @@ export const Vehicles: CollectionConfig = {
     preview: (doc) => `${FRONTEND_URL}/cars/${typeof doc?.slug === 'string' ? doc.slug : ''}`,
     components: {
       views: {
-        // The default list view is replaced by a redirect to the custom
-        // Inventario manager so stale links/bookmarks land in the right place.
-        list: {
-          Component: './components/views/VehiclesListRedirect',
-        },
         edit: {
-          default: {
-            Component: './components/views/VehicleWorkspaceRedirect',
-            tab: {
-              condition: () => false,
-            },
-          },
           workspace: {
             Component: './components/views/VehicleWorkspaceView',
             path: '/workspace',

@@ -1,11 +1,12 @@
 /**
  * Vehicle workflow services.
  *
- * Pure, dependency-free helpers shared between Payload hooks, the custom
- * inventory screens and the vehicle workspace. They derive completeness,
+ * Pure helpers (no Payload/IO dependencies) shared between Payload hooks, the
+ * custom inventory screens and the vehicle workspace. They derive completeness,
  * image/spec status and publish validation from a vehicle-like object so the
  * same business rules apply whether a vehicle is created manually or imported.
  */
+import { galleryMediaIds, landingMediaIds, relationId } from './relations'
 
 export type PublishStatus = 'draft' | 'needs_review' | 'published' | 'archived'
 export type ImageStatus =
@@ -31,6 +32,7 @@ export type VehicleLike = {
   imagePath?: string | null
   imageFilename?: string | null
   gallery?: unknown[] | null
+  landing?: unknown[] | null
   description?: string | null
   features?: unknown[] | null
   specs?: Record<string, unknown> | null
@@ -40,6 +42,7 @@ export type VehicleLike = {
   imageStatus?: string | null
   specStatus?: string | null
   exteriorColor?: string | null
+  allowFallbackRouting?: boolean | null
   sourceMeta?: { specSource?: string | null } | null
 }
 
@@ -109,15 +112,15 @@ export function calculateVehicleCompleteness(vehicle: VehicleLike): number {
  */
 export function deriveImageStatus(vehicle: VehicleLike): ImageStatus {
   const explicit = vehicle.imageStatus
+  const hasImage = hasVehicleImage(vehicle)
   if (
-    explicit === 'approved' ||
-    explicit === 'generated' ||
     explicit === 'rejected' ||
-    explicit === 'candidate_found'
+    explicit === 'candidate_found' ||
+    (hasImage && (explicit === 'approved' || explicit === 'generated'))
   ) {
     return explicit
   }
-  return hasVehicleImage(vehicle) ? 'uploaded' : 'missing'
+  return hasImage ? 'uploaded' : 'missing'
 }
 
 /**
@@ -125,56 +128,111 @@ export function deriveImageStatus(vehicle: VehicleLike): ImageStatus {
  */
 export function deriveSpecStatus(vehicle: VehicleLike): SpecStatus {
   const explicit = vehicle.specStatus
-  if (explicit === 'verified' || explicit === 'manual') return explicit
-
   const filled = countFilledSpecs(vehicle)
+  if (filled === 0) return 'missing'
+  if (explicit === 'verified') return filled >= 4 ? 'verified' : 'partial'
+  if (explicit === 'manual') return 'manual'
+
   const source = vehicle.sourceMeta?.specSource
 
-  if (filled === 0) return 'missing'
   if ((source === 'rapidapi' || source === 'catalog') && filled >= 5) return 'matched'
   return 'partial'
+}
+
+export type PublishIssueArea =
+  | 'routing'
+  | 'identity'
+  | 'inventory'
+  | 'media'
+  | 'pricing'
+  | 'content'
+  | 'specs'
+
+export type PublishIssue = {
+  message: string
+  severity: 'critical' | 'warning'
+  area: PublishIssueArea
 }
 
 export type PublishIssues = {
   critical: string[]
   warnings: string[]
+  issues: PublishIssue[]
+}
+
+export type PublishIssueOptions = {
+  /**
+   * Media ids (as strings) with approved review status and clear rights for
+   * this vehicle — see approvedVehicleMediaMap in vehicleMediaPolicy. When
+   * provided, unapproved hero/gallery/landing media become critical issues,
+   * so callers that can query the approval set (the Vehicles hook) and
+   * callers that cannot (client preflight) share one rule set.
+   */
+  approvedMediaIds?: Set<string>
 }
 
 /**
  * Validate whether a vehicle can be safely published. Critical issues block
  * publishing; warnings can be acknowledged.
  */
-export function getVehiclePublishIssues(vehicle: VehicleLike): PublishIssues {
-  const critical: string[] = []
-  const warnings: string[] = []
+export function getVehiclePublishIssues(
+  vehicle: VehicleLike,
+  options: PublishIssueOptions = {},
+): PublishIssues {
+  const issues: PublishIssue[] = []
+  const critical = (message: string, area: PublishIssueArea) =>
+    issues.push({ message, severity: 'critical', area })
+  const warning = (message: string, area: PublishIssueArea) =>
+    issues.push({ message, severity: 'warning', area })
 
-  if (!hasValue(vehicle.dealership)) critical.push('Falta asignar una agencia.')
-  if (!hasValue(vehicle.brand)) critical.push('Falta la marca.')
-  if (!hasValue(vehicle.model)) critical.push('Falta el modelo.')
-  if (!hasValue(vehicle.year)) critical.push('Falta el año.')
-  if (!hasValue(vehicle.condition)) critical.push('Falta la condición (nuevo / seminuevo).')
-  if (!hasValue(vehicle.inventoryStatus)) critical.push('Falta el estatus de inventario.')
-  if (!hasValue(vehicle.slug)) critical.push('Falta el slug de la página.')
+  const hasRoutingPath = hasValue(vehicle.dealership) || hasValue(vehicle.city) || vehicle.allowFallbackRouting
+  if (!hasRoutingPath) critical('Falta asignar una agencia, ciudad o fallback WhatsApp.', 'routing')
+  if (!hasValue(vehicle.brand)) critical('Falta la marca.', 'identity')
+  if (!hasValue(vehicle.model)) critical('Falta el modelo.', 'identity')
+  if (!hasValue(vehicle.year)) critical('Falta el año.', 'identity')
+  if (!hasValue(vehicle.condition)) critical('Falta la condición (nuevo / seminuevo).', 'identity')
+  if (!hasValue(vehicle.inventoryStatus)) critical('Falta el estatus de inventario.', 'inventory')
+  if (!hasValue(vehicle.slug)) critical('Falta el slug de la página.', 'identity')
+
+  const approved = options.approvedMediaIds
   if (!hasVehicleImage(vehicle)) {
-    critical.push('Falta la imagen principal aprobada.')
-  } else if (vehicle.imageStatus !== 'approved') {
-    warnings.push('La imagen principal aún no está aprobada.')
+    critical('Falta la imagen principal aprobada.', 'media')
+  } else {
+    const heroId = relationId(vehicle.image)
+    const heroUnapproved = approved ? heroId === undefined || !approved.has(String(heroId)) : false
+    if (heroUnapproved) {
+      critical('La imagen principal debe estar aprobada y con derechos claros antes de publicarse.', 'media')
+    } else if (vehicle.imageStatus !== 'approved') {
+      warning('La imagen principal aún no está aprobada.', 'media')
+    }
+  }
+  if (approved) {
+    if (galleryMediaIds(vehicle.gallery).some((id) => !approved.has(String(id)))) {
+      critical('Todas las imagenes de galeria publicas deben estar aprobadas y con derechos claros.', 'media')
+    }
+    if (landingMediaIds(vehicle.landing).some((id) => !approved.has(String(id)))) {
+      critical('Todas las imagenes de landing publicas deben estar aprobadas y con derechos claros.', 'media')
+    }
   }
 
-  if (!hasValue(vehicle.price)) warnings.push('Falta el precio (se publicará "Precio a consultar").')
+  if (!hasValue(vehicle.price)) warning('Falta el precio (se publicará "Precio a consultar").', 'pricing')
   if (vehicle.condition === 'used' && !hasValue(vehicle.mileage)) {
-    warnings.push('Un seminuevo sin kilometraje puede generar dudas.')
+    warning('Un seminuevo sin kilometraje puede generar dudas.', 'content')
   }
-  if (vehicle.imageStatus === 'generated') warnings.push('Se está usando una imagen generada con IA.')
-  if ((vehicle.gallery?.length ?? 0) === 0) warnings.push('No hay imágenes en la galería.')
-  if (countFilledSpecs(vehicle) < 4) warnings.push('Las especificaciones están incompletas.')
+  if (vehicle.imageStatus === 'generated') warning('Se está usando una imagen generada con IA.', 'media')
+  if ((vehicle.gallery?.length ?? 0) === 0) warning('No hay imágenes en la galería.', 'media')
+  if (countFilledSpecs(vehicle) < 4) warning('Las especificaciones están incompletas.', 'specs')
   if (hasValue(vehicle.description) && String(vehicle.description).trim().length < 40) {
-    warnings.push('La descripción es muy corta o genérica.')
+    warning('La descripción es muy corta o genérica.', 'content')
   } else if (!hasValue(vehicle.description)) {
-    warnings.push('Falta una descripción.')
+    warning('Falta una descripción.', 'content')
   }
 
-  return { critical, warnings }
+  return {
+    critical: issues.filter((issue) => issue.severity === 'critical').map((issue) => issue.message),
+    warnings: issues.filter((issue) => issue.severity === 'warning').map((issue) => issue.message),
+    issues,
+  }
 }
 
 export function canPublish(vehicle: VehicleLike): boolean {
@@ -189,11 +247,11 @@ export const PUBLISH_STATUS_LABELS: Record<PublishStatus, string> = {
 }
 
 export const IMAGE_STATUS_LABELS: Record<ImageStatus, string> = {
-  missing: 'Sin imagen',
-  candidate_found: 'Candidata encontrada',
-  uploaded: 'Subida',
-  generated: 'Generada con IA',
-  approved: 'Aprobada',
+  missing: 'Sin imagen publica',
+  candidate_found: 'Candidata sincronizada',
+  uploaded: 'Pendiente de revision',
+  generated: 'Pendiente de revision IA',
+  approved: 'Publicada como principal',
   rejected: 'Rechazada',
 }
 

@@ -300,7 +300,7 @@ export default function InventoryManager() {
       setBulkBusy(true)
       setError(null)
       try {
-        await Promise.all(
+        const responses = await Promise.all(
           Array.from(selected).map((id) =>
             fetch(`/api/vehicles/${id}`, {
               method: 'PATCH',
@@ -310,6 +310,13 @@ export default function InventoryManager() {
             }),
           ),
         )
+        const failed = responses.filter((res) => !res.ok)
+        if (failed.length > 0) {
+          const firstError = await failed[0].text().catch(() => '')
+          throw new Error(
+            `${failed.length} de ${responses.length} vehiculo(s) no se pudieron actualizar. ${firstError}`.trim(),
+          )
+        }
         await Promise.all([fetchList(), fetchCounts()])
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Error en la acción masiva.')
@@ -327,12 +334,20 @@ export default function InventoryManager() {
     )
       return
     setBulkBusy(true)
+    setError(null)
     try {
-      await Promise.all(
+      const responses = await Promise.all(
         Array.from(selected).map((id) =>
           fetch(`/api/vehicles/${id}`, { method: 'DELETE', credentials: 'include' }),
         ),
       )
+      const failed = responses.filter((res) => !res.ok)
+      if (failed.length > 0) {
+        const firstError = await failed[0].text().catch(() => '')
+        throw new Error(
+          `${failed.length} de ${responses.length} vehiculo(s) no se pudieron eliminar. ${firstError}`.trim(),
+        )
+      }
       await Promise.all([fetchList(), fetchCounts()])
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Error al eliminar.')

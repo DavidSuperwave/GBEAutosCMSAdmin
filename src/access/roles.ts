@@ -71,6 +71,17 @@ export const canManageContent: Access = ({ req }) =>
 export const canManageMedia: Access = ({ req }) =>
   hasRole(req.user as UserLike, 'admin', 'media_editor', 'inventory_manager', 'content_editor')
 
+/**
+ * Roles allowed to review (approve/reject) vehicle media. Single source of
+ * truth shared by the review/assign API routes, collection field access, and
+ * the Image Studio client UI.
+ */
+export const MEDIA_REVIEW_ROLES: Role[] = ['admin', 'media_editor']
+
+export function isMediaReviewer(user: UserLike): boolean {
+  return hasRole(user, ...MEDIA_REVIEW_ROLES)
+}
+
 export const canManageLeads: Access = ({ req }) =>
   hasRole(req.user as UserLike, 'admin', 'sales_manager')
 

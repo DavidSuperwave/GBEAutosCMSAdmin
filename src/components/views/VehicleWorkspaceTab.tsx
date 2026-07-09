@@ -551,11 +551,16 @@ export default function VehicleWorkspaceTab() {
 
   const completeness = useMemo(() => (vehicle ? calculateVehicleCompleteness(vehicle) : 0), [vehicle])
   const issues = useMemo(
-    () => (vehicle ? getVehiclePublishIssues(vehicle) : { critical: [], warnings: [] }),
+    () => (vehicle ? getVehiclePublishIssues(vehicle) : { critical: [], warnings: [], issues: [] }),
     [vehicle],
   )
   const primaryImageUrl = vehicle ? vehicleImageUrl(vehicle) : undefined
   const imageStatus = vehicle ? displayedImageStatus(vehicle) : 'missing'
+  // Badge counts and the publish banner derive from the same issue service the
+  // server hook enforces, so the preflight can't drift from the real gate.
+  const imageIssueCount = issues.issues.filter((issue) => issue.area === 'media').length
+  const detailIssueCount = issues.issues.filter((issue) => issue.area !== 'media').length
+  const publishBlocker = issues.critical[0] || 'hay bloqueos pendientes.'
 
   const selectedTagIds = useMemo(() => new Set((vehicle?.tags || []).map(relationId).filter(Boolean)), [vehicle?.tags])
   const dealershipOptions = useMemo(() => {
@@ -671,7 +676,6 @@ export default function VehicleWorkspaceTab() {
           fuel: draft.fuel || null,
           specs: draft.specs,
           features: draft.features.map((feature) => feature.trim()).filter(Boolean).map((feature) => ({ feature })),
-          specStatus: draft.sourceMeta ? 'matched' : 'manual',
           sourceMeta: draft.sourceMeta || { specSource: 'manual' },
         }),
       })
@@ -903,7 +907,7 @@ export default function VehicleWorkspaceTab() {
             {saving ? 'Guardando...' : 'Guardar cambios'}
           </ActionButton>
           <ActionButton variant="secondary" disabled={busy} onClick={() => void setStatus('draft')}>
-            Guardar borrador
+            Marcar como borrador
           </ActionButton>
           <ActionButton variant="secondary" disabled={busy} onClick={() => void setStatus('needs_review')}>
             Enviar a revision
@@ -918,6 +922,12 @@ export default function VehicleWorkspaceTab() {
         </div>
       </PrimaryActionBar>
 
+      {issues.critical.length > 0 ? (
+        <div className="workspace__publish-blocker">
+          No se puede publicar: {publishBlocker}
+        </div>
+      ) : null}
+
       {error ? <div className="builder__error">{error}</div> : null}
       {notice ? <div className="workspace__notice">{notice}</div> : null}
 
@@ -928,7 +938,14 @@ export default function VehicleWorkspaceTab() {
         items={TABS.map((t) => ({
           key: t.key,
           label: t.label,
-          badge: t.key === 'review' && issues.critical.length > 0 ? issues.critical.length : undefined,
+          badge:
+            t.key === 'images' && imageIssueCount > 0
+              ? imageIssueCount
+              : t.key === 'specs' && detailIssueCount > 0
+                ? detailIssueCount
+                : t.key === 'review' && issues.critical.length > 0
+                  ? issues.critical.length
+                  : undefined,
           badgeTone: 'danger',
         }))}
         onChange={setTab}

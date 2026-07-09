@@ -1,8 +1,11 @@
 'use client'
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useAuth } from '@payloadcms/ui'
 
 import { ActionButton, EmptyState, StatusBadge } from '../admin-ui/kit'
+import { isMediaReviewer } from '../../access/roles'
+import { isPublishableRights } from '../../services/vehicleMediaPolicy'
 import { buildVehicleImageMatchKey } from '../../services/vehicleImageMatching'
 import VehicleAIImageWizard from './VehicleAIImageWizard'
 
@@ -49,6 +52,8 @@ type Asset = {
   sourceUrl?: string
   sourceProvider?: string
   approvalStatus?: string
+  rightsStatus?: string
+  usage?: string
   matchKey?: string
   matchConfidence?: string
   make?: string
@@ -191,6 +196,95 @@ function mentionsOtherMake(text: string, make?: string | null): boolean {
   return KNOWN_VEHICLE_MAKES.some((knownMake) => knownMake !== requested && haystack.includes(` ${knownMake} `))
 }
 
+const SOURCE_TYPE_LABELS: Record<string, string> = {
+  uploaded: 'Foto subida',
+  dealer_photo: 'Foto de agencia',
+  api_candidate: 'Candidata buscada',
+  ai_generated: 'Generada con IA',
+  ai_edited: 'Editada',
+  representative: 'Representativa',
+}
+
+const APPROVAL_STATUS_LABELS: Record<string, string> = {
+  draft: 'Borrador',
+  needs_review: 'Pendiente de revision',
+  approved: 'Aprobada',
+  rejected: 'Rechazada',
+}
+
+const RIGHTS_STATUS_LABELS: Record<string, string> = {
+  owned: 'Derechos propios',
+  licensed: 'Con licencia',
+  unknown: 'Derechos por revisar',
+}
+
+const USAGE_LABELS: Record<string, string> = {
+  vehicle_hero: 'Principal',
+  vehicle_gallery: 'Galeria',
+  homepage: 'Homepage',
+  landing_page: 'Landing',
+  promo_banner: 'Promo',
+  social_ad: 'Anuncio',
+  reference: 'Referencia',
+}
+
+const AI_IMAGE_WIZARD_ENABLED = process.env.NEXT_PUBLIC_ENABLE_AI_IMAGE_WIZARD === 'true'
+
+function canAssignPublicAsset(asset: Asset): boolean {
+  return asset.approvalStatus === 'approved' && isPublishableRights(asset.rightsStatus)
+}
+
+function needsReviewAsset(asset: Asset): boolean {
+  return asset.approvalStatus !== 'rejected' && !canAssignPublicAsset(asset)
+}
+
+function assetIsHero(asset: Asset, heroId?: number | string): boolean {
+  const id = mediaId(asset.media)
+  return id != null && heroId != null && String(id) === String(heroId)
+}
+
+function assetIsInGallery(asset: Asset, galleryIds: Set<string>): boolean {
+  const id = mediaId(asset.media)
+  return id != null && galleryIds.has(String(id))
+}
+
+function assetPublicationLabel(asset: Asset, heroId: number | string | undefined, galleryIds: Set<string>): string {
+  if (asset.approvalStatus === 'rejected') return 'Rechazada'
+  if (assetIsHero(asset, heroId)) return 'Principal'
+  if (assetIsInGallery(asset, galleryIds)) return 'Publicada en galeria'
+  if (canAssignPublicAsset(asset)) return 'Aprobada - sin publicar'
+  return 'En revision'
+}
+
+function assetPublicationTone(
+  asset: Asset,
+  heroId: number | string | undefined,
+  galleryIds: Set<string>,
+): 'neutral' | 'success' | 'warning' | 'danger' | 'info' {
+  if (asset.approvalStatus === 'rejected') return 'danger'
+  if (assetIsHero(asset, heroId) || assetIsInGallery(asset, galleryIds)) return 'success'
+  if (canAssignPublicAsset(asset)) return 'warning'
+  return 'info'
+}
+
+function intendedTarget(asset: Asset): 'hero' | 'gallery' | undefined {
+  if (asset.usage === 'vehicle_hero') return 'hero'
+  if (asset.usage === 'vehicle_gallery') return 'gallery'
+  return undefined
+}
+
+function assetSourceLabel(asset: Asset): string {
+  return SOURCE_TYPE_LABELS[asset.sourceType || ''] || asset.sourceType || 'Imagen'
+}
+
+function assetApprovalLabel(asset: Asset): string {
+  return APPROVAL_STATUS_LABELS[asset.approvalStatus || 'draft'] || asset.approvalStatus || 'Borrador'
+}
+
+function assetRightsLabel(asset: Asset): string {
+  return RIGHTS_STATUS_LABELS[asset.rightsStatus || 'unknown'] || asset.rightsStatus || 'Derechos por revisar'
+}
+
 export default function VehicleImageStudio({
   vehicle,
   onChanged,
@@ -208,6 +302,7 @@ export default function VehicleImageStudio({
   const [notice, setNotice] = useState('')
   const [aiWizardOpen, setAiWizardOpen] = useState(false)
   const [uploadTarget, setUploadTarget] = useState<'hero' | 'gallery'>('hero')
+  const [confirmDealerRights, setConfirmDealerRights] = useState(false)
 
   // Photo search (CarsXE) state
   const [searchOpen, setSearchOpen] = useState(false)
@@ -228,6 +323,13 @@ export default function VehicleImageStudio({
   const [draggedGalleryIndex, setDraggedGalleryIndex] = useState<number | null>(null)
   const [dragOverGalleryIndex, setDragOverGalleryIndex] = useState<number | null>(null)
   const [openGalleryMenu, setOpenGalleryMenu] = useState<string | null>(null)
+  const [dismissedApprovedAssetIds, setDismissedApprovedAssetIds] = useState<Set<string>>(() => new Set())
+
+  const { user: authUser } = useAuth()
+  const canReviewMedia = useMemo(
+    () => isMediaReviewer(authUser as Parameters<typeof isMediaReviewer>[0]),
+    [authUser],
+  )
 
   useEffect(() => {
     setGalleryItems(vehicle.gallery || [])
@@ -298,7 +400,7 @@ export default function VehicleImageStudio({
 
   const recordAsset = useCallback(
     async (media: number | string, sourceType: string, usage?: string, extra?: Record<string, unknown>) => {
-      await fetch('/api/vehicle-media-assets', {
+      const res = await fetch('/api/vehicle-media-assets', {
         method: 'POST',
         credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
@@ -316,9 +418,46 @@ export default function VehicleImageStudio({
           exteriorColor: vehicle.exteriorColor,
           ...extra,
         }),
-      }).catch(() => {})
+      })
+      const data = (await res.json().catch(() => ({}))) as { doc?: { id?: number | string }; message?: string; error?: string }
+      if (!res.ok || data.doc?.id == null) {
+        throw new Error(data.error || data.message || 'No se pudo registrar la imagen del vehiculo.')
+      }
+      return data.doc.id
     },
     [vehicleId, vehicle.brand, vehicle.model, vehicle.year, vehicle.trim, vehicle.exteriorColor, vehicleMatchKey],
+  )
+
+  const assignAsset = useCallback(
+    async (assetId: number | string, target: 'hero' | 'gallery') => {
+      const res = await fetch('/api/cms/vehicle-media-assets/assign', {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ vehicleId, assetId, target }),
+      })
+      const data = (await res.json().catch(() => ({}))) as { error?: string }
+      if (!res.ok) throw new Error(data.error || 'No se pudo asignar la imagen aprobada.')
+    },
+    [vehicleId],
+  )
+
+  const reviewAsset = useCallback(
+    async (
+      assetId: number | string,
+      decision: 'approve_owned' | 'approve_licensed' | 'reject',
+      assignTo?: 'hero' | 'gallery',
+    ) => {
+      const res = await fetch('/api/cms/vehicle-media-assets/review', {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ vehicleId, assetId, decision, assignTo }),
+      })
+      const data = (await res.json().catch(() => ({}))) as { error?: string }
+      if (!res.ok) throw new Error(data.error || 'No se pudo revisar la imagen.')
+    },
+    [vehicleId],
   )
 
   const withBusy = useCallback(async (fn: () => Promise<void>, okMessage?: string) => {
@@ -335,19 +474,6 @@ export default function VehicleImageStudio({
     }
   }, [])
 
-  const setHero = useCallback(
-    async (media: number | string) => {
-      const res = await fetch(`/api/vehicles/${vehicleId}`, {
-        method: 'PATCH',
-        credentials: 'include',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ image: media, imageStatus: 'approved' }),
-      })
-      if (!res.ok) throw new Error((await res.text()).slice(0, 160))
-    },
-    [vehicleId],
-  )
-
   const clearHero = useCallback(async () => {
     await withBusy(async () => {
       const res = await fetch(`/api/vehicles/${vehicleId}`, {
@@ -361,23 +487,6 @@ export default function VehicleImageStudio({
       onChanged()
     }, 'Imagen principal quitada del vehiculo.')
   }, [onChanged, vehicleId, withBusy])
-
-  const addToGallery = useCallback(
-    async (media: number | string) => {
-      const existing = galleryPatchItems(galleryItems)
-      const alreadyExists = existing.some((item) => String(item.image) === String(media))
-      const nextGallery = alreadyExists ? existing : [...existing, { image: media }]
-      const res = await fetch(`/api/vehicles/${vehicleId}`, {
-        method: 'PATCH',
-        credentials: 'include',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ gallery: nextGallery }),
-      })
-      if (!res.ok) throw new Error((await res.text()).slice(0, 160))
-      setGalleryItems(nextGallery)
-    },
-    [galleryItems, vehicleId],
-  )
 
   const removeFromGallery = useCallback(
     async (media: number | string) => {
@@ -448,17 +557,39 @@ export default function VehicleImageStudio({
       const file = event.target.files?.[0]
       if (file) {
         await withBusy(async () => {
+          if (!confirmDealerRights) {
+            throw new Error('Confirma que la agencia tiene derechos para publicar esta foto.')
+          }
           const media = await uploadMedia(file)
-          if (uploadTarget === 'hero') await setHero(media.id)
-          else await addToGallery(media.id)
-          await recordAsset(media.id, 'uploaded', uploadTarget === 'hero' ? 'vehicle_hero' : 'vehicle_gallery')
+          const assetId = await recordAsset(media.id, 'dealer_photo', uploadTarget === 'hero' ? 'vehicle_hero' : 'vehicle_gallery', {
+            approvalStatus: canReviewMedia ? 'approved' : 'needs_review',
+            rightsStatus: canReviewMedia ? 'owned' : 'unknown',
+            matchConfidence: 'exact_vehicle',
+          })
+          if (canReviewMedia) {
+            await assignAsset(assetId, uploadTarget === 'hero' ? 'hero' : 'gallery')
+          }
           await loadAssets()
           onChanged()
-        }, uploadTarget === 'hero' ? 'Imagen principal actualizada.' : 'Imagen agregada a la galería.')
+        }, canReviewMedia
+          ? uploadTarget === 'hero'
+            ? 'Foto propia publicada como imagen principal.'
+            : 'Foto propia agregada a la galeria publica.'
+          : 'Foto subida para revision. Un admin o editor de medios debe aprobarla antes de publicarla.')
       }
       if (fileInputRef.current) fileInputRef.current.value = ''
     },
-    [withBusy, uploadMedia, uploadTarget, setHero, addToGallery, recordAsset, loadAssets, onChanged],
+    [
+      assignAsset,
+      canReviewMedia,
+      confirmDealerRights,
+      loadAssets,
+      onChanged,
+      recordAsset,
+      uploadMedia,
+      uploadTarget,
+      withBusy,
+    ],
   )
 
   // ---- Photo search (CarsXE) --------------------------------------------
@@ -532,6 +663,7 @@ export default function VehicleImageStudio({
         })
         const data = (await res.json().catch(() => ({}))) as {
           ok?: boolean
+          assetId?: number | string
           mediaId?: number | string
           mediaUrl?: string
           error?: string
@@ -539,15 +671,13 @@ export default function VehicleImageStudio({
         if (!res.ok || !data.ok || data.mediaId == null) {
           throw new Error(data.error || 'No se pudo guardar la imagen.')
         }
-        if (then === 'hero') await setHero(data.mediaId)
-        else if (then === 'gallery') await addToGallery(data.mediaId)
         await loadAssets()
         onChanged()
         setNotice(
           then === 'hero'
-            ? 'Imagen principal actualizada.'
+            ? 'Candidata enviada a revision como principal.'
             : then === 'gallery'
-              ? 'Imagen agregada a la galería.'
+              ? 'Candidata enviada a revision para galeria.'
               : then === 'reference'
                 ? 'Imagen guardada en la biblioteca del vehículo.'
                 : 'Imagen guardada en la biblioteca del vehículo.',
@@ -558,7 +688,7 @@ export default function VehicleImageStudio({
         setImportingUrl(null)
       }
     },
-    [vehicleId, vehicle.trim, searchColor, searchMake, searchModel, searchYear, setHero, addToGallery, loadAssets, onChanged],
+    [vehicleId, vehicle.trim, searchColor, searchMake, searchModel, searchYear, loadAssets, onChanged],
   )
 
   const importSyncedImage = useCallback(
@@ -569,13 +699,18 @@ export default function VehicleImageStudio({
           sourceIdentity(asset.sourceUrl) === sourceIdentity(vehicle.imageUrl) && mediaId(asset.media) != null,
       )
       const existingMedia = mediaId(existingAsset?.media)
-      if (existingMedia != null) {
+      if (existingMedia != null && existingAsset?.id != null) {
         await withBusy(async () => {
-          if (then === 'hero') await setHero(existingMedia)
-          else await addToGallery(existingMedia)
+          if (canAssignPublicAsset(existingAsset)) {
+            await assignAsset(existingAsset.id, then)
+          } else if (canReviewMedia) {
+            await reviewAsset(existingAsset.id, 'approve_owned', then)
+          } else {
+            throw new Error('La imagen sincronizada esta pendiente de aprobacion por admin/media editor.')
+          }
           await loadAssets()
           onChanged()
-        }, then === 'hero' ? 'Imagen importada usada como principal.' : 'Imagen importada agregada a la galeria.')
+        }, then === 'hero' ? 'Imagen sincronizada publicada como principal.' : 'Imagen sincronizada agregada a la galeria publica.')
         return
       }
 
@@ -601,24 +736,31 @@ export default function VehicleImageStudio({
             fileName: vehicle.imageFilename,
             sourceProvider: 'supabase-storage',
             sourceType: 'dealer_photo',
-            approvalStatus: 'approved',
-            rightsStatus: 'owned',
             matchConfidence: 'exact_vehicle',
           }),
         })
         const data = (await res.json().catch(() => ({}))) as {
           ok?: boolean
+          assetId?: number | string
           mediaId?: number | string
           error?: string
         }
         if (!res.ok || !data.ok || data.mediaId == null) {
           throw new Error(data.error || 'No se pudo importar la imagen sincronizada.')
         }
-        if (then === 'hero') await setHero(data.mediaId)
-        else await addToGallery(data.mediaId)
+        if (data.assetId == null) throw new Error('No se pudo registrar la imagen sincronizada.')
+        if (canReviewMedia) {
+          await reviewAsset(data.assetId, 'approve_owned', then)
+        }
         await loadAssets()
         onChanged()
-        setNotice(then === 'hero' ? 'Imagen sincronizada importada como principal.' : 'Imagen sincronizada agregada a la galeria.')
+        setNotice(
+          canReviewMedia
+            ? then === 'hero'
+              ? 'Imagen sincronizada aprobada y publicada como principal.'
+              : 'Imagen sincronizada aprobada y agregada a la galeria publica.'
+            : 'Imagen sincronizada importada para revision. Un admin o editor de medios debe aprobarla antes de publicarla.',
+        )
       } catch (e) {
         setError((e as Error).message)
       } finally {
@@ -626,11 +768,12 @@ export default function VehicleImageStudio({
       }
     },
     [
-      addToGallery,
+      assignAsset,
       assets,
+      canReviewMedia,
       loadAssets,
       onChanged,
-      setHero,
+      reviewAsset,
       withBusy,
       vehicle.brand,
       vehicle.exteriorColor,
@@ -646,24 +789,23 @@ export default function VehicleImageStudio({
   const useLocalAsset = useCallback(
     async (asset: Asset, then: 'hero' | 'gallery' | 'reference') => {
       const id = mediaId(asset.media)
-      if (id == null) return
+      if (id == null || asset.id == null) return
       await withBusy(async () => {
-        if (then === 'hero') await setHero(id)
-        else if (then === 'gallery') await addToGallery(id)
+        if (then === 'hero' || then === 'gallery') {
+          if (!canAssignPublicAsset(asset)) {
+            throw new Error('Esta imagen todavia necesita aprobacion y derechos claros antes de publicarse.')
+          }
+          await assignAsset(asset.id, then)
+        }
         else {
           setNotice('La referencia IA estará disponible más adelante.')
           return
         }
-        await recordAsset(id, 'representative', then === 'hero' ? 'vehicle_hero' : 'vehicle_gallery', {
-          sourceProvider: asset.sourceType || 'local',
-          matchConfidence: asset.matchConfidence || 'same_trim_color',
-          approvalStatus: 'needs_review',
-        })
         await loadAssets()
         onChanged()
       }, then === 'hero' ? 'Imagen principal actualizada.' : then === 'gallery' ? 'Imagen agregada a la galería.' : undefined)
     },
-    [vehicleId, withBusy, setHero, addToGallery, recordAsset, loadAssets, onChanged],
+    [withBusy, assignAsset, loadAssets, onChanged],
   )
 
   const saveCroppedImage = useCallback(
@@ -672,27 +814,32 @@ export default function VehicleImageStudio({
       await withBusy(async () => {
         const file = new File([blob], `crop-${vehicleId}-${Date.now()}.jpg`, { type: 'image/jpeg' })
         const media = await uploadMedia(file)
-        if (destination === 'hero') await setHero(media.id)
-        else await addToGallery(media.id)
-        await recordAsset(media.id, 'ai_edited', destination === 'hero' ? 'vehicle_hero' : 'vehicle_gallery', {
+        const assetId = await recordAsset(media.id, 'ai_edited', destination === 'hero' ? 'vehicle_hero' : 'vehicle_gallery', {
           sourceProvider: 'browser_crop',
           sourceUrl: cropTarget.url,
-          approvalStatus: 'approved',
-          rightsStatus: 'owned',
+          approvalStatus: canReviewMedia ? 'approved' : 'needs_review',
+          rightsStatus: canReviewMedia ? 'owned' : 'unknown',
           notes: `Crop from media ${cropTarget.id}`,
         })
+        if (canReviewMedia) {
+          await assignAsset(assetId, destination)
+        }
         await loadAssets()
         onChanged()
         setCropTarget(null)
-      }, destination === 'hero' ? 'Recorte aplicado como imagen principal.' : 'Recorte agregado a la galeria.')
+      }, canReviewMedia
+        ? destination === 'hero'
+          ? 'Recorte aplicado como imagen principal.'
+          : 'Recorte agregado a la galeria publica.'
+        : 'Recorte enviado a revision antes de publicarse.')
     },
     [
-      addToGallery,
+      assignAsset,
+      canReviewMedia,
       cropTarget,
       loadAssets,
       onChanged,
       recordAsset,
-      setHero,
       uploadMedia,
       vehicleId,
       withBusy,
@@ -724,9 +871,25 @@ export default function VehicleImageStudio({
   const galleryMediaIds = new Set(galleryPatchItems(galleryItems).map((item) => String(item.image)))
   const syncedIsHero = syncedMediaId != null && String(mediaId(vehicle.image)) === String(syncedMediaId)
   const syncedIsInGallery = syncedMediaId != null && galleryMediaIds.has(String(syncedMediaId))
+  const syncedIsApproved = Boolean(syncedAsset && canAssignPublicAsset(syncedAsset))
   const canUseSyncedAsHero = Boolean(syncedImageUrl && !syncedIsHero)
   const canAddSyncedToGallery = Boolean(syncedImageUrl && !syncedIsInGallery)
   const showSyncedReference = Boolean(syncedImageUrl)
+  const reviewAssets = visibleAssets.filter((asset) => mediaId(asset.media) != null && needsReviewAsset(asset))
+  const approvedUnpublishedAssets = visibleAssets.filter(
+    (asset) =>
+      asset.id != null &&
+      mediaId(asset.media) != null &&
+      canAssignPublicAsset(asset) &&
+      !assetIsHero(asset, heroId) &&
+      !assetIsInGallery(asset, galleryMediaIds) &&
+      !dismissedApprovedAssetIds.has(String(asset.id)),
+  )
+  const promotedAssetIds = new Set([
+    ...reviewAssets.map((asset) => String(asset.id)),
+    ...approvedUnpublishedAssets.map((asset) => String(asset.id)),
+  ])
+  const libraryAssets = visibleAssets.filter((asset) => !promotedAssetIds.has(String(asset.id)))
   const displayImage =
     previewImage ||
     (heroUrl
@@ -736,6 +899,7 @@ export default function VehicleImageStudio({
           label: 'Imagen principal',
         }
       : null)
+  const displayImageIsGalleryPreview = Boolean(previewImage)
   useEffect(() => {
     if (!previewImage?.id) return
     if (!galleryImages.some((image) => String(image.id) === String(previewImage.id))) {
@@ -759,20 +923,44 @@ export default function VehicleImageStudio({
             <button
               className="studio__crop-button"
               disabled={busy}
-              onClick={() => setCropTarget({ ...displayImage, source: 'current' })}
+              onClick={() =>
+                setCropTarget({
+                  ...displayImage,
+                  source: displayImageIsGalleryPreview ? 'gallery' : 'current',
+                })
+              }
               type="button"
             >
               Recortar
             </button>
-            {heroId != null ? (
+            {!displayImageIsGalleryPreview && heroId != null ? (
               <button className="studio__clear-hero-button" disabled={busy} onClick={() => void clearHero()} type="button">
                 Quitar como principal
               </button>
             ) : null}
+            {displayImageIsGalleryPreview && heroUrl ? (
+              <button className="studio__clear-hero-button" disabled={busy} onClick={() => setPreviewImage(null)} type="button">
+                Ver principal
+              </button>
+            ) : null}
           </div>
         ) : (
-          <EmptyState title="Sin imagen principal" message="Sube una imagen o créala con IA." />
+          <EmptyState
+            title="Sin imagen principal"
+            message="Sube una foto propia o publica una imagen sincronizada aprobada."
+          />
         )}
+        <label className="studio__rights-confirm">
+          <input
+            checked={confirmDealerRights}
+            onChange={(event) => setConfirmDealerRights(event.target.checked)}
+            type="checkbox"
+          />
+          <span>
+            <strong>Derechos de foto propia</strong>
+            <span>La agencia confirma que puede publicar las fotos subidas manualmente.</span>
+          </span>
+        </label>
         <div className="studio__actions">
           <ActionButton
             variant="secondary"
@@ -782,7 +970,7 @@ export default function VehicleImageStudio({
               fileInputRef.current?.click()
             }}
           >
-            Subir imagen principal
+            Subir principal
           </ActionButton>
           <ActionButton
             variant="secondary"
@@ -792,27 +980,30 @@ export default function VehicleImageStudio({
               fileInputRef.current?.click()
             }}
           >
-            Agregar a galería
+            Subir a galeria
           </ActionButton>
           <ActionButton variant="secondary" disabled={busy} onClick={() => setSearchOpen((v) => !v)}>
-            {searchOpen ? 'Cerrar búsqueda' : 'Buscar fotos'}
+            {searchOpen ? 'Cerrar búsqueda' : 'Buscar candidatas'}
           </ActionButton>
           <ActionButton variant="primary" disabled={busy} onClick={() => setAiWizardOpen(true)}>
-            Crear con IA
+            {AI_IMAGE_WIZARD_ENABLED ? 'Crear con IA' : 'Crear con IA - proximamente'}
           </ActionButton>
         </div>
         {showSyncedReference ? (
           <div className="studio__synced-source">
             <img src={syncedImageUrl} alt={vehicle.imageFilename || 'Imagen importada'} />
             <div>
-              <strong>Imagen importada disponible</strong>
+              <strong>Imagen sincronizada pendiente de publicar</strong>
               <p>
-                Esta foto es una referencia del inventario sincronizado. Solo aparece publicamente si la usas como
-                principal o la agregas a la galeria.
+                Viene del inventario sincronizado. Solo aparece en la web cuando se aprueba y se publica como principal
+                o en la galeria.
               </p>
               <small>{vehicle.imageFilename || vehicle.imagePath || syncedImageUrl}</small>
             </div>
             <div className="studio__synced-actions">
+              {syncedIsApproved && !syncedIsHero && !syncedIsInGallery ? (
+                <StatusBadge tone="success">Aprobada sin publicar</StatusBadge>
+              ) : null}
               {syncedIsHero ? <StatusBadge tone="success">Principal</StatusBadge> : null}
               {syncedIsInGallery ? <StatusBadge tone="success">En galeria</StatusBadge> : null}
               {canUseSyncedAsHero ? (
@@ -821,7 +1012,11 @@ export default function VehicleImageStudio({
                   disabled={busy || importingUrl === syncedImageUrl}
                   onClick={() => void importSyncedImage('hero')}
                 >
-                  {importingUrl === syncedImageUrl ? 'Importando...' : 'Usar imagen importada como principal'}
+                  {importingUrl === syncedImageUrl
+                    ? 'Importando...'
+                    : canReviewMedia
+                      ? 'Aprobar y publicar como principal'
+                      : 'Enviar a revision como principal'}
                 </ActionButton>
               ) : null}
               {canAddSyncedToGallery ? (
@@ -830,7 +1025,7 @@ export default function VehicleImageStudio({
                   disabled={busy || importingUrl === syncedImageUrl}
                   onClick={() => void importSyncedImage('gallery')}
                 >
-                  Agregar imagen importada a galeria
+                  {canReviewMedia ? 'Aprobar y publicar en galeria' : 'Enviar a revision para galeria'}
                 </ActionButton>
               ) : null}
             </div>
@@ -852,8 +1047,16 @@ export default function VehicleImageStudio({
       />
 
       {galleryImages.length ? (
-        <div className="studio__gallery">
-          {galleryImages.map((image, index) => {
+        <section className="studio__gallery-section">
+          <div className="studio__section-head">
+            <div>
+              <h4>Galeria publica</h4>
+              <span>Orden visible en la ficha del vehiculo.</span>
+            </div>
+            <StatusBadge tone="success">{galleryImages.length}</StatusBadge>
+          </div>
+          <div className="studio__gallery">
+            {galleryImages.map((image, index) => {
             const imageKey = String(image.id)
             const menuOpen = openGalleryMenu === imageKey
 
@@ -944,9 +1147,10 @@ export default function VehicleImageStudio({
                 </div>
               </div>
             </figure>
-            )
-          })}
-        </div>
+              )
+            })}
+          </div>
+        </section>
       ) : null}
 
       {/* Photo search (CarsXE) */}
@@ -1049,10 +1253,10 @@ export default function VehicleImageStudio({
                       </span>
                       <div className="studio__output-actions">
                         <button type="button" disabled={busy} onClick={() => void useLocalAsset(asset, 'hero')}>
-                          Principal
+                          {canAssignPublicAsset(asset) ? 'Publicar principal' : 'Pendiente'}
                         </button>
                         <button type="button" disabled={busy} onClick={() => void useLocalAsset(asset, 'gallery')}>
-                          Galería
+                          {canAssignPublicAsset(asset) ? 'Publicar en galeria' : 'Enviar a revision'}
                         </button>
                         <button
                           type="button"
@@ -1094,13 +1298,13 @@ export default function VehicleImageStudio({
                     ) : null}
                     <div className="studio__output-actions">
                       <button type="button" disabled={busy || importing} onClick={() => void importCandidate(candidate, 'hero')}>
-                        {importing ? '…' : 'Principal'}
+                        {importing ? '...' : 'Enviar a revision como principal'}
                       </button>
                       <button type="button" disabled={busy || importing} onClick={() => void importCandidate(candidate, 'gallery')}>
-                        Galería
+                        Enviar a revision para galeria
                       </button>
                       <button type="button" disabled={busy || importing} onClick={() => void importCandidate(candidate)}>
-                        Guardar
+                        Guardar candidata
                       </button>
                     </div>
                   </div>
@@ -1113,38 +1317,211 @@ export default function VehicleImageStudio({
         </div>
       ) : null}
 
+      {reviewAssets.length ? (
+        <div className="studio__review-queue">
+          <div className="studio__wizard-head">
+            <h4>Imagenes pendientes de revision</h4>
+            <StatusBadge tone="warning">{reviewAssets.length}</StatusBadge>
+          </div>
+          <div className="studio__review-grid">
+            {reviewAssets.map((asset) => {
+              const url = mediaUrl(asset.media)
+              if (!url) return null
+              const target = intendedTarget(asset)
+              return (
+                <article className="studio__review-card" key={asset.id}>
+                  <img src={url} alt={asset.title || 'Imagen pendiente'} />
+                  <div className="studio__review-meta">
+                    <strong>{assetSourceLabel(asset)}</strong>
+                    <span>{asset.matchConfidence || 'Coincidencia por revisar'}</span>
+                    <span>{assetApprovalLabel(asset)} - {assetRightsLabel(asset)}</span>
+                    <span>{USAGE_LABELS[asset.usage || ''] || 'Uso por definir'}</span>
+                    <StatusBadge tone={assetPublicationTone(asset, heroId, galleryMediaIds)}>
+                      {assetPublicationLabel(asset, heroId, galleryMediaIds)}
+                    </StatusBadge>
+                  </div>
+                  {canReviewMedia ? (
+                    <div className="studio__output-actions studio__review-actions">
+                      {target ? (
+                        <button
+                          className="studio__primary-review-action"
+                          disabled={busy}
+                          onClick={() =>
+                            void withBusy(async () => {
+                              await reviewAsset(asset.id, 'approve_owned', target)
+                              await loadAssets()
+                              onChanged()
+                            }, target === 'hero' ? 'Imagen aprobada y publicada como principal.' : 'Imagen aprobada y publicada en galeria.')
+                          }
+                          type="button"
+                        >
+                          {target === 'hero' ? 'Aprobar y publicar como principal' : 'Aprobar y publicar en galeria'}
+                        </button>
+                      ) : null}
+                      <button
+                        disabled={busy}
+                        onClick={() =>
+                          void withBusy(async () => {
+                            await reviewAsset(asset.id, 'approve_owned')
+                            await loadAssets()
+                            onChanged()
+                          }, 'Imagen aprobada para biblioteca. Aun no esta publicada.')
+                        }
+                        type="button"
+                      >
+                        Aprobar solo para biblioteca
+                      </button>
+                      <button
+                        disabled={busy}
+                        onClick={() =>
+                          void withBusy(async () => {
+                            await reviewAsset(asset.id, 'approve_licensed')
+                            await loadAssets()
+                            onChanged()
+                          }, 'Imagen aprobada con licencia. Aun no esta publicada.')
+                        }
+                        type="button"
+                      >
+                        Aprobar con licencia
+                      </button>
+                      <button
+                        disabled={busy}
+                        onClick={() =>
+                          void withBusy(async () => {
+                            await reviewAsset(asset.id, 'reject')
+                            await loadAssets()
+                            onChanged()
+                          }, 'Imagen rechazada.')
+                        }
+                        type="button"
+                      >
+                        Rechazar
+                      </button>
+                    </div>
+                  ) : (
+                    <p className="builder__muted studio__dim">
+                      Pendiente de aprobacion por admin/media editor.
+                    </p>
+                  )}
+                </article>
+              )
+            })}
+          </div>
+        </div>
+      ) : null}
+
+      {approvedUnpublishedAssets.length ? (
+        <div className="studio__approved-queue">
+          <div className="studio__wizard-head">
+            <div>
+              <h4>Aprobadas sin publicar</h4>
+              <span className="builder__muted">
+                Estas imagenes ya tienen derechos aprobados, pero todavia no aparecen en la web.
+              </span>
+            </div>
+            <StatusBadge tone="warning">{approvedUnpublishedAssets.length}</StatusBadge>
+          </div>
+          <div className="studio__review-grid">
+            {approvedUnpublishedAssets.map((asset) => {
+              const url = mediaUrl(asset.media)
+              if (!url) return null
+              return (
+                <article className="studio__review-card studio__review-card--approved" key={asset.id}>
+                  <img src={url} alt={asset.title || 'Imagen aprobada'} />
+                  <div className="studio__review-meta">
+                    <strong>{assetSourceLabel(asset)}</strong>
+                    <span>{asset.matchConfidence || 'Lista para publicar'}</span>
+                    <span>{assetApprovalLabel(asset)} - {assetRightsLabel(asset)}</span>
+                    <StatusBadge tone="warning">Aprobada - sin publicar</StatusBadge>
+                  </div>
+                  <div className="studio__output-actions studio__review-actions">
+                    <button
+                      className="studio__primary-review-action"
+                      disabled={busy}
+                      onClick={() =>
+                        void withBusy(async () => {
+                          await assignAsset(asset.id, 'gallery')
+                          await loadAssets()
+                          onChanged()
+                        }, 'Imagen publicada en galeria.')
+                      }
+                      type="button"
+                    >
+                      Publicar en galeria
+                    </button>
+                    <button
+                      disabled={busy}
+                      onClick={() =>
+                        void withBusy(async () => {
+                          await assignAsset(asset.id, 'hero')
+                          await loadAssets()
+                          onChanged()
+                        }, 'Imagen publicada como principal.')
+                      }
+                      type="button"
+                    >
+                      Publicar como principal
+                    </button>
+                    <button
+                      disabled={busy}
+                      onClick={() => {
+                        setDismissedApprovedAssetIds((current) => {
+                          const next = new Set(current)
+                          next.add(String(asset.id))
+                          return next
+                        })
+                        setNotice('Imagen mantenida en biblioteca. No se publico en la web.')
+                      }}
+                      type="button"
+                    >
+                      Mantener en biblioteca
+                    </button>
+                  </div>
+                </article>
+              )
+            })}
+          </div>
+        </div>
+      ) : null}
+
       {/* Reusable per-vehicle context */}
-      {visibleAssets.length ? (
+      {libraryAssets.length ? (
         <div className="studio__library">
           <div className="studio__wizard-head">
             <h4>Biblioteca y sugerencias</h4>
-            <StatusBadge tone="neutral">{visibleAssets.length}</StatusBadge>
+            <StatusBadge tone="neutral">{libraryAssets.length}</StatusBadge>
           </div>
           <div className="studio__grid">
-            {visibleAssets.map((asset) => {
+            {libraryAssets.map((asset) => {
               const url = mediaUrl(asset.media)
               const id = mediaId(asset.media)
               if (!url || id == null) return null
+              const isPublicHero = assetIsHero(asset, heroId)
+              const isPublicGallery = assetIsInGallery(asset, galleryMediaIds)
               return (
                 <div key={asset.id} className="studio__output">
                   <img src={url} alt={asset.title || ''} />
+                  <span className="builder__muted studio__dim">
+                    {assetSourceLabel(asset)} - {assetApprovalLabel(asset)} - {assetRightsLabel(asset)}
+                  </span>
+                  <StatusBadge tone={assetPublicationTone(asset, heroId, galleryMediaIds)}>
+                    {assetPublicationLabel(asset, heroId, galleryMediaIds)}
+                  </StatusBadge>
                   <div className="studio__output-actions">
-                    <button type="button" disabled={busy} onClick={() => void withBusy(async () => {
-                      await setHero(id)
-                      onChanged()
-                    }, 'Imagen principal actualizada.')}>
-                      Usar como principal
-                    </button>
+                    {!isPublicHero ? (
+                      <button type="button" disabled={busy} onClick={() => void useLocalAsset(asset, 'hero')}>
+                        {canAssignPublicAsset(asset) ? 'Publicar principal' : 'Pendiente'}
+                      </button>
+                    ) : null}
+                    {!isPublicGallery ? (
                     <button
                       type="button"
                       disabled={busy}
-                      onClick={() => void withBusy(async () => {
-                        await addToGallery(id)
-                        onChanged()
-                      }, 'Imagen agregada a la galería.')}
+                      onClick={() => void useLocalAsset(asset, 'gallery')}
                     >
-                      A galería
+                      {canAssignPublicAsset(asset) ? 'Publicar en galeria' : 'Enviar a revision'}
                     </button>
+                    ) : null}
                     <button
                       type="button"
                       disabled={busy}
