@@ -8,12 +8,15 @@ import {
   AdminPageShell,
   AdminTable,
   AdminTabs,
+  ConfirmDialog,
   EmptyState,
   StatusBadge,
 } from '../admin-ui/kit'
 import VehicleImportModal from '../admin-ui/VehicleImportModal'
 import {
+  IMAGE_STATUS_DESCRIPTIONS,
   IMAGE_STATUS_LABELS,
+  IMAGE_STATUS_TONES,
   PUBLISH_STATUS_LABELS,
   type ImageStatus,
   type PublishStatus,
@@ -31,6 +34,7 @@ type Vehicle = {
   completenessScore?: number
   inventoryStatus?: string
   city?: string
+  stockId?: string | null
   exteriorColor?: string
   dealership?: { name?: string; displayName?: string; city?: string } | string | number | null
   image?: { url?: string; thumbnailURL?: string } | string | null
@@ -204,6 +208,13 @@ export default function InventoryManager() {
   const [error, setError] = useState<string | null>(null)
   const [bulkBusy, setBulkBusy] = useState(false)
   const [importOpen, setImportOpen] = useState(false)
+  const [confirmAction, setConfirmAction] = useState<{
+    title: string
+    message?: string
+    confirmLabel: string
+    tone: 'primary' | 'danger'
+    run: () => Promise<void>
+  } | null>(null)
 
   useEffect(() => {
     if (window.location.pathname.endsWith('/admin/collections/vehicles/create')) {
@@ -294,9 +305,8 @@ export default function InventoryManager() {
   }, [docs])
 
   const runBulk = useCallback(
-    async (patch: Record<string, unknown>, confirmMessage?: string) => {
+    async (patch: Record<string, unknown>) => {
       if (selected.size === 0) return
-      if (confirmMessage && !window.confirm(confirmMessage)) return
       setBulkBusy(true)
       setError(null)
       try {
@@ -329,10 +339,6 @@ export default function InventoryManager() {
 
   const deleteBulk = useCallback(async () => {
     if (selected.size === 0) return
-    if (
-      !window.confirm(`¿Eliminar ${selected.size} vehículo(s)? Esta acción no se puede deshacer.`)
-    )
-      return
     setBulkBusy(true)
     setError(null)
     try {
@@ -440,62 +446,101 @@ export default function InventoryManager() {
       {selected.size > 0 ? (
         <div className="inventory__bulkbar">
           <span>{selected.size} seleccionado(s)</span>
-          <ActionButton
-            variant="primary"
-            disabled={bulkBusy}
-            onClick={() =>
-              void runBulk({ publishStatus: 'published' }, '¿Publicar los vehículos seleccionados?')
-            }
-          >
-            Publicar
-          </ActionButton>
-          <ActionButton
-            variant="secondary"
-            disabled={bulkBusy}
-            onClick={() => void runBulk({ publishStatus: 'needs_review' })}
-          >
-            Enviar a revisión
-          </ActionButton>
-          <ActionButton
-            variant="secondary"
-            disabled={bulkBusy}
-            onClick={() => void runBulk({ publishStatus: 'draft' })}
-          >
-            Mover a borrador
-          </ActionButton>
-          <ActionButton
-            variant="secondary"
-            disabled={bulkBusy}
-            onClick={() => void runBulk({ publishStatus: 'archived' })}
-          >
-            Archivar
-          </ActionButton>
-          <ActionButton
-            variant="secondary"
-            disabled={bulkBusy}
-            onClick={() => void runBulk({ inventoryStatus: 'available' })}
-          >
-            Disponible
-          </ActionButton>
-          <ActionButton
-            variant="secondary"
-            disabled={bulkBusy}
-            onClick={() => void runBulk({ inventoryStatus: 'reserved' })}
-          >
-            Apartar
-          </ActionButton>
-          <ActionButton
-            variant="secondary"
-            disabled={bulkBusy}
-            onClick={() => void runBulk({ inventoryStatus: 'sold' })}
-          >
-            Vendido
-          </ActionButton>
-          <ActionButton variant="danger" disabled={bulkBusy} onClick={() => void deleteBulk()}>
-            Eliminar
-          </ActionButton>
+          <div className="inventory__bulk-group" role="group" aria-label="Publicación">
+            <ActionButton
+              variant="primary"
+              disabled={bulkBusy}
+              onClick={() =>
+                setConfirmAction({
+                  title: `¿Publicar ${selected.size} vehículo(s)?`,
+                  message: 'Solo se publicarán los que pasen la validación (imagen aprobada, agencia, datos).',
+                  confirmLabel: 'Publicar',
+                  tone: 'primary',
+                  run: () => runBulk({ publishStatus: 'published' }),
+                })
+              }
+            >
+              Publicar
+            </ActionButton>
+            <ActionButton
+              variant="secondary"
+              disabled={bulkBusy}
+              onClick={() => void runBulk({ publishStatus: 'needs_review' })}
+            >
+              Enviar a revisión
+            </ActionButton>
+            <ActionButton
+              variant="secondary"
+              disabled={bulkBusy}
+              onClick={() => void runBulk({ publishStatus: 'draft' })}
+            >
+              Mover a borrador
+            </ActionButton>
+            <ActionButton
+              variant="secondary"
+              disabled={bulkBusy}
+              onClick={() => void runBulk({ publishStatus: 'archived' })}
+            >
+              Archivar
+            </ActionButton>
+          </div>
+          <div className="inventory__bulk-group" role="group" aria-label="Inventario">
+            <ActionButton
+              variant="secondary"
+              disabled={bulkBusy}
+              onClick={() => void runBulk({ inventoryStatus: 'available' })}
+            >
+              Disponible
+            </ActionButton>
+            <ActionButton
+              variant="secondary"
+              disabled={bulkBusy}
+              onClick={() => void runBulk({ inventoryStatus: 'reserved' })}
+            >
+              Apartar
+            </ActionButton>
+            <ActionButton
+              variant="secondary"
+              disabled={bulkBusy}
+              onClick={() => void runBulk({ inventoryStatus: 'sold' })}
+            >
+              Vendido
+            </ActionButton>
+          </div>
+          <div className="inventory__bulk-group inventory__bulk-group--danger">
+            <ActionButton
+              variant="danger"
+              disabled={bulkBusy}
+              onClick={() =>
+                setConfirmAction({
+                  title: `¿Eliminar ${selected.size} vehículo(s)?`,
+                  message: 'Esta acción no se puede deshacer.',
+                  confirmLabel: 'Eliminar',
+                  tone: 'danger',
+                  run: () => deleteBulk(),
+                })
+              }
+            >
+              Eliminar
+            </ActionButton>
+          </div>
         </div>
       ) : null}
+
+      <ConfirmDialog
+        open={confirmAction !== null}
+        title={confirmAction?.title || ''}
+        message={confirmAction?.message}
+        confirmLabel={confirmAction?.confirmLabel}
+        tone={confirmAction?.tone}
+        busy={bulkBusy}
+        onCancel={() => setConfirmAction(null)}
+        onConfirm={() => {
+          const action = confirmAction
+          setConfirmAction(null)
+          if (action) void action.run()
+        }}
+      />
 
       {error ? <div className="builder__error">{error}</div> : null}
 
@@ -544,7 +589,10 @@ export default function InventoryManager() {
                       />
                     </td>
                     <td>
-                      <div className="inventory__vehicle">
+                      <div
+                        className="inventory__vehicle"
+                        title={vehicle.imageFilename ? `Imagen sync: ${vehicle.imageFilename}` : undefined}
+                      >
                         {url ? (
                           <img src={url} alt="" />
                         ) : (
@@ -557,9 +605,9 @@ export default function InventoryManager() {
                           {vehicle.exteriorColor ? (
                             <small>Color: {vehicle.exteriorColor}</small>
                           ) : null}
-                          {vehicle.imageFilename ? <small>Imagen: {vehicle.imageFilename}</small> : null}
                           <small>
                             {vehicle.year || 's/año'} · {vehicle.city || 'sin ciudad'}
+                            {vehicle.stockId ? ` · Stock ${vehicle.stockId}` : ''}
                           </small>
                           <small>{dealershipLabel(vehicle)}</small>
                         </div>
@@ -582,7 +630,10 @@ export default function InventoryManager() {
                       </StatusBadge>
                     </td>
                     <td>
-                      <StatusBadge tone={imageStatus === 'missing' ? 'danger' : 'info'}>
+                      <StatusBadge
+                        tone={IMAGE_STATUS_TONES[imageStatus]}
+                        title={IMAGE_STATUS_DESCRIPTIONS[imageStatus]}
+                      >
                         {IMAGE_STATUS_LABELS[imageStatus]}
                       </StatusBadge>
                     </td>
@@ -636,7 +687,10 @@ export default function InventoryManager() {
                       Abrir
                     </ActionButton>
                   </div>
-                  <div className="inventory-card__vehicle">
+                  <div
+                    className="inventory-card__vehicle"
+                    title={vehicle.imageFilename ? `Imagen sync: ${vehicle.imageFilename}` : undefined}
+                  >
                     {url ? (
                       <img src={url} alt="" />
                     ) : (
@@ -648,8 +702,8 @@ export default function InventoryManager() {
                       </strong>
                       <small>
                         {vehicle.year || 's/año'} · {vehicle.city || 'sin ciudad'}
+                        {vehicle.stockId ? ` · Stock ${vehicle.stockId}` : ''}
                       </small>
-                      {vehicle.imageFilename ? <small>Imagen: {vehicle.imageFilename}</small> : null}
                       <small>{dealershipLabel(vehicle)}</small>
                     </div>
                   </div>
@@ -676,7 +730,10 @@ export default function InventoryManager() {
                     <StatusBadge tone={PUBLISH_TONE[vehicle.publishStatus || 'draft'] || 'neutral'}>
                       {PUBLISH_STATUS_LABELS[(vehicle.publishStatus as PublishStatus) || 'draft']}
                     </StatusBadge>
-                    <StatusBadge tone={imageStatus === 'missing' ? 'danger' : 'info'}>
+                    <StatusBadge
+                      tone={IMAGE_STATUS_TONES[imageStatus]}
+                      title={IMAGE_STATUS_DESCRIPTIONS[imageStatus]}
+                    >
                       {IMAGE_STATUS_LABELS[imageStatus]}
                     </StatusBadge>
                   </div>

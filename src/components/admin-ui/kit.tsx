@@ -1,6 +1,7 @@
 'use client'
 
 import React from 'react'
+import { createPortal } from 'react-dom'
 
 /**
  * Shared admin UI kit.
@@ -146,11 +147,66 @@ export function ActionButton({
 export function StatusBadge({
   children,
   tone = 'neutral',
+  title,
 }: {
   children: React.ReactNode
   tone?: Tone
+  title?: string
 }) {
-  return <span className={`admin-kit-badge admin-kit-badge--${tone}`}>{children}</span>
+  return (
+    <span className={`admin-kit-badge admin-kit-badge--${tone}`} title={title}>
+      {children}
+    </span>
+  )
+}
+
+// ---- Confirm dialog -------------------------------------------------------
+
+export function ConfirmDialog({
+  open,
+  title,
+  message,
+  confirmLabel = 'Confirmar',
+  cancelLabel = 'Cancelar',
+  tone = 'primary',
+  busy = false,
+  onConfirm,
+  onCancel,
+}: {
+  open: boolean
+  title: string
+  message?: string
+  confirmLabel?: string
+  cancelLabel?: string
+  tone?: 'primary' | 'danger'
+  busy?: boolean
+  onConfirm: () => void
+  onCancel: () => void
+}) {
+  if (!open || typeof document === 'undefined') return null
+  return createPortal(
+    <div className="admin-kit-confirm__overlay" role="presentation" onClick={onCancel}>
+      <div
+        aria-label={title}
+        aria-modal="true"
+        className="admin-kit-confirm"
+        onClick={(event) => event.stopPropagation()}
+        role="alertdialog"
+      >
+        <h3>{title}</h3>
+        {message ? <p>{message}</p> : null}
+        <div className="admin-kit-confirm__actions">
+          <ActionButton disabled={busy} onClick={onCancel} variant="secondary">
+            {cancelLabel}
+          </ActionButton>
+          <ActionButton disabled={busy} onClick={onConfirm} variant={tone}>
+            {busy ? '…' : confirmLabel}
+          </ActionButton>
+        </div>
+      </div>
+    </div>,
+    document.body,
+  )
 }
 
 // ---- Tabs / segmented controls -----------------------------------------

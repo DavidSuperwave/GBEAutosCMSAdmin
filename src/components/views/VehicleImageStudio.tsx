@@ -207,7 +207,7 @@ const SOURCE_TYPE_LABELS: Record<string, string> = {
 
 const APPROVAL_STATUS_LABELS: Record<string, string> = {
   draft: 'Borrador',
-  needs_review: 'Pendiente de revision',
+  needs_review: 'Pendiente de revisión',
   approved: 'Aprobada',
   rejected: 'Rechazada',
 }
@@ -220,7 +220,7 @@ const RIGHTS_STATUS_LABELS: Record<string, string> = {
 
 const USAGE_LABELS: Record<string, string> = {
   vehicle_hero: 'Principal',
-  vehicle_gallery: 'Galeria',
+  vehicle_gallery: 'Galería',
   homepage: 'Homepage',
   landing_page: 'Landing',
   promo_banner: 'Promo',
@@ -251,9 +251,9 @@ function assetIsInGallery(asset: Asset, galleryIds: Set<string>): boolean {
 function assetPublicationLabel(asset: Asset, heroId: number | string | undefined, galleryIds: Set<string>): string {
   if (asset.approvalStatus === 'rejected') return 'Rechazada'
   if (assetIsHero(asset, heroId)) return 'Principal'
-  if (assetIsInGallery(asset, galleryIds)) return 'Publicada en galeria'
+  if (assetIsInGallery(asset, galleryIds)) return 'Publicada en galería'
   if (canAssignPublicAsset(asset)) return 'Aprobada - sin publicar'
-  return 'En revision'
+  return 'En revisión'
 }
 
 function assetPublicationTone(
@@ -504,7 +504,7 @@ export default function VehicleImageStudio({
         if (String(previewImage?.id) === String(media)) setPreviewImage(null)
         setOpenGalleryMenu(null)
         onChanged()
-      }, 'Imagen eliminada de la galeria.')
+      }, 'Imagen eliminada de la galería.')
     },
     [galleryItems, onChanged, previewImage?.id, vehicleId, withBusy],
   )
@@ -533,7 +533,7 @@ export default function VehicleImageStudio({
           return nextIndex >= 0 ? { ...current, label: current.label, index: nextIndex } : current
         })
         onChanged()
-      }, 'Orden de galeria actualizado.')
+      }, 'Orden de galería actualizado.')
     },
     [galleryItems, onChanged, vehicleId, withBusy],
   )
@@ -574,8 +574,8 @@ export default function VehicleImageStudio({
         }, canReviewMedia
           ? uploadTarget === 'hero'
             ? 'Foto propia publicada como imagen principal.'
-            : 'Foto propia agregada a la galeria publica.'
-          : 'Foto subida para revision. Un admin o editor de medios debe aprobarla antes de publicarla.')
+            : 'Foto propia agregada a la galería pública.'
+          : 'Foto subida para revisión. Un admin o editor de medios debe aprobarla antes de publicarla.')
       }
       if (fileInputRef.current) fileInputRef.current.value = ''
     },
@@ -675,9 +675,9 @@ export default function VehicleImageStudio({
         onChanged()
         setNotice(
           then === 'hero'
-            ? 'Candidata enviada a revision como principal.'
+            ? 'Candidata enviada a revisión como principal.'
             : then === 'gallery'
-              ? 'Candidata enviada a revision para galeria.'
+              ? 'Candidata enviada a revisión para galería.'
               : then === 'reference'
                 ? 'Imagen guardada en la biblioteca del vehículo.'
                 : 'Imagen guardada en la biblioteca del vehículo.',
@@ -710,7 +710,7 @@ export default function VehicleImageStudio({
           }
           await loadAssets()
           onChanged()
-        }, then === 'hero' ? 'Imagen sincronizada publicada como principal.' : 'Imagen sincronizada agregada a la galeria publica.')
+        }, then === 'hero' ? 'Imagen sincronizada publicada como principal.' : 'Imagen sincronizada agregada a la galería pública.')
         return
       }
 
@@ -758,8 +758,8 @@ export default function VehicleImageStudio({
           canReviewMedia
             ? then === 'hero'
               ? 'Imagen sincronizada aprobada y publicada como principal.'
-              : 'Imagen sincronizada aprobada y agregada a la galeria publica.'
-            : 'Imagen sincronizada importada para revision. Un admin o editor de medios debe aprobarla antes de publicarla.',
+              : 'Imagen sincronizada aprobada y agregada a la galería pública.'
+            : 'Imagen sincronizada importada para revisión. Un admin o editor de medios debe aprobarla antes de publicarla.',
         )
       } catch (e) {
         setError((e as Error).message)
@@ -830,8 +830,8 @@ export default function VehicleImageStudio({
       }, canReviewMedia
         ? destination === 'hero'
           ? 'Recorte aplicado como imagen principal.'
-          : 'Recorte agregado a la galeria publica.'
-        : 'Recorte enviado a revision antes de publicarse.')
+          : 'Recorte agregado a la galería pública.'
+        : 'Recorte enviado a revisión antes de publicarse.')
     },
     [
       assignAsset,
@@ -856,7 +856,7 @@ export default function VehicleImageStudio({
           const url = mediaUrl(g.image)
           const id = mediaId(g.image)
           if (!url || id == null) return null
-          return { id, url, label: g.alt || `Galeria ${index + 1}`, index }
+          return { id, url, label: g.alt || `Galería ${index + 1}`, index }
         })
         .filter(isGalleryPreviewImage),
     [galleryItems],
@@ -980,7 +980,7 @@ export default function VehicleImageStudio({
               fileInputRef.current?.click()
             }}
           >
-            Subir a galeria
+            Subir a galería
           </ActionButton>
           <ActionButton variant="secondary" disabled={busy} onClick={() => setSearchOpen((v) => !v)}>
             {searchOpen ? 'Cerrar búsqueda' : 'Buscar candidatas'}
@@ -996,7 +996,7 @@ export default function VehicleImageStudio({
               <strong>Imagen sincronizada pendiente de publicar</strong>
               <p>
                 Viene del inventario sincronizado. Solo aparece en la web cuando se aprueba y se publica como principal
-                o en la galeria.
+                o en la galería.
               </p>
               <small>{vehicle.imageFilename || vehicle.imagePath || syncedImageUrl}</small>
             </div>
@@ -1005,7 +1005,7 @@ export default function VehicleImageStudio({
                 <StatusBadge tone="success">Aprobada sin publicar</StatusBadge>
               ) : null}
               {syncedIsHero ? <StatusBadge tone="success">Principal</StatusBadge> : null}
-              {syncedIsInGallery ? <StatusBadge tone="success">En galeria</StatusBadge> : null}
+              {syncedIsInGallery ? <StatusBadge tone="success">En galería</StatusBadge> : null}
               {canUseSyncedAsHero ? (
                 <ActionButton
                   variant="secondary"
@@ -1016,7 +1016,7 @@ export default function VehicleImageStudio({
                     ? 'Importando...'
                     : canReviewMedia
                       ? 'Aprobar y publicar como principal'
-                      : 'Enviar a revision como principal'}
+                      : 'Enviar a revisión como principal'}
                 </ActionButton>
               ) : null}
               {canAddSyncedToGallery ? (
@@ -1025,7 +1025,7 @@ export default function VehicleImageStudio({
                   disabled={busy || importingUrl === syncedImageUrl}
                   onClick={() => void importSyncedImage('gallery')}
                 >
-                  {canReviewMedia ? 'Aprobar y publicar en galeria' : 'Enviar a revision para galeria'}
+                  {canReviewMedia ? 'Aprobar y publicar en galería' : 'Enviar a revisión para galería'}
                 </ActionButton>
               ) : null}
             </div>
@@ -1050,7 +1050,7 @@ export default function VehicleImageStudio({
         <section className="studio__gallery-section">
           <div className="studio__section-head">
             <div>
-              <h4>Galeria publica</h4>
+              <h4>Galería pública</h4>
               <span>Orden visible en la ficha del vehiculo.</span>
             </div>
             <StatusBadge tone="success">{galleryImages.length}</StatusBadge>
@@ -1142,7 +1142,7 @@ export default function VehicleImageStudio({
                     }}
                     type="button"
                   >
-                    Quitar de galeria
+                    Quitar de galería
                   </button>
                 </div>
               </div>
@@ -1256,7 +1256,7 @@ export default function VehicleImageStudio({
                           {canAssignPublicAsset(asset) ? 'Publicar principal' : 'Pendiente'}
                         </button>
                         <button type="button" disabled={busy} onClick={() => void useLocalAsset(asset, 'gallery')}>
-                          {canAssignPublicAsset(asset) ? 'Publicar en galeria' : 'Enviar a revision'}
+                          {canAssignPublicAsset(asset) ? 'Publicar en galería' : 'Enviar a revisión'}
                         </button>
                         <button
                           type="button"
@@ -1298,10 +1298,10 @@ export default function VehicleImageStudio({
                     ) : null}
                     <div className="studio__output-actions">
                       <button type="button" disabled={busy || importing} onClick={() => void importCandidate(candidate, 'hero')}>
-                        {importing ? '...' : 'Enviar a revision como principal'}
+                        {importing ? '...' : 'Enviar a revisión como principal'}
                       </button>
                       <button type="button" disabled={busy || importing} onClick={() => void importCandidate(candidate, 'gallery')}>
-                        Enviar a revision para galeria
+                        Enviar a revisión para galería
                       </button>
                       <button type="button" disabled={busy || importing} onClick={() => void importCandidate(candidate)}>
                         Guardar candidata
@@ -1320,7 +1320,7 @@ export default function VehicleImageStudio({
       {reviewAssets.length ? (
         <div className="studio__review-queue">
           <div className="studio__wizard-head">
-            <h4>Imagenes pendientes de revision</h4>
+            <h4>Imágenes pendientes de revisión</h4>
             <StatusBadge tone="warning">{reviewAssets.length}</StatusBadge>
           </div>
           <div className="studio__review-grid">
@@ -1351,11 +1351,11 @@ export default function VehicleImageStudio({
                               await reviewAsset(asset.id, 'approve_owned', target)
                               await loadAssets()
                               onChanged()
-                            }, target === 'hero' ? 'Imagen aprobada y publicada como principal.' : 'Imagen aprobada y publicada en galeria.')
+                            }, target === 'hero' ? 'Imagen aprobada y publicada como principal.' : 'Imagen aprobada y publicada en galería.')
                           }
                           type="button"
                         >
-                          {target === 'hero' ? 'Aprobar y publicar como principal' : 'Aprobar y publicar en galeria'}
+                          {target === 'hero' ? 'Aprobar y publicar como principal' : 'Aprobar y publicar en galería'}
                         </button>
                       ) : null}
                       <button
@@ -1443,11 +1443,11 @@ export default function VehicleImageStudio({
                           await assignAsset(asset.id, 'gallery')
                           await loadAssets()
                           onChanged()
-                        }, 'Imagen publicada en galeria.')
+                        }, 'Imagen publicada en galería.')
                       }
                       type="button"
                     >
-                      Publicar en galeria
+                      Publicar en galería
                     </button>
                     <button
                       disabled={busy}
@@ -1519,7 +1519,7 @@ export default function VehicleImageStudio({
                       disabled={busy}
                       onClick={() => void useLocalAsset(asset, 'gallery')}
                     >
-                      {canAssignPublicAsset(asset) ? 'Publicar en galeria' : 'Enviar a revision'}
+                      {canAssignPublicAsset(asset) ? 'Publicar en galería' : 'Enviar a revisión'}
                     </button>
                     ) : null}
                     <button
@@ -1679,7 +1679,7 @@ function CropImageModal({
             Cancelar
           </ActionButton>
           <ActionButton variant="secondary" disabled={busy} onClick={() => void save('gallery')}>
-            Guardar en galeria
+            Guardar en galería
           </ActionButton>
           <ActionButton variant="primary" disabled={busy} onClick={() => void save('hero')}>
             Usar como principal

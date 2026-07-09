@@ -1583,6 +1583,20 @@
   display: block;
 }
 
+/* Long tokens (sync filenames, slugs) must wrap inside the cell, never
+   overflow the card/table edge. */
+.inventory__vehicle > div,
+.inventory-card__vehicle > div {
+  min-width: 0;
+}
+
+.inventory__vehicle strong,
+.inventory__vehicle small,
+.inventory-card__vehicle strong,
+.inventory-card__vehicle small {
+  overflow-wrap: anywhere;
+}
+
 .inventory__thumb-empty {
   align-items: center;
   background: var(--theme-elevation-100);
@@ -4799,6 +4813,7 @@
 .admin-kit-header {
   align-items: flex-end;
   display: flex;
+  flex-wrap: wrap;
   gap: 16px;
   justify-content: space-between;
 }
@@ -4895,6 +4910,21 @@
 .workspace__actionbar {
   justify-content: space-between;
   margin-bottom: 16px;
+}
+
+/* Solid backdrop so scrolled content never peeks around the sticky bar's
+   rounded corners or shows through the gutter above it. */
+.admin-kit-actionbar::before,
+.workspace__actionbar::before {
+  background: var(--theme-bg);
+  content: '';
+  inset: -16px -16px -4px;
+  position: absolute;
+  z-index: -1;
+}
+
+.vehicle-create .admin-kit-actionbar::before {
+  content: none;
 }
 
 .admin-kit-btn {
@@ -5075,6 +5105,91 @@
 .workspace__tab-badge {
   background: var(--admin-kit-danger);
   color: #fff;
+}
+
+@media (max-width: 640px) {
+  /* Single scrollable tab row on phones: no wrapped rows, no clipped pills. */
+  .admin-kit-tabs,
+  .inventory__tabs,
+  .workspace__tabs {
+    -webkit-overflow-scrolling: touch;
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    scrollbar-width: thin;
+  }
+
+  .admin-kit-tabs__tab,
+  .inventory__tab,
+  .workspace__tab {
+    flex: 0 0 auto;
+    white-space: nowrap;
+  }
+
+  /* The workspace action bar should not pin half the phone viewport. */
+  .workspace__actionbar {
+    position: static;
+  }
+
+  .workspace__actionbar-buttons {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    width: 100%;
+  }
+}
+
+.inventory__bulk-group {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.inventory__bulk-group + .inventory__bulk-group {
+  border-left: 1px solid var(--admin-kit-border);
+  padding-left: 12px;
+}
+
+.inventory__bulk-group--danger {
+  margin-left: auto;
+}
+
+.admin-kit-confirm__overlay {
+  align-items: center;
+  background: color-mix(in srgb, var(--theme-elevation-1000, #000) 42%, transparent);
+  display: flex;
+  inset: 0;
+  justify-content: center;
+  padding: 20px;
+  position: fixed;
+  z-index: 120;
+}
+
+.admin-kit-confirm {
+  background: var(--admin-kit-surface);
+  border: 1px solid var(--admin-kit-border);
+  border-radius: var(--admin-kit-radius);
+  box-shadow: var(--admin-kit-shadow-sm);
+  max-width: 420px;
+  padding: 20px;
+  width: 100%;
+}
+
+.admin-kit-confirm h3 {
+  font-size: 16px;
+  line-height: 1.3;
+  margin: 0 0 8px;
+}
+
+.admin-kit-confirm p {
+  color: var(--admin-kit-muted);
+  line-height: 1.45;
+  margin: 0 0 16px;
+}
+
+.admin-kit-confirm__actions {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
 }
 
 .admin-kit-segmented {
@@ -6176,11 +6291,20 @@
   align-items: flex-start;
 }
 
+.vehicle-specs-lookup__head > div {
+  display: grid;
+  gap: 4px;
+}
+
+.vehicle-specs-lookup__head h3 {
+  margin: 0;
+}
+
 .vehicle-specs-lookup__head p {
   color: var(--vehicle-create-muted);
   font-size: 13px;
   line-height: 1.45;
-  margin: -8px 0 0;
+  margin: 0;
   max-width: 340px;
 }
 

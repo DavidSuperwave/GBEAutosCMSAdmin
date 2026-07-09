@@ -208,10 +208,10 @@ export function getVehiclePublishIssues(
   }
   if (approved) {
     if (galleryMediaIds(vehicle.gallery).some((id) => !approved.has(String(id)))) {
-      critical('Todas las imagenes de galeria publicas deben estar aprobadas y con derechos claros.', 'media')
+      critical('Todas las imágenes de galería públicas deben estar aprobadas y con derechos claros.', 'media')
     }
     if (landingMediaIds(vehicle.landing).some((id) => !approved.has(String(id)))) {
-      critical('Todas las imagenes de landing publicas deben estar aprobadas y con derechos claros.', 'media')
+      critical('Todas las imágenes de landing públicas deben estar aprobadas y con derechos claros.', 'media')
     }
   }
 
@@ -247,12 +247,34 @@ export const PUBLISH_STATUS_LABELS: Record<PublishStatus, string> = {
 }
 
 export const IMAGE_STATUS_LABELS: Record<ImageStatus, string> = {
-  missing: 'Sin imagen publica',
-  candidate_found: 'Candidata sincronizada',
-  uploaded: 'Pendiente de revision',
-  generated: 'Pendiente de revision IA',
-  approved: 'Publicada como principal',
+  missing: 'Sin imagen',
+  candidate_found: 'Candidata',
+  uploaded: 'En revisión',
+  generated: 'IA en revisión',
+  approved: 'Aprobada',
   rejected: 'Rechazada',
+}
+
+/** Longer explanations for tooltips; badges stay short. */
+export const IMAGE_STATUS_DESCRIPTIONS: Record<ImageStatus, string> = {
+  missing: 'No hay imagen pública para este vehículo.',
+  candidate_found: 'Hay una imagen sincronizada del inventario pendiente de aprobar.',
+  uploaded: 'La imagen subida espera aprobación de un revisor.',
+  generated: 'La imagen generada con IA espera aprobación de un revisor.',
+  approved: 'La imagen principal está aprobada y publicada.',
+  rejected: 'La imagen fue rechazada; el vehículo necesita otra imagen.',
+}
+
+export type StatusTone = 'neutral' | 'success' | 'warning' | 'danger' | 'info'
+
+/** One tone vocabulary for image-status badges across inventory and workspace. */
+export const IMAGE_STATUS_TONES: Record<ImageStatus, StatusTone> = {
+  missing: 'danger',
+  candidate_found: 'warning',
+  uploaded: 'warning',
+  generated: 'warning',
+  approved: 'success',
+  rejected: 'danger',
 }
 
 export const SPEC_STATUS_LABELS: Record<SpecStatus, string> = {

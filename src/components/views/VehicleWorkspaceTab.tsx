@@ -130,10 +130,10 @@ type VehicleAnalytics = {
 }
 
 const SPEC_LABELS: Record<string, string> = {
-  tipo: 'Tipo / carroceria',
+  tipo: 'Tipo / carrocería',
   motor: 'Motor',
   potencia: 'Potencia',
-  transmision: 'Transmision',
+  transmision: 'Transmisión',
   combustible: 'Combustible',
   traccion: 'Tracción',
   cylinders: 'Cilindros',
@@ -156,7 +156,7 @@ const INVENTORY_STATUS_LABELS: Record<string, string> = {
 
 const BODY_TYPE_OPTIONS = [
   ['', 'Sin definir'],
-  ['sedan', 'Sedan'],
+  ['sedan', 'Sedán'],
   ['suv', 'SUV'],
   ['pickup', 'Pickup'],
   ['coupe', 'Coupe'],
@@ -167,7 +167,7 @@ const BODY_TYPE_OPTIONS = [
 
 const TRANSMISSION_OPTIONS = [
   ['', 'Sin definir'],
-  ['automatic', 'Automatica'],
+  ['automatic', 'Automática'],
   ['manual', 'Manual'],
   ['cvt', 'CVT'],
 ] as const
@@ -176,14 +176,14 @@ const FUEL_OPTIONS = [
   ['', 'Sin definir'],
   ['gasoline', 'Gasolina'],
   ['diesel', 'Diesel'],
-  ['hybrid', 'Hibrido'],
-  ['electric', 'Electrico'],
+  ['hybrid', 'Híbrido'],
+  ['electric', 'Eléctrico'],
 ] as const
 
 const TABS = [
   { key: 'overview', label: 'Resumen' },
   { key: 'specs', label: 'Detalles y etiquetas' },
-  { key: 'images', label: 'Imagenes' },
+  { key: 'images', label: 'Imágenes' },
   { key: 'listing', label: 'Página' },
   { key: 'review', label: 'Revisar y publicar' },
 ] as const
@@ -191,13 +191,13 @@ const TABS = [
 const FRONTEND_URL = process.env.NEXT_PUBLIC_FRONTEND_URL || 'http://localhost:3000'
 
 const TEMPLATE_OVERRIDE_FIELDS: Array<{ key: keyof VehicleTemplateOverrides; label: string }> = [
-  { key: 'gallery', label: 'Galeria principal' },
+  { key: 'gallery', label: 'Galería principal' },
   { key: 'purchaseCard', label: 'Tarjeta de contacto' },
   { key: 'quickSpecs', label: 'Resumen de specs' },
-  { key: 'description', label: 'Descripcion' },
-  { key: 'features', label: 'Caracteristicas' },
+  { key: 'description', label: 'Descripción' },
+  { key: 'features', label: 'Características' },
   { key: 'similarVehicles', label: 'Autos similares' },
-  { key: 'mobileCta', label: 'CTA movil WhatsApp' },
+  { key: 'mobileCta', label: 'CTA móvil WhatsApp' },
 ]
 
 type TabKey = (typeof TABS)[number]['key']
@@ -590,8 +590,8 @@ export default function VehicleWorkspaceTab() {
     if (!vehicle) return []
     const items: ChecklistItem[] = []
     const need = (label: string, ok: boolean) => items.push({ label, status: ok ? 'ok' : 'bad' })
-    need('Marca, modelo y ano', Boolean(vehicle.brand && vehicle.model && vehicle.year))
-    need('Condicion', Boolean(vehicle.condition))
+    need('Marca, modelo y año', Boolean(vehicle.brand && vehicle.model && vehicle.year))
+    need('Condición', Boolean(vehicle.condition))
     need('Agencia y ciudad', Boolean(vehicle.dealership && dealershipCity(vehicle)))
     need('Imagen principal', Boolean(vehicleImageUrl(vehicle)))
     need('Estatus', Boolean(vehicle.inventoryStatus))
@@ -601,7 +601,7 @@ export default function VehicleWorkspaceTab() {
     })
     items.push({ label: 'Precio', status: vehicle.price ? 'ok' : 'warn' })
     items.push({
-      label: 'Descripcion',
+      label: 'Descripción',
       status: vehicle.description && String(vehicle.description).length >= 40 ? 'ok' : 'warn',
     })
     return items
@@ -910,7 +910,7 @@ export default function VehicleWorkspaceTab() {
             Marcar como borrador
           </ActionButton>
           <ActionButton variant="secondary" disabled={busy} onClick={() => void setStatus('needs_review')}>
-            Enviar a revision
+            Enviar a revisión
           </ActionButton>
           <ActionButton
             variant="primary"
@@ -1055,7 +1055,7 @@ export default function VehicleWorkspaceTab() {
                 />
               </label>
               <label className="builder__field">
-                <span>Condicion</span>
+                <span>Condición</span>
                 <select value={draft.condition} onChange={(event) => updateDraft({ condition: event.target.value })}>
                   <option value="new">Nuevo</option>
                   <option value="used">Seminuevo</option>
@@ -1125,7 +1125,7 @@ export default function VehicleWorkspaceTab() {
                 />
               </label>
               <label className="builder__field workspace__field-wide">
-                <span>Descripcion</span>
+                <span>Descripción</span>
                 <textarea
                   rows={4}
                   value={draft.description}
@@ -1146,7 +1146,7 @@ export default function VehicleWorkspaceTab() {
             </div>
             <div className="workspace__form-grid">
               <label className="builder__field">
-                <span>Tipo de carroceria</span>
+                <span>Tipo de carrocería</span>
                 <select value={draft.bodyType} onChange={(event) => updateDraft({ bodyType: event.target.value })}>
                   {BODY_TYPE_OPTIONS.map(([value, label]) => (
                     <option key={value} value={value}>
@@ -1156,7 +1156,7 @@ export default function VehicleWorkspaceTab() {
                 </select>
               </label>
               <label className="builder__field">
-                <span>Transmision comercial</span>
+                <span>Transmisión comercial</span>
                 <select
                   value={draft.transmission}
                   onChange={(event) => updateDraft({ transmission: event.target.value })}
@@ -1256,7 +1256,7 @@ export default function VehicleWorkspaceTab() {
         {tab === 'images' ? (
           <div>
             <div className="workspace__section-head">
-              <h3>Imagenes</h3>
+              <h3>Imágenes</h3>
               <StatusBadge
                 tone={
                   imageStatus === 'approved'
@@ -1294,7 +1294,7 @@ export default function VehicleWorkspaceTab() {
                 </a>
                 {publicUrl ? (
                   <a className="builder__preview-link" href={publicUrl} rel="noreferrer" target="_blank">
-                    Abrir pagina publica
+                    Abrir página pública
                   </a>
                 ) : null}
               </>
