@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useCallback, useEffect, useMemo, useState } from 'react'
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useDocumentInfo } from '@payloadcms/ui'
 
 import SectionBuilder, { type BuilderPreviewContext, type Section } from '../admin-ui/SectionBuilder'
@@ -136,6 +136,11 @@ type VehicleAnalytics = {
   conversionRate: number
   lastView?: string
   lastLead?: string
+}
+
+type LoadOptions = {
+  preserveDirtyDraft?: boolean
+  preserveDirtyTemplateOverrides?: boolean
 }
 
 const SPEC_LABELS: Record<string, string> = {
@@ -479,6 +484,9 @@ export default function VehicleWorkspaceTab() {
   const [error, setError] = useState<string | null>(null)
   const [notice, setNotice] = useState<string | null>(null)
   const [dirty, setDirty] = useState(false)
+  const [templateDirty, setTemplateDirty] = useState(false)
+  const dirtyRef = useRef(false)
+  const templateDirtyRef = useRef(false)
   const [queue, setQueue] = useState<VehicleQueue | null>(null)
   const [pendingNav, setPendingNav] = useState<(() => void) | null>(null)
   const [analytics, setAnalytics] = useState<VehicleAnalytics>({
@@ -488,7 +496,17 @@ export default function VehicleWorkspaceTab() {
     conversionRate: 0,
   })
 
-  const load = useCallback(async () => {
+  const hasUnsavedChanges = dirty || templateDirty
+
+  useEffect(() => {
+    dirtyRef.current = dirty
+  }, [dirty])
+
+  useEffect(() => {
+    templateDirtyRef.current = templateDirty
+  }, [templateDirty])
+
+  const load = useCallback(async (options: LoadOptions = {}) => {
     if (!id) {
       setLoading(false)
       return
@@ -500,9 +518,14 @@ export default function VehicleWorkspaceTab() {
       if (!res.ok) throw new Error('No se pudo cargar el vehículo.')
       const nextVehicle = (await res.json()) as Vehicle
       setVehicle(nextVehicle)
-      setDraft(createDraft(nextVehicle))
-      setDirty(false)
-      setTemplateOverrides(nextVehicle.templateOverrides || {})
+      if (!(options.preserveDirtyDraft && dirtyRef.current)) {
+        setDraft(createDraft(nextVehicle))
+        setDirty(false)
+      }
+      if (!(options.preserveDirtyTemplateOverrides && templateDirtyRef.current)) {
+        setTemplateOverrides(nextVehicle.templateOverrides || {})
+        setTemplateDirty(false)
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Error al cargar.')
     } finally {
@@ -534,14 +557,14 @@ export default function VehicleWorkspaceTab() {
 
   // Warn on tab close / external navigation while the form has unsaved edits.
   useEffect(() => {
-    if (!dirty) return
+    if (!hasUnsavedChanges) return
     const handler = (event: BeforeUnloadEvent) => {
       event.preventDefault()
       event.returnValue = ''
     }
     window.addEventListener('beforeunload', handler)
     return () => window.removeEventListener('beforeunload', handler)
-  }, [dirty])
+  }, [hasUnsavedChanges])
 
   useEffect(() => {
     let active = true
@@ -745,7 +768,7 @@ export default function VehicleWorkspaceTab() {
       }
       setDirty(false)
       setNotice('Cambios guardados en el vehículo.')
-      await load()
+      await load({ preserveDirtyTemplateOverrides: true })
       return true
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Error al guardar.')
@@ -758,8 +781,12 @@ export default function VehicleWorkspaceTab() {
   const setStatus = useCallback(
     async (publishStatus: PublishStatus, opts?: { guard?: boolean }) => {
       if (!id || !vehicle) return
-      if (dirty) {
-        setError('Tienes cambios sin guardar. Guarda los cambios antes de cambiar el estado.')
+      if (hasUnsavedChanges) {
+        setError(
+          templateDirty && !dirty
+            ? 'Tienes cambios de plantilla sin guardar. Guarda la plantilla antes de cambiar el estado.'
+            : 'Tienes cambios sin guardar. Guarda los cambios antes de cambiar el estado.',
+        )
         return
       }
       if (opts?.guard && issues.critical.length > 0) {
@@ -789,7 +816,7 @@ export default function VehicleWorkspaceTab() {
         setBusy(false)
       }
     },
-    [id, vehicle, dirty, issues.critical.length, load],
+    [id, vehicle, dirty, templateDirty, hasUnsavedChanges, issues.critical.length, load],
   )
 
   // ---- Triage queue navigation --------------------------------------------
@@ -806,13 +833,13 @@ export default function VehicleWorkspaceTab() {
 
   const requestQueueNav = useCallback(
     (nextIndex: number) => {
-      if (dirty) {
+      if (hasUnsavedChanges) {
         setPendingNav(() => () => commitQueueNav(nextIndex))
         return
       }
       commitQueueNav(nextIndex)
     },
-    [dirty, commitQueueNav],
+    [hasUnsavedChanges, commitQueueNav],
   )
 
   const exitQueue = useCallback(() => {
@@ -821,12 +848,12 @@ export default function VehicleWorkspaceTab() {
       clearVehicleQueue()
       window.location.href = returnTo
     }
-    if (dirty) {
+    if (hasUnsavedChanges) {
       setPendingNav(() => leave)
       return
     }
     leave()
-  }, [queue, dirty])
+  }, [queue, hasUnsavedChanges])
 
   const saveTags = useCallback(
     async (tagIds: string[]) => {
@@ -846,7 +873,7 @@ export default function VehicleWorkspaceTab() {
           throw new Error(`No se pudieron guardar tags. ${detail.slice(0, 160)}`)
         }
         setNotice('Tags actualizados.')
-        await load()
+        await load({ preserveDirtyDraft: true, preserveDirtyTemplateOverrides: true })
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Error al guardar tags.')
       } finally {
@@ -923,8 +950,8 @@ export default function VehicleWorkspaceTab() {
     [id],
   )
 
-  const saveTemplateOverrides = useCallback(async () => {
-    if (!id) return
+  const saveTemplateOverrides = useCallback(async (): Promise<boolean> => {
+    if (!id) return false
     setTemplateSaving(true)
     setError(null)
     setNotice(null)
@@ -941,12 +968,27 @@ export default function VehicleWorkspaceTab() {
       }
       setNotice('Visibilidad de plantilla actualizada.')
       setVehicle((current) => (current ? { ...current, templateOverrides } : current))
+      setTemplateDirty(false)
+      return true
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Error al guardar plantilla.')
+      return false
     } finally {
       setTemplateSaving(false)
     }
   }, [id, templateOverrides])
+
+  const savePendingChanges = useCallback(async (): Promise<boolean> => {
+    if (dirty) {
+      const savedVehicle = await saveVehicleEdits()
+      if (!savedVehicle) return false
+    }
+    if (templateDirty) {
+      const savedTemplate = await saveTemplateOverrides()
+      if (!savedTemplate) return false
+    }
+    return true
+  }, [dirty, templateDirty, saveVehicleEdits, saveTemplateOverrides])
 
   if (!id) {
     return (
@@ -1018,7 +1060,6 @@ export default function VehicleWorkspaceTab() {
 
       <PrimaryActionBar className="workspace__actionbar">
         <div className="workspace__actionbar-info">
-          <strong>{title}</strong>
           <StatusBadge
             tone={
               publishStatus === 'published'
@@ -1030,30 +1071,42 @@ export default function VehicleWorkspaceTab() {
           >
             {PUBLISH_STATUS_LABELS[publishStatus]}
           </StatusBadge>
-          {dirty ? <StatusBadge tone="warning">Cambios sin guardar</StatusBadge> : null}
-          <span className="workspace__completeness">
+          {hasUnsavedChanges ? <StatusBadge tone="warning">Cambios sin guardar</StatusBadge> : null}
+          <span className="workspace__completeness" title={`Completitud del vehículo: ${completeness}%`}>
             <span className="workspace__completeness-bar">
               <span style={{ width: `${completeness}%` }} />
             </span>
-            {completeness}% completo
+            {completeness}%
           </span>
         </div>
         <div className="workspace__actionbar-buttons">
           <ActionButton
-            variant={dirty ? 'primary' : 'secondary'}
-            disabled={saving}
-            onClick={() => void saveVehicleEdits()}
+            size="sm"
+            variant="ghost"
+            disabled={busy}
+            title="Regresar el vehículo a borrador"
+            onClick={() => void setStatus('draft')}
           >
-            {saving ? 'Guardando...' : 'Guardar cambios'}
-          </ActionButton>
-          <ActionButton variant="secondary" disabled={busy} onClick={() => void setStatus('draft')}>
-            Marcar como borrador
-          </ActionButton>
-          <ActionButton variant="secondary" disabled={busy} onClick={() => void setStatus('needs_review')}>
-            Enviar a revisión
+            Borrador
           </ActionButton>
           <ActionButton
-            variant={dirty ? 'secondary' : 'primary'}
+            size="sm"
+            variant="ghost"
+            disabled={busy}
+            title="Enviar el vehículo a revisión"
+            onClick={() => void setStatus('needs_review')}
+          >
+            A revisión
+          </ActionButton>
+          <ActionButton
+            variant={hasUnsavedChanges ? 'primary' : 'secondary'}
+            disabled={saving || templateSaving}
+            onClick={() => void savePendingChanges()}
+          >
+            {saving || templateSaving ? 'Guardando...' : 'Guardar cambios'}
+          </ActionButton>
+          <ActionButton
+            variant={hasUnsavedChanges ? 'secondary' : 'primary'}
             disabled={busy || issues.critical.length > 0}
             title={issues.critical.length > 0 ? `Bloqueado: ${issues.critical.join(' ')}` : undefined}
             onClick={() => void setStatus('published', { guard: true })}
@@ -1069,11 +1122,11 @@ export default function VehicleWorkspaceTab() {
         message="Guarda los cambios de este vehículo antes de continuar, o sigue editando."
         confirmLabel="Guardar y continuar"
         cancelLabel="Seguir editando"
-        busy={saving}
+        busy={saving || templateSaving}
         onCancel={() => setPendingNav(null)}
         onConfirm={() => {
           void (async () => {
-            const saved = await saveVehicleEdits()
+            const saved = await savePendingChanges()
             if (saved && pendingNav) pendingNav()
             setPendingNav(null)
           })()
@@ -1082,7 +1135,10 @@ export default function VehicleWorkspaceTab() {
 
       {issues.critical.length > 0 ? (
         <div className="workspace__publish-blocker">
-          No se puede publicar: {publishBlocker}
+          <span>No se puede publicar: {publishBlocker}</span>
+          <button className="workspace__publish-blocker-link" onClick={() => setTab('review')} type="button">
+            Ver bloqueos ({issues.critical.length})
+          </button>
         </div>
       ) : null}
 
@@ -1112,92 +1168,104 @@ export default function VehicleWorkspaceTab() {
       <div className="workspace__body">
         {tab === 'overview' ? (
           <div className="workspace__grid">
-            <div>
-              <VehicleSummaryCard
-                imageUrl={primaryImageUrl}
-                title={title}
-                subtitle={`${vehicle.condition === 'used' ? 'Seminuevo' : 'Nuevo'} - ${
-                  agencyCity || 'Sin ciudad'
-                }`}
-                badge={<StatusBadge tone="info">{vehicle.price || 'Precio a consultar'}</StatusBadge>}
-              />
-              <dl className="workspace__facts">
-                <div>
-                  <dt>Agencia</dt>
-                  <dd>{agencyName || vehicle.sourceDealerName || '-'}</dd>
+            <div className="workspace__stack">
+              <section className="workspace__card">
+                <VehicleSummaryCard
+                  imageUrl={primaryImageUrl}
+                  title={title}
+                  subtitle={`${vehicle.condition === 'used' ? 'Seminuevo' : 'Nuevo'} · ${
+                    agencyCity || 'Sin ciudad'
+                  }`}
+                  badge={<StatusBadge tone="info">{vehicle.price || 'Precio a consultar'}</StatusBadge>}
+                />
+                <dl className="workspace__facts">
+                  <div>
+                    <dt>Agencia</dt>
+                    <dd>{agencyName || vehicle.sourceDealerName || '-'}</dd>
+                  </div>
+                  <div>
+                    <dt>Ciudad</dt>
+                    <dd>{agencyCity || '-'}</dd>
+                  </div>
+                  <div>
+                    <dt>Estatus</dt>
+                    <dd>{INVENTORY_STATUS_LABELS[vehicle.inventoryStatus || ''] || '-'}</dd>
+                  </div>
+                  <div>
+                    <dt>Kilometraje</dt>
+                    <dd>{vehicle.mileage ? `${vehicle.mileage} km` : '-'}</dd>
+                  </div>
+                  <div>
+                    <dt>Actualizado</dt>
+                    <dd>{formatDate(vehicle.updatedAt)}</dd>
+                  </div>
+                  <div>
+                    <dt>Imagen sync</dt>
+                    <dd>
+                      {vehicle.imageUrl ? (
+                        <a href={vehicle.imageUrl} rel="noreferrer" target="_blank" title={vehicle.imagePath || undefined}>
+                          {vehicle.imageFilename || 'Abrir imagen'}
+                        </a>
+                      ) : (
+                        '-'
+                      )}
+                    </dd>
+                  </div>
+                </dl>
+              </section>
+              <section className="workspace__card">
+                <div className="workspace__section-head">
+                  <h3>Demanda del vehículo</h3>
+                  <StatusBadge tone={analytics.leads ? 'success' : 'neutral'}>
+                    {analytics.conversionRate}% conversión
+                  </StatusBadge>
                 </div>
-                <div>
-                  <dt>Ciudad</dt>
-                  <dd>{agencyCity || '-'}</dd>
-                </div>
-                <div>
-                  <dt>Estatus</dt>
-                  <dd>{INVENTORY_STATUS_LABELS[vehicle.inventoryStatus || ''] || '-'}</dd>
-                </div>
-                <div>
-                  <dt>Kilometraje</dt>
-                  <dd>{vehicle.mileage ? `${vehicle.mileage} km` : '-'}</dd>
-                </div>
-                <div>
-                  <dt>Slug</dt>
-                  <dd>{vehicle.slug || '-'}</dd>
-                </div>
-                <div>
-                  <dt>Actualizado</dt>
-                  <dd>{formatDate(vehicle.updatedAt)}</dd>
-                </div>
-                <div>
-                  <dt>Imagen sync</dt>
-                  <dd>
-                    {vehicle.imageUrl ? (
-                      <a href={vehicle.imageUrl} rel="noreferrer" target="_blank">
-                        {vehicle.imageFilename || vehicle.imagePath || 'Abrir imagen'}
-                      </a>
-                    ) : (
-                      '-'
-                    )}
-                  </dd>
-                </div>
-              </dl>
-              <div className="workspace__section-head">
-                <h3>Demanda del vehículo</h3>
-                <StatusBadge tone={analytics.leads ? 'success' : 'neutral'}>
-                  {analytics.conversionRate}% conversion
-                </StatusBadge>
-              </div>
-              <dl className="workspace__facts workspace__facts--analytics">
-                <div>
-                  <dt>Vistas</dt>
-                  <dd>{analytics.views}</dd>
-                </div>
-                <div>
-                  <dt>Clics</dt>
-                  <dd>{analytics.clicks}</dd>
-                </div>
-                <div>
-                  <dt>Leads WhatsApp</dt>
-                  <dd>{analytics.leads}</dd>
-                </div>
-                <div>
-                  <dt>Ultima vista</dt>
-                  <dd>{formatDate(analytics.lastView)}</dd>
-                </div>
-                <div>
-                  <dt>Ultimo lead</dt>
-                  <dd>{formatDate(analytics.lastLead)}</dd>
-                </div>
-              </dl>
+                <dl className="workspace__stats">
+                  <div>
+                    <dt>Vistas</dt>
+                    <dd>{analytics.views}</dd>
+                  </div>
+                  <div>
+                    <dt>Clics</dt>
+                    <dd>{analytics.clicks}</dd>
+                  </div>
+                  <div>
+                    <dt>Leads WhatsApp</dt>
+                    <dd>{analytics.leads}</dd>
+                  </div>
+                </dl>
+                <dl className="workspace__facts workspace__facts--analytics">
+                  <div>
+                    <dt>Última vista</dt>
+                    <dd>{formatDate(analytics.lastView)}</dd>
+                  </div>
+                  <div>
+                    <dt>Último lead</dt>
+                    <dd>{formatDate(analytics.lastLead)}</dd>
+                  </div>
+                </dl>
+              </section>
             </div>
-            <div>
-              <h3>Lista de completitud</h3>
-              <CompletionChecklist items={checklist} />
-              <p className="builder__muted">{vehicle.description || 'Sin descripcion.'}</p>
+            <div className="workspace__stack">
+              <section className="workspace__card">
+                <div className="workspace__section-head">
+                  <h3>Lista de completitud</h3>
+                </div>
+                <CompletionChecklist items={checklist} />
+              </section>
+              <section className="workspace__card">
+                <div className="workspace__section-head">
+                  <h3>Descripción</h3>
+                </div>
+                <p className="builder__muted">{vehicle.description || 'Sin descripción.'}</p>
+              </section>
             </div>
           </div>
         ) : null}
 
         {tab === 'specs' ? (
           <div className="workspace__edit-stack">
+            <section className="workspace__card">
             <div className="workspace__section-head">
               <h3>Detalles principales</h3>
               <StatusBadge tone="info">{SPEC_STATUS_LABELS[(vehicle.specStatus as SpecStatus) || 'missing']}</StatusBadge>
@@ -1292,6 +1360,9 @@ export default function VehicleWorkspaceTab() {
               </label>
             </div>
 
+            </section>
+
+            <section className="workspace__card">
             <VehicleSpecsLookup
               defaultMake={vehicle.brand || ''}
               defaultModel={vehicle.model || ''}
@@ -1358,6 +1429,9 @@ export default function VehicleWorkspaceTab() {
               </React.Fragment>
             ))}
 
+            </section>
+
+            <section className="workspace__card">
             <div className="workspace__section-head">
               <h3>Características</h3>
               <ActionButton
@@ -1384,6 +1458,9 @@ export default function VehicleWorkspaceTab() {
               ))}
             </div>
 
+            </section>
+
+            <section className="workspace__card">
             <div className="workspace__section-head">
               <h3>Tags de catálogo</h3>
               <StatusBadge tone="neutral">{selectedTagIds.size}</StatusBadge>
@@ -1417,6 +1494,8 @@ export default function VehicleWorkspaceTab() {
               })}
             </div>
 
+            </section>
+
             <div className="workspace__form-actions">
               <ActionButton
                 variant={dirty ? 'primary' : 'secondary'}
@@ -1445,7 +1524,10 @@ export default function VehicleWorkspaceTab() {
                 {IMAGE_STATUS_LABELS[imageStatus]}
               </StatusBadge>
             </div>
-            <VehicleImageStudio vehicle={vehicle} onChanged={() => void load()} />
+            <VehicleImageStudio
+              vehicle={vehicle}
+              onChanged={() => void load({ preserveDirtyDraft: true, preserveDirtyTemplateOverrides: true })}
+            />
           </div>
         ) : null}
 
@@ -1482,7 +1564,10 @@ export default function VehicleWorkspaceTab() {
               <TemplateOverridesPanel
                 value={templateOverrides}
                 saving={templateSaving}
-                onChange={setTemplateOverrides}
+                onChange={(next) => {
+                  setTemplateOverrides(next)
+                  setTemplateDirty(true)
+                }}
                 onSave={() => void saveTemplateOverrides()}
               />
             }

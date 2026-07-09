@@ -218,6 +218,22 @@ const RIGHTS_STATUS_LABELS: Record<string, string> = {
   unknown: 'Derechos por revisar',
 }
 
+/** Mirrors the matchConfidence select options in VehicleMediaAssets. */
+const MATCH_CONFIDENCE_LABELS: Record<string, string> = {
+  exact_vehicle: 'Vehículo exacto',
+  same_trim_color: 'Mismo trim y color',
+  same_model_color: 'Mismo modelo y color',
+  same_model: 'Mismo modelo',
+  representative: 'Representativa',
+  generated: 'Generada',
+  unknown: 'Por revisar',
+}
+
+function matchConfidenceLabel(value: string | null | undefined, fallback: string): string {
+  if (!value) return fallback
+  return MATCH_CONFIDENCE_LABELS[value] || fallback
+}
+
 const USAGE_LABELS: Record<string, string> = {
   vehicle_hero: 'Principal',
   vehicle_gallery: 'Galería',
@@ -993,12 +1009,10 @@ export default function VehicleImageStudio({
           <div className="studio__synced-source">
             <img src={syncedImageUrl} alt={vehicle.imageFilename || 'Imagen importada'} />
             <div>
-              <strong>Imagen sincronizada pendiente de publicar</strong>
-              <p>
-                Viene del inventario sincronizado. Solo aparece en la web cuando se aprueba y se publica como principal
-                o en la galería.
-              </p>
-              <small>{vehicle.imageFilename || vehicle.imagePath || syncedImageUrl}</small>
+              <strong title={vehicle.imageFilename || vehicle.imagePath || undefined}>
+                Imagen sincronizada pendiente de publicar
+              </strong>
+              <p>Se aprueba y se publica como principal o en la galería para aparecer en la web.</p>
             </div>
             <div className="studio__synced-actions">
               {syncedIsApproved && !syncedIsHero && !syncedIsInGallery ? (
@@ -1249,7 +1263,7 @@ export default function VehicleImageStudio({
                     <div key={asset.id} className="studio__output">
                       <img src={url} alt={asset.title || ''} />
                       <span className="builder__muted studio__dim">
-                        {asset.matchConfidence || 'Coincidencia por modelo/año/trim/color'}
+                        {matchConfidenceLabel(asset.matchConfidence, 'Coincidencia por modelo/año/trim/color')}
                       </span>
                       <div className="studio__output-actions">
                         <button type="button" disabled={busy} onClick={() => void useLocalAsset(asset, 'hero')}>
@@ -1333,7 +1347,7 @@ export default function VehicleImageStudio({
                   <img src={url} alt={asset.title || 'Imagen pendiente'} />
                   <div className="studio__review-meta">
                     <strong>{assetSourceLabel(asset)}</strong>
-                    <span>{asset.matchConfidence || 'Coincidencia por revisar'}</span>
+                    <span>{matchConfidenceLabel(asset.matchConfidence, 'Coincidencia por revisar')}</span>
                     <span>{assetApprovalLabel(asset)} - {assetRightsLabel(asset)}</span>
                     <span>{USAGE_LABELS[asset.usage || ''] || 'Uso por definir'}</span>
                     <StatusBadge tone={assetPublicationTone(asset, heroId, galleryMediaIds)}>
@@ -1430,9 +1444,9 @@ export default function VehicleImageStudio({
                   <img src={url} alt={asset.title || 'Imagen aprobada'} />
                   <div className="studio__review-meta">
                     <strong>{assetSourceLabel(asset)}</strong>
-                    <span>{asset.matchConfidence || 'Lista para publicar'}</span>
-                    <span>{assetApprovalLabel(asset)} - {assetRightsLabel(asset)}</span>
-                    <StatusBadge tone="warning">Aprobada - sin publicar</StatusBadge>
+                    <span>
+                      {matchConfidenceLabel(asset.matchConfidence, 'Lista para publicar')} · {assetRightsLabel(asset)}
+                    </span>
                   </div>
                   <div className="studio__output-actions studio__review-actions">
                     <button
@@ -1463,6 +1477,7 @@ export default function VehicleImageStudio({
                       Publicar como principal
                     </button>
                     <button
+                      className="studio__link-action"
                       disabled={busy}
                       onClick={() => {
                         setDismissedApprovedAssetIds((current) => {
@@ -1470,7 +1485,7 @@ export default function VehicleImageStudio({
                           next.add(String(asset.id))
                           return next
                         })
-                        setNotice('Imagen mantenida en biblioteca. No se publico en la web.')
+                        setNotice('Imagen mantenida en biblioteca. No se publicó en la web.')
                       }}
                       type="button"
                     >
@@ -1501,8 +1516,8 @@ export default function VehicleImageStudio({
               return (
                 <div key={asset.id} className="studio__output">
                   <img src={url} alt={asset.title || ''} />
-                  <span className="builder__muted studio__dim">
-                    {assetSourceLabel(asset)} - {assetApprovalLabel(asset)} - {assetRightsLabel(asset)}
+                  <span className="builder__muted studio__dim" title={assetApprovalLabel(asset)}>
+                    {assetSourceLabel(asset)} · {assetRightsLabel(asset)}
                   </span>
                   <StatusBadge tone={assetPublicationTone(asset, heroId, galleryMediaIds)}>
                     {assetPublicationLabel(asset, heroId, galleryMediaIds)}

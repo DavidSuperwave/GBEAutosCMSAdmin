@@ -1702,14 +1702,79 @@
 }
 
 .workspace__publish-blocker {
+  align-items: center;
   background: rgb(217 119 6 / 12%);
   border: 1px solid rgb(217 119 6 / 24%);
   border-radius: 8px;
   color: var(--admin-kit-warning, #92400e);
+  display: flex;
+  flex-wrap: wrap;
   font-size: 13px;
   font-weight: 700;
+  gap: 8px;
+  justify-content: space-between;
   margin-bottom: 14px;
-  padding: 10px 14px;
+  padding: 8px 14px;
+}
+
+.workspace__publish-blocker-link {
+  background: none;
+  border: 0;
+  color: inherit;
+  cursor: pointer;
+  font: inherit;
+  padding: 0;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  white-space: nowrap;
+}
+
+/* Carded sections: each block of the workspace reads as its own surface. */
+.workspace__card {
+  background: var(--admin-kit-surface);
+  border: 1px solid var(--admin-kit-border);
+  border-radius: var(--admin-kit-radius);
+  min-width: 0;
+  padding: 16px 18px;
+}
+
+.workspace__card > :last-child {
+  margin-bottom: 0;
+}
+
+.workspace__stack {
+  display: grid;
+  gap: 14px;
+  align-content: start;
+}
+
+/* Big-number tiles for the demand panel. */
+.workspace__stats {
+  display: grid;
+  gap: 10px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  margin: 0 0 12px;
+}
+
+.workspace__stats div {
+  background: var(--admin-kit-surface-subtle, var(--theme-elevation-50));
+  border: 1px solid var(--theme-elevation-100);
+  border-radius: 8px;
+  padding: 10px 12px;
+}
+
+.workspace__stats dt {
+  color: var(--theme-elevation-500);
+  font-size: 11px;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+
+.workspace__stats dd {
+  font-size: 22px;
+  font-weight: 800;
+  line-height: 1.2;
+  margin: 2px 0 0;
 }
 
 .workspace__tabs {
@@ -1773,6 +1838,9 @@
   font-size: 13px;
   font-weight: 600;
   margin: 0;
+  min-width: 0;
+  overflow-wrap: anywhere;
+  text-align: right;
 }
 
 .workspace__section-head {
@@ -2077,8 +2145,13 @@
 }
 
 .studio__current {
+  background: var(--admin-kit-surface);
+  border: 1px solid var(--admin-kit-border);
+  border-radius: var(--admin-kit-radius);
   display: grid;
   gap: 12px;
+  min-width: 0;
+  padding: 16px 18px;
 }
 
 .studio__hero {
@@ -2208,11 +2281,27 @@
   gap: 12px;
 }
 
+/* Match the workspace card language so studio zones read as surfaces. */
+.studio__gallery-section,
+.studio__library {
+  background: var(--admin-kit-surface);
+  border: 1px solid var(--admin-kit-border);
+  border-radius: var(--admin-kit-radius);
+  min-width: 0;
+  padding: 16px 18px;
+}
+
 .studio__section-head {
   align-items: center;
   display: flex;
-  gap: 12px;
-  justify-content: space-between;
+  gap: 10px;
+  justify-content: flex-start;
+}
+
+/* Count badges sit next to the title, not orphaned at the far edge. */
+.studio__section-head > .admin-kit-badge,
+.studio__wizard-head > .admin-kit-badge {
+  margin-left: 2px;
 }
 
 .studio__section-head h4,
@@ -2428,7 +2517,7 @@
   align-items: center;
   display: flex;
   gap: 10px;
-  justify-content: space-between;
+  justify-content: flex-start;
 }
 
 .studio__wizard-head h4 {
@@ -5125,9 +5214,15 @@
     white-space: nowrap;
   }
 
-  /* The workspace action bar should not pin half the phone viewport. */
+  /* The workspace action bar should not pin half the phone viewport. The
+     sticky backdrop must go with it: on a static bar the absolutely
+     positioned ::before would anchor to the page and paint over content. */
   .workspace__actionbar {
     position: static;
+  }
+
+  .workspace__actionbar::before {
+    content: none;
   }
 
   .workspace__actionbar-buttons {
@@ -8298,16 +8393,13 @@
 /* ---- Inventario image approval clarity ---------------------------------- */
 
 .studio__approved-queue {
-  background: #fffaf0;
-  border: 1px solid #f4c56f;
-  border-radius: var(--gbe-radius);
+  background: var(--admin-kit-surface);
+  border: 1px solid var(--admin-kit-border);
+  border-left: 3px solid #f4c56f;
+  border-radius: var(--admin-kit-radius);
   display: grid;
   gap: 12px;
-  padding: 14px;
-}
-
-.studio__review-card--approved {
-  border-color: #f4c56f;
+  padding: 16px 18px;
 }
 
 .studio__review-meta .admin-kit-badge {
@@ -8318,6 +8410,22 @@
   background: var(--admin-kit-primary, #2563eb) !important;
   border-color: var(--admin-kit-primary, #2563eb) !important;
   color: #fff !important;
+}
+
+/* Tertiary action rendered as a quiet text link instead of a third button. */
+.studio__link-action {
+  background: none !important;
+  border: 0 !important;
+  color: var(--theme-elevation-600) !important;
+  cursor: pointer;
+  font-size: 12px;
+  padding: 4px 0 !important;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.studio__link-action:hover:not(:disabled) {
+  color: var(--theme-text) !important;
 }
 
 /* ---- AI wizard production-beta light treatment -------------------------- */
