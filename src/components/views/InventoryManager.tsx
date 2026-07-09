@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useCallback, useEffect, useMemo, useState } from 'react'
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
 import {
   ActionButton,
@@ -13,6 +13,7 @@ import {
   StatusBadge,
 } from '../admin-ui/kit'
 import VehicleImportModal from '../admin-ui/VehicleImportModal'
+import { clearVehicleQueue, vehicleWorkspacePath, writeVehicleQueue } from '../admin-ui/vehicleQueue'
 import {
   IMAGE_STATUS_DESCRIPTIONS,
   IMAGE_STATUS_LABELS,
@@ -144,8 +145,8 @@ function isTabKey(value: string | null): value is TabKey {
   return TABS.some((t) => t.key === value)
 }
 
-function buildQuery(tab: TabKey, search: string, page: number, sort: string): string {
-  const parts: string[] = [`limit=${PAGE_SIZE}`, `page=${page}`, `depth=1`, `sort=${sort}`]
+function buildWhereParts(tab: TabKey, search: string): string[] {
+  const parts: string[] = []
   const trimmed = search.trim()
   const base = tabDefinition(tab).where(trimmed ? 'where[and][0]' : 'where')
   if (base.length > 0 && trimmed) {
@@ -164,8 +165,15 @@ function buildQuery(tab: TabKey, search: string, page: number, sort: string): st
     parts.push(`where[or][2][city][like]=${q}`)
     parts.push(`where[or][3][exteriorColor][like]=${q}`)
   }
-  return parts.join('&')
+  return parts
 }
+
+function buildQuery(tab: TabKey, search: string, page: number, sort: string): string {
+  return [`limit=${PAGE_SIZE}`, `page=${page}`, `depth=1`, `sort=${sort}`, ...buildWhereParts(tab, search)].join('&')
+}
+
+/** Max vehicles snapshotted into a triage queue. */
+const QUEUE_LIMIT = 1000
 
 function mediaImageUrl(image: Vehicle['image']): string | undefined {
   if (!image || typeof image === 'string') return undefined
@@ -208,6 +216,7 @@ export default function InventoryManager() {
   const [error, setError] = useState<string | null>(null)
   const [bulkBusy, setBulkBusy] = useState(false)
   const [importOpen, setImportOpen] = useState(false)
+  const [queueBusy, setQueueBusy] = useState(false)
   const [confirmAction, setConfirmAction] = useState<{
     title: string
     message?: string
@@ -233,7 +242,12 @@ export default function InventoryManager() {
     }
   }, [])
 
+  // Monotonic sequence so a slow, stale response (e.g. the unfiltered "all"
+  // query racing a fast filtered one) can never clobber newer results.
+  const fetchSeq = useRef(0)
+
   const fetchList = useCallback(async () => {
+    const seq = ++fetchSeq.current
     setLoading(true)
     setError(null)
     try {
@@ -245,14 +259,16 @@ export default function InventoryManager() {
         totalDocs: number
         totalPages: number
       }
+      if (seq !== fetchSeq.current) return
       setDocs(data.docs || [])
       setTotalDocs(data.totalDocs || 0)
       setTotalPages(data.totalPages || 1)
       setSelected(new Set())
     } catch (err) {
+      if (seq !== fetchSeq.current) return
       setError(err instanceof Error ? err.message : 'Error al cargar.')
     } finally {
-      setLoading(false)
+      if (seq === fetchSeq.current) setLoading(false)
     }
   }, [tab, appliedSearch, page, sort])
 
@@ -362,6 +378,43 @@ export default function InventoryManager() {
     }
   }, [selected, fetchList, fetchCounts])
 
+  const startQueue = useCallback(async () => {
+    setQueueBusy(true)
+    setError(null)
+    try {
+      const query = [
+        `limit=${QUEUE_LIMIT}`,
+        'page=1',
+        'depth=0',
+        `sort=${sort}`,
+        'select[id]=true',
+        ...buildWhereParts(tab, appliedSearch),
+      ].join('&')
+      const res = await fetch(`/api/vehicles?${query}`, { credentials: 'include' })
+      if (!res.ok) throw new Error('No se pudo preparar la cola de trabajo.')
+      const data = (await res.json()) as { docs: Array<{ id: string | number }> }
+      const ids = (data.docs || []).map((doc) => String(doc.id))
+      if (ids.length === 0) {
+        setError('No hay vehículos en este filtro para trabajar en cola.')
+        return
+      }
+      const tabLabel = tabDefinition(tab).label
+      clearVehicleQueue()
+      writeVehicleQueue({
+        label: appliedSearch.trim() ? `${tabLabel} · "${appliedSearch.trim()}"` : tabLabel,
+        ids,
+        index: 0,
+        returnTo: '/admin/inventory',
+        createdAt: Date.now(),
+      })
+      window.location.href = vehicleWorkspacePath(ids[0])
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Error al preparar la cola.')
+    } finally {
+      setQueueBusy(false)
+    }
+  }, [tab, appliedSearch, sort])
+
   const allSelected = selected.size > 0 && selected.size === docs.length
 
   const header = useMemo(
@@ -441,6 +494,14 @@ export default function InventoryManager() {
           <option value="-completenessScore">Más completos</option>
           <option value="completenessScore">Menos completos</option>
         </select>
+        <ActionButton
+          variant="primary"
+          disabled={queueBusy || loading || totalDocs === 0}
+          onClick={() => void startQueue()}
+          title="Recorre uno por uno los vehículos de este filtro en el espacio de trabajo."
+        >
+          {queueBusy ? 'Preparando…' : `Trabajar en cola (${Math.min(totalDocs, QUEUE_LIMIT)})`}
+        </ActionButton>
       </div>
 
       {selected.size > 0 ? (

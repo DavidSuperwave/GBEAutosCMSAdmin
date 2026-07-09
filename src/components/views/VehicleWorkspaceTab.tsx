@@ -8,10 +8,18 @@ import VehicleImageStudio from './VehicleImageStudio'
 import VehicleSpecsLookup, { type AppliedVehicleSpecs } from './VehicleSpecsLookup'
 import { VEHICLE_SECTION_LIBRARY } from '../admin-ui/sectionLibraries'
 import {
+  clearVehicleQueue,
+  readVehicleQueue,
+  vehicleWorkspacePath,
+  writeVehicleQueue,
+  type VehicleQueue,
+} from '../admin-ui/vehicleQueue'
+import {
   ActionButton,
   AdminPageShell,
   AdminTabs,
   CompletionChecklist,
+  ConfirmDialog,
   EmptyState,
   PrimaryActionBar,
   StatusBadge,
@@ -24,6 +32,7 @@ import {
   SPEC_STATUS_LABELS,
   SPEC_KEYS,
   calculateVehicleCompleteness,
+  countFilledSpecs,
   getVehiclePublishIssues,
   type ImageStatus,
   type PublishStatus,
@@ -153,6 +162,17 @@ const INVENTORY_STATUS_LABELS: Record<string, string> = {
   reserved: 'Apartado',
   sold: 'Vendido',
 }
+
+/** Grouped presentation of SPEC_KEYS so the form reads in sections. */
+const SPEC_GROUPS: Array<{ title: string; keys: string[] }> = [
+  {
+    title: 'Motor y desempeño',
+    keys: ['motor', 'potencia', 'torqueNm', 'cylinders', 'transmision', 'combustible', 'traccion'],
+  },
+  { title: 'Carrocería', keys: ['tipo', 'seats', 'doors'] },
+  { title: 'Dimensiones', keys: ['lengthMm', 'widthMm', 'heightMm', 'wheelbaseMm'] },
+  { title: 'Capacidades', keys: ['maxTrunkCapacityL', 'fuelTankCapacityL'] },
+]
 
 const BODY_TYPE_OPTIONS = [
   ['', 'Sin definir'],
@@ -458,6 +478,9 @@ export default function VehicleWorkspaceTab() {
   const [templateSaving, setTemplateSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [notice, setNotice] = useState<string | null>(null)
+  const [dirty, setDirty] = useState(false)
+  const [queue, setQueue] = useState<VehicleQueue | null>(null)
+  const [pendingNav, setPendingNav] = useState<(() => void) | null>(null)
   const [analytics, setAnalytics] = useState<VehicleAnalytics>({
     views: 0,
     clicks: 0,
@@ -478,6 +501,7 @@ export default function VehicleWorkspaceTab() {
       const nextVehicle = (await res.json()) as Vehicle
       setVehicle(nextVehicle)
       setDraft(createDraft(nextVehicle))
+      setDirty(false)
       setTemplateOverrides(nextVehicle.templateOverrides || {})
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Error al cargar.')
@@ -489,6 +513,35 @@ export default function VehicleWorkspaceTab() {
   useEffect(() => {
     void load()
   }, [load])
+
+  // Triage queue: pick it up when this vehicle belongs to the active queue and
+  // keep the stored index pointing at the vehicle being viewed.
+  useEffect(() => {
+    if (!id) return
+    const activeQueue = readVehicleQueue()
+    if (!activeQueue) return
+    const position = activeQueue.ids.indexOf(String(id))
+    if (position === -1) {
+      setQueue(null)
+      return
+    }
+    if (activeQueue.index !== position) {
+      activeQueue.index = position
+      writeVehicleQueue(activeQueue)
+    }
+    setQueue(activeQueue)
+  }, [id])
+
+  // Warn on tab close / external navigation while the form has unsaved edits.
+  useEffect(() => {
+    if (!dirty) return
+    const handler = (event: BeforeUnloadEvent) => {
+      event.preventDefault()
+      event.returnValue = ''
+    }
+    window.addEventListener('beforeunload', handler)
+    return () => window.removeEventListener('beforeunload', handler)
+  }, [dirty])
 
   useEffect(() => {
     let active = true
@@ -589,32 +642,37 @@ export default function VehicleWorkspaceTab() {
   const checklist = useMemo<ChecklistItem[]>(() => {
     if (!vehicle) return []
     const items: ChecklistItem[] = []
-    const need = (label: string, ok: boolean) => items.push({ label, status: ok ? 'ok' : 'bad' })
+    const need = (label: string, ok: boolean, target: TabKey = 'specs') =>
+      items.push({ label, status: ok ? 'ok' : 'bad', onClick: () => setTab(target) })
     need('Marca, modelo y año', Boolean(vehicle.brand && vehicle.model && vehicle.year))
     need('Condición', Boolean(vehicle.condition))
     need('Agencia y ciudad', Boolean(vehicle.dealership && dealershipCity(vehicle)))
-    need('Imagen principal', Boolean(vehicleImageUrl(vehicle)))
+    need('Imagen principal', Boolean(vehicleImageUrl(vehicle)), 'images')
     need('Estatus', Boolean(vehicle.inventoryStatus))
     items.push({
       label: 'Imagen aprobada',
       status: vehicle.imageStatus === 'approved' ? 'ok' : vehicleImageUrl(vehicle) ? 'warn' : 'bad',
+      onClick: () => setTab('images'),
     })
-    items.push({ label: 'Precio', status: vehicle.price ? 'ok' : 'warn' })
+    items.push({ label: 'Precio', status: vehicle.price ? 'ok' : 'warn', onClick: () => setTab('specs') })
     items.push({
       label: 'Descripción',
       status: vehicle.description && String(vehicle.description).length >= 40 ? 'ok' : 'warn',
+      onClick: () => setTab('specs'),
     })
     return items
   }, [vehicle])
 
   const updateDraft = useCallback((patch: Partial<VehicleDraft>) => {
     setDraft((current) => (current ? { ...current, ...patch } : current))
+    setDirty(true)
   }, [])
 
   const setSpecValue = useCallback((key: string, value: string) => {
     setDraft((current) =>
       current ? { ...current, specs: { ...current.specs, [key]: value } } : current,
     )
+    setDirty(true)
   }, [])
 
   const setFeatureValue = useCallback((index: number, value: string) => {
@@ -628,6 +686,7 @@ export default function VehicleWorkspaceTab() {
           }
         : current,
     )
+    setDirty(true)
   }, [])
 
   const applySpecs = useCallback((data: AppliedVehicleSpecs) => {
@@ -643,18 +702,19 @@ export default function VehicleWorkspaceTab() {
           }
         : current,
     )
-    setNotice('Especificaciones aplicadas al borrador. Guarda detalles para conservarlas.')
+    setDirty(true)
+    setNotice('Especificaciones aplicadas al borrador. Guarda los cambios para conservarlas.')
   }, [])
 
-  const saveVehicleEdits = useCallback(async () => {
-    if (!id || !draft) return
+  const saveVehicleEdits = useCallback(async (): Promise<boolean> => {
+    if (!id || !draft) return false
     setSaving(true)
     setError(null)
     setNotice(null)
     try {
       const mileage = draft.mileage.trim() ? Number(draft.mileage) : null
       if (draft.mileage.trim() && !Number.isFinite(mileage)) {
-        throw new Error('El kilometraje debe ser numerico.')
+        throw new Error('El kilometraje debe ser numérico.')
       }
 
       const res = await fetch(`/api/vehicles/${id}`, {
@@ -683,10 +743,13 @@ export default function VehicleWorkspaceTab() {
         const detail = await res.text()
         throw new Error(`No se pudieron guardar los cambios. ${detail.slice(0, 160)}`)
       }
+      setDirty(false)
       setNotice('Cambios guardados en el vehículo.')
       await load()
+      return true
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Error al guardar.')
+      return false
     } finally {
       setSaving(false)
     }
@@ -695,8 +758,12 @@ export default function VehicleWorkspaceTab() {
   const setStatus = useCallback(
     async (publishStatus: PublishStatus, opts?: { guard?: boolean }) => {
       if (!id || !vehicle) return
+      if (dirty) {
+        setError('Tienes cambios sin guardar. Guarda los cambios antes de cambiar el estado.')
+        return
+      }
       if (opts?.guard && issues.critical.length > 0) {
-        setError('No se puede publicar: resuelve los problemas criticos primero.')
+        setError('No se puede publicar: resuelve los problemas críticos primero.')
         setTab('review')
         return
       }
@@ -722,8 +789,44 @@ export default function VehicleWorkspaceTab() {
         setBusy(false)
       }
     },
-    [id, vehicle, issues.critical.length, load],
+    [id, vehicle, dirty, issues.critical.length, load],
   )
+
+  // ---- Triage queue navigation --------------------------------------------
+
+  const commitQueueNav = useCallback(
+    (nextIndex: number) => {
+      if (!queue) return
+      const bounded = Math.min(Math.max(0, nextIndex), queue.ids.length - 1)
+      writeVehicleQueue({ ...queue, index: bounded })
+      window.location.href = vehicleWorkspacePath(queue.ids[bounded])
+    },
+    [queue],
+  )
+
+  const requestQueueNav = useCallback(
+    (nextIndex: number) => {
+      if (dirty) {
+        setPendingNav(() => () => commitQueueNav(nextIndex))
+        return
+      }
+      commitQueueNav(nextIndex)
+    },
+    [dirty, commitQueueNav],
+  )
+
+  const exitQueue = useCallback(() => {
+    const returnTo = queue?.returnTo || '/admin/inventory'
+    const leave = () => {
+      clearVehicleQueue()
+      window.location.href = returnTo
+    }
+    if (dirty) {
+      setPendingNav(() => leave)
+      return
+    }
+    leave()
+  }, [queue, dirty])
 
   const saveTags = useCallback(
     async (tagIds: string[]) => {
@@ -881,6 +984,38 @@ export default function VehicleWorkspaceTab() {
 
   return (
     <AdminPageShell className="workspace">
+      {queue ? (
+        <div className="workspace__queuebar">
+          <div className="workspace__queuebar-info">
+            <strong>Cola: {queue.label}</strong>
+            <span>
+              {queue.index + 1} de {queue.ids.length}
+            </span>
+          </div>
+          <div className="workspace__queuebar-actions">
+            <ActionButton
+              size="sm"
+              variant="secondary"
+              disabled={queue.index <= 0}
+              onClick={() => requestQueueNav(queue.index - 1)}
+            >
+              ← Anterior
+            </ActionButton>
+            <ActionButton
+              size="sm"
+              variant="primary"
+              disabled={queue.index >= queue.ids.length - 1}
+              onClick={() => requestQueueNav(queue.index + 1)}
+            >
+              Siguiente →
+            </ActionButton>
+            <ActionButton size="sm" variant="ghost" onClick={exitQueue}>
+              Salir de la cola
+            </ActionButton>
+          </div>
+        </div>
+      ) : null}
+
       <PrimaryActionBar className="workspace__actionbar">
         <div className="workspace__actionbar-info">
           <strong>{title}</strong>
@@ -895,6 +1030,7 @@ export default function VehicleWorkspaceTab() {
           >
             {PUBLISH_STATUS_LABELS[publishStatus]}
           </StatusBadge>
+          {dirty ? <StatusBadge tone="warning">Cambios sin guardar</StatusBadge> : null}
           <span className="workspace__completeness">
             <span className="workspace__completeness-bar">
               <span style={{ width: `${completeness}%` }} />
@@ -903,7 +1039,11 @@ export default function VehicleWorkspaceTab() {
           </span>
         </div>
         <div className="workspace__actionbar-buttons">
-          <ActionButton variant="secondary" disabled={saving} onClick={() => void saveVehicleEdits()}>
+          <ActionButton
+            variant={dirty ? 'primary' : 'secondary'}
+            disabled={saving}
+            onClick={() => void saveVehicleEdits()}
+          >
             {saving ? 'Guardando...' : 'Guardar cambios'}
           </ActionButton>
           <ActionButton variant="secondary" disabled={busy} onClick={() => void setStatus('draft')}>
@@ -913,14 +1053,32 @@ export default function VehicleWorkspaceTab() {
             Enviar a revisión
           </ActionButton>
           <ActionButton
-            variant="primary"
+            variant={dirty ? 'secondary' : 'primary'}
             disabled={busy || issues.critical.length > 0}
+            title={issues.critical.length > 0 ? `Bloqueado: ${issues.critical.join(' ')}` : undefined}
             onClick={() => void setStatus('published', { guard: true })}
           >
             Publicar
           </ActionButton>
         </div>
       </PrimaryActionBar>
+
+      <ConfirmDialog
+        open={pendingNav !== null}
+        title="Tienes cambios sin guardar"
+        message="Guarda los cambios de este vehículo antes de continuar, o sigue editando."
+        confirmLabel="Guardar y continuar"
+        cancelLabel="Seguir editando"
+        busy={saving}
+        onCancel={() => setPendingNav(null)}
+        onConfirm={() => {
+          void (async () => {
+            const saved = await saveVehicleEdits()
+            if (saved && pendingNav) pendingNav()
+            setPendingNav(null)
+          })()
+        }}
+      />
 
       {issues.critical.length > 0 ? (
         <div className="workspace__publish-blocker">
@@ -1178,25 +1336,39 @@ export default function VehicleWorkspaceTab() {
                   ))}
                 </select>
               </label>
-              {SPEC_KEYS.map((key) => (
-                <label key={key} className="builder__field">
-                  <span>{SPEC_LABELS[key] || key}</span>
-                  <input value={draft.specs[key] || ''} onChange={(event) => setSpecValue(key, event.target.value)} />
-                </label>
-              ))}
             </div>
 
             <div className="workspace__section-head">
-              <h3>Caracteristicas</h3>
+              <h3>Especificaciones técnicas</h3>
+              <StatusBadge tone="info" title="Con 4 o más especificaciones completas, las specs dejan de bloquear la publicación.">
+                {countFilledSpecs({ specs: draft.specs })}/4 para publicar
+              </StatusBadge>
+            </div>
+            {SPEC_GROUPS.map((group) => (
+              <React.Fragment key={group.title}>
+                <h4 className="workspace__spec-group">{group.title}</h4>
+                <div className="workspace__form-grid">
+                  {group.keys.map((key) => (
+                    <label key={key} className="builder__field">
+                      <span>{SPEC_LABELS[key] || key}</span>
+                      <input value={draft.specs[key] || ''} onChange={(event) => setSpecValue(key, event.target.value)} />
+                    </label>
+                  ))}
+                </div>
+              </React.Fragment>
+            ))}
+
+            <div className="workspace__section-head">
+              <h3>Características</h3>
               <ActionButton
                 variant="secondary"
                 onClick={() => updateDraft({ features: [...draft.features, ''] })}
               >
-                Agregar caracteristica
+                Agregar característica
               </ActionButton>
             </div>
             <div className="workspace__feature-list">
-              {draft.features.length === 0 ? <p className="builder__muted">Sin caracteristicas.</p> : null}
+              {draft.features.length === 0 ? <p className="builder__muted">Sin características.</p> : null}
               {draft.features.map((feature, index) => (
                 <div className="workspace__feature-row" key={`${index}-${feature}`}>
                   <input value={feature} onChange={(event) => setFeatureValue(index, event.target.value)} />
@@ -1246,8 +1418,12 @@ export default function VehicleWorkspaceTab() {
             </div>
 
             <div className="workspace__form-actions">
-              <ActionButton variant="primary" disabled={saving} onClick={() => void saveVehicleEdits()}>
-                {saving ? 'Guardando...' : 'Guardar detalles'}
+              <ActionButton
+                variant={dirty ? 'primary' : 'secondary'}
+                disabled={saving}
+                onClick={() => void saveVehicleEdits()}
+              >
+                {saving ? 'Guardando...' : 'Guardar cambios'}
               </ActionButton>
             </div>
           </div>

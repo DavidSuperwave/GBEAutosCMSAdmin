@@ -5153,6 +5153,62 @@
   margin-left: auto;
 }
 
+.workspace__queuebar {
+  align-items: center;
+  background: color-mix(in srgb, var(--admin-kit-accent) 8%, var(--admin-kit-surface));
+  border: 1px solid color-mix(in srgb, var(--admin-kit-accent) 30%, var(--admin-kit-border));
+  border-radius: var(--admin-kit-radius);
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  justify-content: space-between;
+  margin-bottom: 12px;
+  padding: 10px 14px;
+}
+
+.workspace__queuebar-info {
+  align-items: baseline;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.workspace__queuebar-info span {
+  color: var(--admin-kit-muted);
+  font-size: 13px;
+}
+
+.workspace__queuebar-actions {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.workspace__spec-group {
+  color: var(--theme-elevation-650, var(--theme-elevation-600));
+  font-size: 13px;
+  letter-spacing: 0.02em;
+  margin: 6px 0 0;
+  text-transform: uppercase;
+}
+
+.admin-kit-checklist__link {
+  background: none;
+  border: 0;
+  color: inherit;
+  cursor: pointer;
+  font: inherit;
+  padding: 0;
+  text-align: left;
+  text-decoration: underline dotted;
+  text-underline-offset: 3px;
+}
+
+.admin-kit-checklist__link:hover {
+  color: var(--admin-kit-accent);
+}
+
 .admin-kit-confirm__overlay {
   align-items: center;
   background: color-mix(in srgb, var(--theme-elevation-1000, #000) 42%, transparent);
