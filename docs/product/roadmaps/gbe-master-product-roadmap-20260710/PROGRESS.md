@@ -20,6 +20,8 @@ Delivered in-repo:
 - **F006/F022 — additive slice complete.** Public lead/analytics ingestion guard (`src/services/publicIngestionGuard.ts`): submitter-field whitelists (management-field injection blocked; anonymous lead `stage` limited to `new`/`whatsapp_opened` to match the live Storefront), string caps, duration clamp, per-IP sliding-window rate limits (in-memory, per instance). `analytics-events` update/delete → admin-only. **Remaining:** narrow ingestion endpoints + idempotency keys, in lockstep with the Storefront migration off raw POSTs. Commit `22fbefc`.
 - **F005 — slice complete.** Dealership `internalNotes`/`salesRepName` hidden from anonymous reads (contract-checked unconsumed by Storefront); explicit role-guarded mutations on Dealerships; `SiteConfig`/`Home` global update restricted to admin/content_editor. Live-verified: anonymous dealership read omits internal fields and keeps `whatsapp`; anonymous update of site-config → 403; anonymous reads of vehicles/leads/analytics → 403; public site-config/dealership reads intact. **Remaining:** `externalUrl` approved-redirect field (schema change → staging), bounded public dealership DTO endpoint + Storefront cutover. Commit `0993c0a`.
 
+- **F005/F006 — bounded public endpoints live (2026-07-10).** `GET /api/public/dealerships` (safe DTO), `POST /api/public/leads` (replay-window idempotency, one-submission-one-lead proven live), `POST /api/public/analytics` (taxonomy-validated). Contracts exported from `src/contracts/publicIngestion.ts`. **Remaining:** Storefront cutover to these endpoints, then closing anonymous access to the raw collections + `site-config`/`pages` reads.
+
 Blocked until human decisions / operator actions:
 
 | Item | Blocked on |
