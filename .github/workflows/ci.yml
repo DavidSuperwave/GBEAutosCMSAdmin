@@ -37,6 +37,9 @@ jobs:
       - name: Migration static checks
         run: npm run check:migrations
 
+      - name: Storefront contract drift check
+        run: npm run check:contracts
+
       - name: Typecheck
         run: npm run typecheck
 
