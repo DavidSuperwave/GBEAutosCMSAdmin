@@ -10,3 +10,4 @@
 export * from './analytics'
 export * from './blocks'
 export * from './publicCatalog'
+export * from './publicIngestion'
