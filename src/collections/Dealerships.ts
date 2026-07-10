@@ -1,9 +1,21 @@
-import type { CollectionConfig } from 'payload'
+import type { CollectionConfig, FieldAccess } from 'payload'
+
+import { isAdminAccess, rolesAccess } from '../access/roles'
+
+/** Internal-only fields: hidden from the anonymous storefront reads. The
+ * Storefront consumption contract (contracts/storefront-consumption.json)
+ * confirms it never reads these. */
+const staffOnlyRead: FieldAccess = ({ req }) => Boolean(req.user)
+
+const canEditDealerships = rolesAccess('content_editor', 'inventory_manager')
 
 export const Dealerships: CollectionConfig = {
   slug: 'dealerships',
   access: {
     read: () => true,
+    create: canEditDealerships,
+    update: canEditDealerships,
+    delete: isAdminAccess,
   },
   admin: {
     group: false,
@@ -52,11 +64,17 @@ export const Dealerships: CollectionConfig = {
         description: 'Se usa si no hay una agencia exacta para la marca seleccionada.',
       },
     },
-    { name: 'salesRepName', type: 'text', label: 'Asesor principal' },
+    {
+      name: 'salesRepName',
+      type: 'text',
+      label: 'Asesor principal',
+      access: { read: staffOnlyRead },
+    },
     {
       name: 'internalNotes',
       type: 'textarea',
       label: 'Notas internas',
+      access: { read: staffOnlyRead },
       admin: {
         position: 'sidebar',
       },

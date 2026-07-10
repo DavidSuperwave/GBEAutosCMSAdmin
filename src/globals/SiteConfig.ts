@@ -1,5 +1,6 @@
 import type { GlobalConfig } from 'payload'
 
+import { canManageContent } from '../access/roles'
 import { siteSectionBlocks } from '../blocks/SiteSections'
 
 const FRONTEND_URL = process.env.NEXT_PUBLIC_FRONTEND_URL || 'http://localhost:3000'
@@ -9,6 +10,7 @@ export const SiteConfig: GlobalConfig = {
   label: 'Configuración del sitio',
   access: {
     read: () => true,
+    update: canManageContent,
   },
   admin: {
     group: false,

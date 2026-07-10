@@ -75,6 +75,14 @@ test('public lead input drops management and unknown fields', () => {
   assert.deepEqual(out, { firstName: 'Ana', phone: '5512345678', message: 'Me interesa' })
 })
 
+test('public lead input allows only entry stages (storefront sends whatsapp_opened)', () => {
+  assert.equal(sanitizePublicLeadInput({ stage: 'whatsapp_opened' }).stage, 'whatsapp_opened')
+  assert.equal(sanitizePublicLeadInput({ stage: 'new' }).stage, 'new')
+  assert.equal('stage' in sanitizePublicLeadInput({ stage: 'closed_won' }), false)
+  assert.equal('stage' in sanitizePublicLeadInput({ stage: 'contacted' }), false)
+  assert.equal('stage' in sanitizePublicLeadInput({ stage: 42 }), false)
+})
+
 test('public lead input keeps legitimate storefront routing fields', () => {
   const input = {
     firstName: 'Ana',
@@ -92,6 +100,7 @@ test('public lead input keeps legitimate storefront routing fields', () => {
     leadSource: 'whatsapp_vehicle_form',
     source: 'website_form',
     message: 'Hola',
+    stage: 'whatsapp_opened',
   }
   assert.deepEqual(sanitizePublicLeadInput(input), input)
 })

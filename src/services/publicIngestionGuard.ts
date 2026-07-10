@@ -86,7 +86,13 @@ export const PUBLIC_LEAD_FIELDS: ReadonlySet<string> = new Set([
   'leadSource',
   'source',
   'message',
+  'stage',
 ])
+
+/** Entry stages an anonymous submitter may declare (the Storefront sends
+ * `whatsapp_opened` when the visitor jumps to WhatsApp). Anything further
+ * down the funnel is sales-only. */
+export const PUBLIC_LEAD_STAGES: ReadonlySet<string> = new Set(['new', 'whatsapp_opened'])
 
 export const PUBLIC_ANALYTICS_FIELDS: ReadonlySet<string> = new Set([
   'eventType',
@@ -137,7 +143,11 @@ function sanitize(data: UnknownRecord, allowed: ReadonlySet<string>): UnknownRec
 }
 
 export function sanitizePublicLeadInput(data: UnknownRecord): UnknownRecord {
-  return sanitize(data, PUBLIC_LEAD_FIELDS)
+  const out = sanitize(data, PUBLIC_LEAD_FIELDS)
+  if (typeof out.stage !== 'string' || !PUBLIC_LEAD_STAGES.has(out.stage)) {
+    delete out.stage
+  }
+  return out
 }
 
 export function sanitizePublicAnalyticsInput(data: UnknownRecord): UnknownRecord {

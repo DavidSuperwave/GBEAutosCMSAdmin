@@ -102,7 +102,10 @@ export const Leads: CollectionConfig = {
       type: 'select',
       label: 'Etapa',
       defaultValue: 'new',
-      access: { create: salesFieldAccess, update: salesFieldAccess },
+      // Creation stays open because the Storefront submits
+      // stage: 'whatsapp_opened'; the ingestion guard limits anonymous
+      // submissions to entry stages. Advancing a lead is sales-only.
+      access: { update: salesFieldAccess },
       options: [
         { label: 'Nuevo', value: 'new' },
         { label: 'WhatsApp abierto', value: 'whatsapp_opened' },
