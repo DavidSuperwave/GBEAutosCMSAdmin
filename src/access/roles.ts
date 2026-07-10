@@ -4,8 +4,9 @@
  * Roles: admin, inventory_manager, content_editor, sales_manager,
  * media_editor, viewer.
  *
- * Backwards compatibility: users created before the roles field existed have no
- * roles. They are treated as admins so existing accounts are never locked out.
+ * Fail-closed: users with a missing or unrecognized role resolve to no roles
+ * and are denied everything role-gated. The F002 live capture (2026-07-10)
+ * verified every existing user holds a valid role, so no account loses access.
  */
 import type { Access, FieldAccess } from 'payload'
 
@@ -28,15 +29,17 @@ export const ROLES: { label: string; value: Role }[] = [
 
 type UserLike = { role?: Role | null; roles?: Role[] | null } | null | undefined
 
+const ROLE_VALUES: ReadonlySet<string> = new Set(ROLES.map((r) => r.value))
+
 export function getRoles(user: UserLike): Role[] {
   // Supports a single `role` (current schema) and is tolerant of a legacy
-  // `roles` array. Users without any role behave as admins so existing
-  // accounts are never locked out.
+  // `roles` array. Only values in the known role catalog count; a missing or
+  // unrecognized role yields no roles (fail closed).
   const single = user?.role
   const many = user?.roles
-  const resolved = [single, ...(many || [])].filter(Boolean) as Role[]
-  if (resolved.length === 0) return user ? ['admin'] : []
-  return resolved
+  return [single, ...(many || [])].filter(
+    (value): value is Role => typeof value === 'string' && ROLE_VALUES.has(value),
+  )
 }
 
 export function hasRole(user: UserLike, ...roles: Role[]): boolean {
