@@ -1,14 +1,35 @@
-import type { CollectionConfig } from 'payload'
+import { APIError, type CollectionConfig } from 'payload'
 
 import { ANALYTICS_EVENT_TYPE_OPTIONS } from '../contracts/analytics'
+import { isAdminAccess } from '../access/roles'
+import {
+  PUBLIC_ANALYTICS_RATE_LIMIT,
+  clientKeyFromHeaders,
+  isRateLimited,
+  sanitizePublicAnalyticsInput,
+} from '../services/publicIngestionGuard'
 
 export const AnalyticsEvents: CollectionConfig = {
   slug: 'analytics-events',
   access: {
     create: () => true,
     read: ({ req }) => Boolean(req.user),
-    update: ({ req }) => Boolean(req.user),
-    delete: ({ req }) => Boolean(req.user),
+    // The event log is append-only for everyone but admins (F005 closure).
+    update: isAdminAccess,
+    delete: isAdminAccess,
+  },
+  hooks: {
+    beforeValidate: [
+      ({ data, req, operation }) => {
+        if (operation !== 'create' || req.user || !data) return data
+        if (
+          isRateLimited(`analytics:${clientKeyFromHeaders(req.headers)}`, PUBLIC_ANALYTICS_RATE_LIMIT)
+        ) {
+          throw new APIError('Demasiadas solicitudes.', 429)
+        }
+        return sanitizePublicAnalyticsInput(data)
+      },
+    ],
   },
   admin: {
     // Raw event log (collected automatically, summarized on the Analítica
