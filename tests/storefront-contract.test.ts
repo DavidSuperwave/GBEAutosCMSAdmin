@@ -40,7 +40,7 @@ test('storefront contract check passes on the current repository', () => {
 
 test('storefront contract check fails when a consumed DTO field disappears', (testContext) => {
   const probe = withProbeFixture(testContext, (fixture) => {
-    const dtoTypes = fixture.dtoTypes['src/services/publicVehicleCatalog.ts'] as Record<
+    const dtoTypes = fixture.dtoTypes['src/contracts/publicCatalog.ts'] as Record<
       string,
       string[]
     >

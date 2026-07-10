@@ -1,114 +1,26 @@
 import type { Payload, Where } from 'payload'
 
+import type {
+  PublicLandingBlock,
+  PublicVehicleCard,
+  PublicVehicleDetail,
+  PublicVehicleListOptions,
+  PublicVehicleListResult,
+} from '../contracts/publicCatalog'
 import { approvedVehicleMediaMap } from './vehicleMediaPolicy'
 import { relationId, relationIds } from './relations'
 import { SPEC_KEYS } from './vehicleWorkflow'
 
+// The DTO shapes live in src/contracts (F038); re-export for existing consumers.
+export type {
+  PublicLandingBlock,
+  PublicVehicleCard,
+  PublicVehicleDetail,
+  PublicVehicleListOptions,
+} from '../contracts/publicCatalog'
+
 type JsonRecord = Record<string, unknown>
 type RelationValue = string | number | JsonRecord | null | undefined
-
-export type PublicVehicleCard = {
-  id: string
-  slug: string
-  title: string
-  condition: 'new' | 'used'
-  inventoryStatus: 'available' | 'reserved' | 'sold'
-  brand: string
-  model: string
-  modelFamily?: string
-  trim?: string
-  year?: number
-  priceLabel?: string
-  mileage?: number
-  city?: string
-  agencyName?: string
-  exteriorColor?: string
-  bodyType?: string
-  segment?: string
-  fuel?: string
-  transmission?: string
-  tags: string[]
-  image?: { url: string; alt?: string }
-  stats?: {
-    views?: number
-    leads?: number
-  }
-}
-
-export type PublicVehicleDetail = PublicVehicleCard & {
-  description?: string
-  features: string[]
-  gallery: Array<{ url: string; alt?: string }>
-  landing: PublicLandingBlock[]
-  specs?: Record<string, unknown>
-  templateOverrides?: Record<string, unknown>
-}
-
-export type PublicLandingBlock =
-  | {
-      blockType: 'imageText'
-      eyebrow?: string
-      heading: string
-      body?: string
-      image?: { url: string; alt?: string }
-      imagePosition?: 'left' | 'right'
-    }
-  | {
-      blockType: 'gallery'
-      heading?: string
-      images: Array<{ image: { url: string; alt?: string }; alt?: string }>
-    }
-  | {
-      blockType: 'highlightList'
-      heading: string
-      body?: string
-      items: Array<{ label: string; description?: string }>
-    }
-  | {
-      blockType: 'featureGrid'
-      heading: string
-      items: string[]
-    }
-  | {
-      blockType: 'cta'
-      heading: string
-      body?: string
-      buttonLabel?: string
-    }
-
-export type PublicVehicleListOptions = {
-  page?: number
-  limit?: number
-  sort?: string
-  keyword?: string
-  brand?: string
-  model?: string
-  modelFamily?: string
-  city?: string
-  agency?: string
-  yearMin?: number
-  yearMax?: number
-  mileageMin?: number
-  mileageMax?: number
-  bodyType?: string
-  segment?: string
-  vehicleType?: string
-  fuel?: string
-  transmission?: string
-  condition?: string
-  inventoryStatus?: string
-  tags?: string[]
-}
-
-type PublicVehicleListResult = {
-  docs: PublicVehicleCard[]
-  totalDocs: number
-  totalPages: number
-  page: number
-  limit: number
-  hasNextPage: boolean
-  hasPrevPage: boolean
-}
 
 type PublicSerializationOptions = {
   approvedMediaIds?: Set<string>

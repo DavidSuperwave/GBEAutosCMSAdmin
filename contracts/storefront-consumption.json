@@ -14,7 +14,7 @@
     "src/app/(payload)/api/[...slug]/route.ts"
   ],
   "dtoTypes": {
-    "src/services/publicVehicleCatalog.ts": {
+    "src/contracts/publicCatalog.ts": {
       "PublicVehicleCard": [
         "id",
         "slug",
@@ -67,6 +67,13 @@
     }
   },
   "landingBlockTypes": {
+    "src/contracts/publicCatalog.ts": [
+      "imageText",
+      "gallery",
+      "highlightList",
+      "featureGrid",
+      "cta"
+    ],
     "src/services/publicVehicleCatalog.ts": [
       "imageText",
       "gallery",
@@ -192,7 +199,7 @@
     ]
   },
   "analyticsEventTypes": {
-    "src/collections/AnalyticsEvents.ts": [
+    "src/contracts/analytics.ts": [
       "page_view",
       "vehicle_view",
       "vehicle_click",
