@@ -6,6 +6,18 @@
       "runtimeExecutable": "npm",
       "runtimeArgs": ["run", "dev"],
       "port": 3001
+    },
+    {
+      "name": "gbe-cms-admin-preview",
+      "runtimeExecutable": "npx",
+      "runtimeArgs": ["next", "dev", "-p", "3777"],
+      "port": 3777
+    },
+    {
+      "name": "gbe-autos-frontend",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["--prefix", "../GBE Autos", "run", "dev"],
+      "port": 3000
     }
   ]
 }

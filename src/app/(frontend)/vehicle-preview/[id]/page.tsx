@@ -6,6 +6,7 @@ import { getPayload } from 'payload'
 import config from '@payload-config'
 import { hasRole } from '../../../../access/roles'
 import { toPublicVehicleDetail } from '../../../../services/publicVehicleCatalog'
+import { formatMileage } from '../../../../utils/formatMileage'
 
 type RouteContext = {
   params: Promise<{ id: string }>
@@ -165,7 +166,7 @@ export default async function VehiclePreviewPage({ params }: RouteContext) {
             </div>
             <div>
               <dt>Kilometraje</dt>
-              <dd>{mileage ? `${mileage.toLocaleString('es-MX')} km` : 'Por confirmar'}</dd>
+              <dd>{formatMileage(mileage)}</dd>
             </div>
           </dl>
         </div>
