@@ -1,0 +1,738 @@
+{
+  "schema_version": 1,
+  "blueprint_id": "gbeautoscmsadmin-gbe-single-site-homepage-roadmap-20260710-blueprint-20260710t132330z",
+  "title": "GBE Autos CMS Admin \u2014 single-site homepage-first roadmap (revised per verified Supabase live read-only audit, 2026-07-10)",
+  "consultation_summary": "The F002 operations truth-capture audit ran strictly read-only against the live Supabase project bdnvgbdmqmbzemllqngs and returned 'partially captured; F002 remains open'. It live-verified: the role enum is exactly the legacy six-role set (admin, inventory_manager, content_editor, sales_manager, media_editor, viewer) with neither 'general' nor 'sales'; all 93 public tables report RLS enabled but 35 have no policies (advisor INFO only, no ERROR/WARN); no tenant table or tenant-named column exists anywhere, confirming the single-site model and mandating removal of the tenancy feature; both the legacy 'home' table family (home, home_stats, home_brands \u2014 all with live rows) and the registered 'site_config' model contain data, creating a real competing homepage source-of-truth problem; Storage holds 1 bucket and 277 object rows against only 42 Payload media rows, with bucket identity/visibility unknown; and vehicles (1,391 rows) carry text price plus overlapping status and image fields. Every execute_sql call was cancelled by the MCP layer, so exact Postgres version, byte sizes, forced-RLS, policies, grants, privileged functions, exact counts, and role distributions remain unknown. The audit reconciles the prior 17-feature platform blueprint against confirmed human decisions: F008 (tenancy) is removed; F009 (durable media on Supabase Storage) and F013 (homepage/SiteConfig publishing) are unblocked, with F013 pulled forward ahead of generic Pages publishing (F007); F001 is revised to migrate the live six-role enum to the three-role fail-closed model (admin/general/sales); F002 stays open pending safe manual SQL captures; and F017 Storefront verification remains the release gate. Recommended sequence: complete F002 captures, then F001, F003 CI, homepage-relevant F005 access closure, F013 homepage publishing, remaining F004\u2013F006 boundary work, F009\u2013F010 media, F011\u2013F012 catalog, then F007/F014/F015, F016, and finally F017.",
+  "product_outcome": "A safe-to-operate single-site CMS for the primary GBE website in which exactly three business roles (admin, general, sales) confer explicit fail-closed privileges; the registered site_config global is the sole homepage source of truth with draft, preview, publish, unpublish, and rollback semantics replacing publish-on-save; the legacy home global family is reconciled and retired; public APIs expose only bounded published DTOs (including a safe dealership DTO with an approved external link); leads and analytics are trustworthy; media bytes live durably in Supabase Storage behind the canonical Payload Media service with single-site keys; the catalog gains numeric pricing and deterministic complete filters/sorts; and every contract is proven by a Node 22 CI harness and a pinned-SHA Storefront verification gate rather than asserted from code reading.",
+  "repo_assessment": "Live repository re-inspected at branch codex/admin-workflow-updates (HEAD d6d505f, plus uncommitted logo/CSS/preview-page/launch-config changes and untracked docs/scripts). Every material consultation claim reproduced against the tree: (1) src/access/roles.ts:12-27 defines the six legacy roles matching the live enum, and getRoles at :31-40 returns ['admin'] for any authenticated user with no role \u2014 the fail-open fallback that keeps F001 critical; src/services/cmsRequestAuth.ts:40 delegates to hasRole so every requireCmsRole guard inherits it. (2) src/payload.config.ts:149-165 uses the Postgres adapter via DATABASE_URI, :167 has plugins: [] (no storage adapter), :123 registers SiteConfig as the only global while src/globals/Home.ts exists unregistered with public read \u2014 matching the live competing home/home_stats/home_brands rows. (3) src/collections/Media.ts:28 is upload: true to local filesystem with public read at :8; scripts/sync-vehicle-images.mjs:22-24,39 is the out-of-band Supabase Storage write path using SUPABASE_SERVICE_ROLE_KEY against bucket 'vehicle-images' with an optional direct vehicle-row update mode \u2014 the dual media contract the audit requires retiring. (4) src/collections/Vehicles.ts:604-609 keeps price as text accepting ranges; :620-643 carries inventoryStatus (available/reserved/sold) and publishStatus (draft/needs_review/published/archived); :743-771 carries sourceDealerName plus legacy imageUrl/imagePath/imageFilename beside the canonical image relationship \u2014 all matching the live schema findings. (5) src/globals/SiteConfig.ts:10-12 declares only public read with no update policy and no versions; src/components/views/HomeBuilder.tsx:23-33 POSTs section edits directly to /api/globals/site-config and its UI copy at :38 states changes publish on save \u2014 no durable publishing boundary. (6) src/collections/Dealerships.ts:5-7 has public read over all fields including internalNotes (:57-63) and salesRepName (:55), no mutation access declared, and no approved external-URL field anywhere in the collection. (7) src/collections/Leads.ts:8 and src/collections/AnalyticsEvents.ts:6 allow anonymous create over full schemas; AnalyticsEvents update/delete require only authentication (:8-9). (8) Raw REST and GraphQL remain mounted at src/app/(payload)/api/[...slug]/route.ts:14-19 and src/app/(payload)/api/graphql/route.ts beside the bounded public DTO routes under src/app/(payload)/api/public/. (9) src/services/publicVehicleCatalog.ts:79-101 omits price/color options and :164-181 silently maps mostViewed/mostClicked/mostLeads (and newest) to -createdAt. (10) The preview route src/app/(payload)/api/public/vehicles/preview/[id]/route.ts:12-16 enforces requireCmsRole but names the legacy roles inventory_manager/content_editor, which the three-role migration must rewrite. (11) No versions/drafts config exists in any collection or global (grep matches only a 2026-05-21 migration's table names); Pages uses a manual status select at src/collections/Pages.ts:69-78. (12) No .github/workflows directory exists and package.json:7-27 has no test or typecheck script \u2014 no CI harness. (13) src/migrations contains 15 registered migration modules (17 entries including index.ts and a schema JSON) versus 17 live payload_migrations rows, confirming the audit's name-only capture requirement. (14) No tenant model or tenant-named code exists under src, consistent with the live schema and the single-site decision. The prior blueprint at docs/product/roadmaps/gbe-platform-roadmap-20260710/BLUEPRINT.json supplies the F001\u2013F017 identifiers revised here.",
+  "gate_status": "needs_decision",
+  "decisions_required": [
+    {
+      "id": "D01",
+      "question": "What is the exact permission matrix for the three target roles admin, general, and sales?",
+      "why": "The human decisions doc confirms exactly three roles but states the permission matrix still requires review. The code currently spreads capability across six roles (canManageInventory, canManageContent, canManageMedia, MEDIA_REVIEW_ROLES, canManageLeads in src/access/roles.ts:60-86), and every guard, field access rule, and custom route must be rewritten against the new matrix. Engineering cannot infer which of general/sales inherits inventory, content, media review, or lead management.",
+      "options": [
+        "Approve a written per-collection/per-operation matrix for admin, general, and sales before F001 implementation starts",
+        "Map general = all current non-admin operational capabilities and sales = lead/analytics management only, then refine after launch",
+        "Defer any capability change and only rename/collapse roles 1:1 (not recommended \u2014 leaves the matrix ambiguous)"
+      ]
+    },
+    {
+      "id": "D02",
+      "question": "What is the explicit per-user role mapping for the three existing user rows (including any null/blank/legacy values)?",
+      "why": "The live enum has six roles and public.users reports 3 rows, but exact role values per user are unknown (the aggregate SQL was cancelled) and the audit states no legacy role can be automatically mapped to general or sales. getRoles currently treats roleless users as admins (src/access/roles.ts:38), so the fail-closed migration must not run until a human signs off who holds which target role. This mapping is a private human process whose identity-level output stays out of the audit trail.",
+      "options": [
+        "Run the safe role-distribution capture, then privately review and sign off a mapping for every user before the migration",
+        "Default all three users to admin explicitly and downgrade later (ratifies over-privilege but preserves access)",
+        "Default unmapped users to no role (fail-closed immediately; risks locking out active staff)"
+      ]
+    },
+    {
+      "id": "D03",
+      "question": "Which content wins the homepage reconciliation: the registered site_config rows or the legacy home/home_stats/home_brands rows?",
+      "why": "Both models contain live rows ([MCP-live-verified]), so making site_config the single source of truth (confirmed direction) requires deciding whether any legacy home content must be migrated into site_config blocks before the home family and unregistered src/globals/Home.ts are retired. Content value judgments belong to the business, not engineering.",
+      "options": [
+        "Review both contents side by side and hand-pick what migrates into site_config before retiring the legacy family",
+        "Declare current site_config content canonical as-is and archive/drop the legacy rows after a backup export",
+        "Migrate everything from home into site_config mechanically and edit down afterwards"
+      ]
+    },
+    {
+      "id": "D04",
+      "question": "Remove or temporarily hide the smart analytics sort ranks (mostViewed/mostClicked/mostLeads) until trusted rollups exist?",
+      "why": "src/services/publicVehicleCatalog.ts:174-179 silently maps all three ranks to -createdAt, and analytics ingestion is publicly spoofable (src/collections/AnalyticsEvents.ts:6), so the public contract is currently misleading. The human decisions doc recommends removing or hiding them temporarily but leaves the choice open.",
+      "options": [
+        "Remove them from the public contract until F006 ingestion hardening plus a rollup layer exist (recommended)",
+        "Hide them in the UI but keep API acceptance with documented newest fallback",
+        "Keep them and fast-track trusted rollups as a dependency of F012"
+      ]
+    },
+    {
+      "id": "D05",
+      "question": "Which Storefront repository commit (pinned SHA) is the verification target for F017?",
+      "why": "The repository root redirects to /admin (src/app/(frontend)/page.tsx:4); the main GBE website lives elsewhere and consumes the homepage, navigation, inventory, media, dealership-link, preview, and analytics contracts. F017 cannot start without the exact consumer capture, and all Storefront conclusions so far are carried forward, not verified.",
+      "options": [
+        "Supply the GBECMS Storefront repository at a pinned SHA and wire a cross-repository contract-test gate",
+        "Accept Admin-side API contract tests as the acceptance boundary and defer Storefront verification (weakens the release gate)"
+      ]
+    },
+    {
+      "id": "D06",
+      "question": "Who executes the blocked read-only SQL captures, and through which channel, to close F002?",
+      "why": "Every execute_sql request was cancelled by the MCP layer before execution, leaving Postgres version, table bytes, forced-RLS, policy/grant inventory, SECURITY DEFINER functions, Storage bucket restrictions, and all exact aggregates unknown. The audit ships the exact read-only transactions to run; an authorized operator must run them and archive catalog/aggregate output only. Role-distribution output feeds D02 and migration planning; policy/grant output determines how much of the 35 RLS-without-policy surface matters.",
+      "options": [
+        "An authorized operator reruns the audit's read-only SQL through the same Supabase MCP project with execute_sql approved, archiving outputs beside the audit",
+        "Run the same SQL via the Supabase dashboard SQL editor read-only and archive sanitized outputs",
+        "Accept the unknowns and gate each dependent feature on its own just-in-time capture (slower, repeats risk)"
+      ]
+    },
+    {
+      "id": "D07",
+      "question": "Should vehicle presentation content be versioned separately from operational inventory fields (F014)?",
+      "why": "Landing/presentation fields share the live vehicle record (src/collections/Vehicles.ts) with no versions config, so enabling Payload versions on Vehicles would version operational churn (inventoryStatus, publishStatus) together with marketing content. The human decisions doc explicitly leaves this open and states it must not block homepage work.",
+      "options": [
+        "Extract presentation content into a separate versioned collection related to Vehicles",
+        "Enable versions/drafts on Vehicles as-is and accept mixed inventory/content history",
+        "Keep vehicle content unversioned and rely on the existing publish gating (skip F014)"
+      ]
+    }
+  ],
+  "milestones": [
+    {
+      "id": "M01",
+      "title": "Close the operations truth gap (F002 manual captures)",
+      "outcome": "The blocked read-only captures are executed by an authorized operator per D06: Postgres version, table sizes and forced-RLS, policy/grant/SECURITY DEFINER inventory, Storage bucket identity and aggregates, role distribution, and content-quality aggregates are archived, converting the audit's unknowns into evidence that feeds the role mapping (D02), media planning, and price backfill.",
+      "sequence": 1,
+      "feature_ids": [
+        "F002"
+      ]
+    },
+    {
+      "id": "M02",
+      "title": "Three-role fail-closed authorization foundation",
+      "outcome": "The live six-role enum and code model are migrated to exactly admin/general/sales per the approved matrix (D01) and per-user mapping (D02); missing, null, or invalid roles grant no privilege anywhere; negative tests prove it.",
+      "sequence": 2,
+      "feature_ids": [
+        "F001"
+      ]
+    },
+    {
+      "id": "M03",
+      "title": "Minimum Node 22 CI and security-test harness",
+      "outcome": "A clean Node 22 pipeline runs install, style guard, typecheck, lint, the focused security tests from F001, and production build as required checks with retained artifacts, making all later acceptance criteria mechanically enforceable.",
+      "sequence": 3,
+      "feature_ids": [
+        "F003"
+      ]
+    },
+    {
+      "id": "M04",
+      "title": "Homepage-relevant access closure",
+      "outcome": "SiteConfig gains an explicit update policy, Pages public read is scoped, Dealerships stop exposing internal fields and gain a bounded public DTO with an approved external URL field, and Media/reference access is ratified \u2014 the access preconditions for safe homepage publishing.",
+      "sequence": 4,
+      "feature_ids": [
+        "F005"
+      ]
+    },
+    {
+      "id": "M05",
+      "title": "Primary GBE homepage publishing on site_config",
+      "outcome": "site_config is the single homepage source of truth with draft, authenticated preview, explicit publish, unpublish, rollback, and concurrency protection; publish-on-save is gone; the legacy home/home_stats/home_brands family and unregistered Home global are reconciled per D03 and retired.",
+      "sequence": 5,
+      "feature_ids": [
+        "F013"
+      ]
+    },
+    {
+      "id": "M06",
+      "title": "Remaining API boundary hardening",
+      "outcome": "The vehicle raw/public/preview contracts are frozen and proven with the three target roles, and lead/analytics ingestion is hardened with idempotency, limits, and server-owned fields so commercial data becomes trustworthy.",
+      "sequence": 6,
+      "feature_ids": [
+        "F004",
+        "F006"
+      ]
+    },
+    {
+      "id": "M07",
+      "title": "Durable media on Supabase Storage and legacy cutover",
+      "outcome": "All new uploads flow through the canonical Payload Media service into Supabase Storage under single-site keys with a staging durability proof; the 42 Media rows, 277 Storage objects, vehicle image relationships, and legacy image columns are reconciled; the out-of-band sync path and legacy fields are retired.",
+      "sequence": 7,
+      "feature_ids": [
+        "F009",
+        "F010"
+      ]
+    },
+    {
+      "id": "M08",
+      "title": "Catalog correctness",
+      "outcome": "Vehicle pricing becomes numeric amount/currency after human-reviewed classification of ambiguous values, and the public catalog offers complete filters, deterministic numeric sorts, and facets \u2014 with smart ranks removed or trusted per D04.",
+      "sequence": 8,
+      "feature_ids": [
+        "F011",
+        "F012"
+      ]
+    },
+    {
+      "id": "M09",
+      "title": "Secondary publishing models and concurrency",
+      "outcome": "Pages gain the draft/version publishing proof, vehicle presentation versioning proceeds if D07 approves it, and optimistic concurrency protects vehicle workspace edits beyond the homepage.",
+      "sequence": 9,
+      "feature_ids": [
+        "F007",
+        "F014",
+        "F015"
+      ]
+    },
+    {
+      "id": "M10",
+      "title": "Admin style architecture isolation",
+      "outcome": "Global admin styling is decomposed into owned, scoped modules with guard and browser regression coverage, after functional contracts have stopped moving.",
+      "sequence": 10,
+      "feature_ids": [
+        "F016"
+      ]
+    },
+    {
+      "id": "M11",
+      "title": "Storefront release gate",
+      "outcome": "The main GBE Storefront at a pinned SHA verifiably renders the published homepage, navigation, inventory, media, approved dealership redirects, isolated previews, and deduplicated analytics \u2014 the final gate before public acceptance.",
+      "sequence": 11,
+      "feature_ids": [
+        "F017"
+      ]
+    }
+  ],
+  "features": [
+    {
+      "id": "F001",
+      "title": "Three-role fail-closed migration (admin/general/sales) replacing the live six-role enum",
+      "user_outcome": "Administrators trust that only the three explicitly granted business roles confer access: an account with a missing, null, stale, or invalid role can do nothing privileged, and every guard speaks the approved role language.",
+      "business_value": "Closes the highest-leverage security hole \u2014 every guard currently fails open to admin for roleless authenticated users \u2014 and aligns the entire authorization layer with the confirmed three-role product model before any other feature builds on it.",
+      "current_state": "partially_implemented",
+      "repo_evidence": [
+        "src/access/roles.ts:31-40 \u2014 getRoles returns ['admin'] for any authenticated user with no role ('Users without any role behave as admins')",
+        "src/access/roles.ts:12-27 \u2014 the code role set is the legacy six roles, matching the [MCP-live-verified] live enum which has neither 'general' nor 'sales'",
+        "src/services/cmsRequestAuth.ts:40 \u2014 requireCmsRole delegates to hasRole and inherits the fail-open fallback across all custom CMS routes",
+        "src/collections/Users.ts:44-56 \u2014 role select defaults to 'viewer' (not a valid target role) with admin-only field access already in place",
+        "src/app/(payload)/api/public/vehicles/preview/[id]/route.ts:12-16 \u2014 guards name legacy roles inventory_manager/content_editor that will not exist after migration",
+        "Consultation [MCP-live-verified]: live enum is exactly admin, inventory_manager, content_editor, sales_manager, media_editor, viewer; 3 user rows; per-user values unknown pending D02/D06"
+      ],
+      "recommended_route": "After D01 (matrix) and D02 (per-user mapping) are approved and M01's role-distribution capture is archived: (1) write a reviewed, idempotent, transactional migration that alters the live role enum to admin/general/sales and applies the explicit mapping, aborting if any user remains unmapped, with a pre-migration export and rollback plan \u2014 staging first, never production during build work; (2) rewrite src/access/roles.ts to the three-role model with getRoles returning no roles for missing/invalid values; (3) sweep every consumer (roles.ts helpers, cmsRequestAuth callers, collection access, field access, admin UI role options, invite flow) to the new matrix; (4) add focused security tests with roleless/invalid-role/each-role fixtures asserting deny-by-default on invite, import, specs, workshop, media review, and preview routes.",
+      "alternatives_rejected": [
+        "Flip getRoles to fail-closed without the enum migration and mapping \u2014 rejected: would lock out or silently demote real staff; the audit requires the private human mapping first",
+        "Automatically map legacy roles to general/sales by heuristic \u2014 rejected: the audit states no legacy role can be automatically mapped; it is a private human decision",
+        "Keep the six-role model and just remove the fallback \u2014 rejected: contradicts the confirmed three-role product decision and would require a second migration later"
+      ],
+      "dependencies": [
+        "F002"
+      ],
+      "risk": "critical",
+      "confidence": "high",
+      "acceptance_criteria": [
+        "The live role enum contains exactly admin, general, and sales; every user row holds exactly one valid target role per the signed-off D02 mapping; the migration is idempotent, staged-tested, and aborts on unmapped users",
+        "getRoles resolves missing/null/blank/invalid roles to no roles \u2014 never admin \u2014 and anonymous access remains denied; 'viewer' no longer exists as a default or option",
+        "Every guard, field access rule, custom route, and admin UI option references only the three target roles per the D01 matrix; no reference to the six legacy roles remains in src",
+        "Security tests prove 401/403 for anonymous, roleless, and invalid-role fixtures on invite, vehicle-specs, import, workshop, media review, and preview endpoints, and the documented allow/deny matrix passes per role",
+        "A pre-migration user export and rollback procedure are archived; the migration never runs against production during blueprint/build work"
+      ],
+      "status": "review"
+    },
+    {
+      "id": "F002",
+      "title": "Operations truth capture \u2014 complete the blocked read-only live facts",
+      "user_outcome": "The team plans migrations from verified facts \u2014 Postgres version, sizes, policies, grants, privileged functions, Storage bucket restrictions, role distribution, and content-quality aggregates \u2014 instead of estimates and unknowns.",
+      "business_value": "Every migration in this roadmap (roles, price, media, homepage reconciliation) mutates live business data; the audit already verified schema shape, enums, advisors, and row estimates via MCP but every execute_sql was cancelled, so the exact aggregates that gate F001, F009-F011, and F013 remain unknown.",
+      "current_state": "partially_implemented",
+      "repo_evidence": [
+        "docs/product/inputs/SUPABASE_LIVE_READONLY_AUDIT_20260710_VERIFIED.md \u2014 MCP-01..MCP-12 succeeded (tables, extensions, migrations, advisors, generated types, docs) while MCP-13..MCP-20 (all SQL) were cancelled before execution",
+        "The audit ships the exact read-only capture transactions: version/sizes/forced-RLS, policies/grants/views/SECURITY DEFINER, Storage bucket aggregate, and roles/content aggregates",
+        "src/migrations contains 15 registered migration modules versus 17 live payload_migrations rows \u2014 the audit requires a safe name-only capture to reconcile before migration planning",
+        "scripts/production-e2e-smoke.ts exists as a read-only smoke check but captures none of the required catalog/aggregate artifacts"
+      ],
+      "recommended_route": "Per D06: an authorized operator reruns the audit's four read-only SQL blocks through the same Supabase MCP project (or dashboard SQL editor), returning catalog/aggregate output only \u2014 no identities, object names, URLs, or secrets \u2014 plus a name-only payload_migrations listing. Archive timestamped outputs beside the verified audit as the evidence pack feeding D02 (role mapping), F009 (bucket identity/restrictions), F010 (media reconciliation counts), F011 (price quality), and F013 (homepage completeness/orphan checks). The per-user identity mapping happens in a separate private human process.",
+      "alternatives_rejected": [
+        "Use local .env/psql credentials for live facts \u2014 rejected: the audit's invariants forbid it; capture must stay within the authorized read-only channel",
+        "Proceed to migrations with table-level row estimates only \u2014 rejected: the role migration must abort on unmapped users and the price backfill needs exact quality counts; estimates cannot gate either"
+      ],
+      "dependencies": [],
+      "risk": "medium",
+      "confidence": "high",
+      "acceptance_criteria": [
+        "Archived, timestamped read-only outputs exist for: server version, per-object sizes and forced-RLS state, policy inventory, API-role grants, views/materialized views, SECURITY DEFINER functions, Storage bucket identity/visibility/limits/aggregates, user role distribution, vehicle price/image/status aggregates, dealership/pages/site_config/media/leads/analytics aggregates, and a name-only payload_migrations reconciliation",
+        "No mutation, RPC, identity read, object-name read, or secret read occurred during capture",
+        "The pages orphan-child question (0 parent rows vs 1 row each in pages_blocks_hero and pages_blocks_cta) is resolved with exact counts and foreign-key state",
+        "F002's gate flips to passed in a dated addendum, and D02's mapping review is scheduled from the role-distribution output"
+      ],
+      "status": "review"
+    },
+    {
+      "id": "F003",
+      "title": "Minimum Node 22 CI and security-test harness",
+      "user_outcome": "Every change is proven by a reproducible pipeline \u2014 install, style guard, typecheck, lint, focused security tests, production build \u2014 before it ships.",
+      "business_value": "No CI, test framework, or typecheck script exists, so no later feature's acceptance criteria are mechanically enforceable; the audit sequences this immediately after F001 so the fail-closed proof becomes a permanent regression gate.",
+      "current_state": "not_implemented",
+      "repo_evidence": [
+        "No .github/workflows directory exists (verified live)",
+        "package.json:7-27 \u2014 scripts contain build/lint/migrate/seed/smoke but no test, typecheck, or CI entry point; :59-61 pins engines to node 22.x",
+        "scripts/check-admin-styles.mjs exists as the one wired quality guard (npm run check:admin-styles)",
+        "scripts/production-e2e-smoke.ts:1 targets production, not an ephemeral CI database"
+      ],
+      "recommended_route": "Add a GitHub Actions (or equivalent) workflow on Node 22 running npm ci, check:admin-styles, tsc --noEmit, lint, the F001 security suite against an ephemeral or authorized staging Postgres, and next build, with retained artifacts and required-check status. Admin-repo-only scope: no Storefront builds, no browser baselines yet (sequenced with F016).",
+      "alternatives_rejected": [
+        "Adopt a heavy browser E2E framework first \u2014 rejected: the immediate need is typecheck/lint/security enforcement; browser regression lands with style work (F016)",
+        "Run CI tests against the live Supabase project \u2014 rejected: the database is live production data; tests must use ephemeral or explicitly authorized staging infrastructure"
+      ],
+      "dependencies": [
+        "F001"
+      ],
+      "risk": "medium",
+      "confidence": "high",
+      "acceptance_criteria": [
+        "A clean checkout on Node 22 runs install, style guard, typecheck, lint, focused security tests, and production build as required CI checks, all passing",
+        "The security tests never touch the production database; their target is ephemeral or explicitly authorized",
+        "CI artifacts (logs, reports, build output) are retained and linkable",
+        "Documentation states what CI does and does not prove (no browser coverage, no Storefront verification yet)"
+      ],
+      "status": "review"
+    },
+    {
+      "id": "F004",
+      "title": "Vehicle raw/public/preview boundary contracts under the three-role model",
+      "user_outcome": "Anonymous visitors see exactly the published, non-sold, approved-media vehicle data intended for the storefront \u2014 and nothing else \u2014 through frozen, tested DTO contracts; staff preview works only for permitted target roles.",
+      "business_value": "Locks in the existing hardening with regression proof so the vehicle boundary cannot silently reopen, gives the Storefront a stable contract, and reconciles the duplicate status/image paths the live audit confirmed (status vs inventory_status, _status vs publish_status, legacy image columns vs image_id).",
+      "current_state": "partially_implemented",
+      "repo_evidence": [
+        "src/collections/Vehicles.ts:243-247 \u2014 raw reads require authentication; mutations require inventory roles",
+        "src/services/publicVehicleCatalog.ts \u2014 bounded public DTO service enforcing published/non-sold serialization for the public routes under src/app/(payload)/api/public/vehicles/",
+        "src/app/(payload)/api/public/vehicles/preview/[id]/route.ts:12-16 \u2014 preview requires requireCmsRole but with legacy role names",
+        "src/app/(payload)/api/[...slug]/route.ts:14-19 and src/app/(payload)/api/graphql/route.ts \u2014 raw REST and GraphQL remain mounted, so the boundary rests on per-collection access rules only tests keep honest",
+        "src/collections/Vehicles.ts:620-643,749-771 \u2014 overlapping inventoryStatus/publishStatus and legacy image fields the contract must pin down; live DB additionally carries legacy 'status' and Payload '_status' columns [MCP-live-verified]"
+      ],
+      "recommended_route": "After F001/F003: freeze public vehicle and collection DTO snapshots as contract tests; add negative tests proving anonymous raw REST and GraphQL reads are denied for vehicles, collections, and media assets; verify published/non-sold/approved-media enforcement across list, detail, collection, and preview paths; rewrite preview guards to the target roles; and document/pin the canonical status fields (publish_status, inventory_status) while scheduling the legacy status/_status columns for reconciliation alongside F010-style cleanup.",
+      "alternatives_rejected": [
+        "Unmount raw REST/GraphQL entirely \u2014 rejected for now: the admin UI consumes the REST API (e.g. HomeBuilder fetches /api/globals/site-config); the boundary must be proven at the access layer regardless, with GraphQL disablement a possible follow-up hardening",
+        "Treat the boundary as done based on the current code \u2014 rejected: the fail-open fallback made prior claims unverifiable and no tests exist"
+      ],
+      "dependencies": [
+        "F001",
+        "F003"
+      ],
+      "risk": "high",
+      "confidence": "high",
+      "acceptance_criteria": [
+        "Anonymous requests to raw REST and GraphQL for vehicles, vehicle-collections, and vehicle-media-assets are denied, with tests",
+        "Public list/detail/collection/preview DTO snapshots are frozen and any field change fails CI",
+        "Unpublished, sold, and unapproved-media content is proven absent from every public path",
+        "Preview endpoints deny anonymous and roleless users and succeed only for the D01-designated roles",
+        "The canonical status fields are documented and the legacy status/_status duplication has a written reconciliation plan"
+      ],
+      "status": "review"
+    },
+    {
+      "id": "F005",
+      "title": "Content and reference access closure with a safe public dealership DTO",
+      "user_outcome": "Internal operational data \u2014 dealership internal notes and staff names, site configuration writes, page mutations \u2014 is readable and writable only by roles that need it, while the storefront gets a bounded dealership DTO including an approved external website link.",
+      "business_value": "Closes the remaining always-true and Payload-default boundaries, eliminates public exposure of person-related internal fields, and creates the approved external-URL capability the confirmed product model requires (route visitors to external dealership sites GBE does not control) \u2014 none of which the current schema supports.",
+      "current_state": "partially_implemented",
+      "repo_evidence": [
+        "src/collections/Dealerships.ts:5-7 \u2014 access declares only read: () => true; create/update/delete fall to Payload defaults; internalNotes (:57-63), salesRepName (:55), and email (:35) are publicly readable",
+        "src/collections/Dealerships.ts \u2014 no external website URL field exists anywhere in the collection, matching the [MCP-live-verified] finding of no external-site URL column",
+        "src/globals/SiteConfig.ts:10-12 \u2014 only read: () => true; no update access declaration",
+        "src/collections/Pages.ts:30-35 \u2014 public read over all fields regardless of the manual status field at :69-78",
+        "src/collections/Media.ts:7-12 \u2014 public read with role-guarded mutations (to be ratified in the matrix)",
+        "src/collections/AnalyticsEvents.ts:8-9 \u2014 any authenticated user may update or delete raw analytics events"
+      ],
+      "recommended_route": "Prioritize the homepage-relevant closure first (SiteConfig explicit update policy per the D01 matrix, Pages read scoping, dealership field protection and DTO) so F013 can proceed, then complete the rest: add an approved externalUrl field to Dealerships with admin-controlled approval semantics; split public consumption onto a bounded dealership DTO (visitor-safe fields only) and restrict raw reads; declare explicit role-guarded mutations for Dealerships/Pages/Media/VehicleTags; make AnalyticsEvents update/delete admin-only; land every policy with allow/deny matrix tests across REST, GraphQL, and the custom routes.",
+      "alternatives_rejected": [
+        "Make Dealerships fully private \u2014 rejected: the storefront needs location/contact/routing data; the fix is field-level protection plus a bounded DTO, not blanket denial",
+        "Defer the dealership external URL to a later feature \u2014 rejected: it is a confirmed product requirement for visitor routing and belongs with the DTO design, not bolted on after",
+        "One monolithic access commit without tests \u2014 rejected: repeats the unverifiable-boundary pattern the audits flagged"
+      ],
+      "dependencies": [
+        "F001",
+        "F003"
+      ],
+      "risk": "high",
+      "confidence": "high",
+      "acceptance_criteria": [
+        "internalNotes, salesRepName, and other internal fields are not readable anonymously via any path; the public dealership DTO exposes only visitor-safe fields including the approved external URL",
+        "SiteConfig updates require the D01-designated role; anonymous and unprivileged writes are denied with tests",
+        "Dealerships, Pages, Media, and VehicleTags mutations are explicitly role-guarded \u2014 no collection relies on Payload defaults",
+        "AnalyticsEvents update/delete require admin",
+        "The dealership externalUrl field exists with documented approval semantics, and only approved links are served publicly"
+      ],
+      "status": "review"
+    },
+    {
+      "id": "F006",
+      "title": "Lead and analytics ingestion hardening",
+      "user_outcome": "Sales staff see leads and metrics that reflect real customer actions: one submission equals one lead, events cannot be spoofed or replayed, and management fields cannot be set by the public.",
+      "business_value": "Leads are the commercial output of the platform; today anyone can create arbitrary leads and analytics rows (408 live analytics rows are already operationally untrusted per the audit), poisoning the dashboard and any future smart ranking.",
+      "current_state": "not_implemented",
+      "repo_evidence": [
+        "src/collections/Leads.ts:7-12 \u2014 create: () => true over the full schema at a broad collection boundary",
+        "src/collections/AnalyticsEvents.ts:5-10 \u2014 anonymous create over the full event schema; no idempotency, rate limiting, or server timestamps; authenticated users may update/delete",
+        "Consultation: public.analytics_events reports 408 rows whose counts remain operationally untrusted pending F006; public.leads reports 0 rows",
+        "No rate-limit or body-limit middleware exists on any public route (verified route files)"
+      ],
+      "recommended_route": "Replace public raw-collection creation with narrow ingestion endpoints: strict whitelisted submitter fields, server-assigned timestamps/source, idempotency keys making replays no-ops, body-size limits, and rate limiting; deny public create on the raw collections; restrict management-field mutation to the D01 sales-capable role; base dashboards on server-side rollups instead of capped raw scans. Prove with fixture journeys (one submission \u2192 exactly one lead; replay \u2192 no duplicate).",
+      "alternatives_rejected": [
+        "Captcha only \u2014 rejected: does not address replays, management-field injection, or authenticated tampering",
+        "Filter garbage at read time while keeping raw public create \u2014 rejected: poisoned rows would still accumulate; the audit requires ingestion-time validation and idempotency"
+      ],
+      "dependencies": [
+        "F001",
+        "F003",
+        "F005"
+      ],
+      "risk": "high",
+      "confidence": "high",
+      "acceptance_criteria": [
+        "Public raw create on leads and analytics-events is denied; only the narrow ingestion endpoints accept submissions",
+        "A fixture journey produces exactly one lead and one conversion; replaying the identical request is idempotent",
+        "Management fields cannot be set through public ingestion and require the designated sales/admin roles to change",
+        "Oversized bodies and burst traffic are rejected per configured limits, with tests",
+        "Dashboard figures reconcile against a rollup/aggregation source"
+      ],
+      "status": "review"
+    },
+    {
+      "id": "F007",
+      "title": "Pages draft/version publishing proof (resequenced after homepage)",
+      "user_outcome": "Content editors can draft, preview, publish, roll back, and unpublish standalone pages, with anonymous visitors never seeing unpublished work.",
+      "business_value": "Extends the publishing model proven on the homepage (F013) to generic pages; deliberately resequenced so it cannot delay the primary homepage, and it resolves the live orphan-child question (0 pages rows vs live pages_blocks rows).",
+      "current_state": "not_implemented",
+      "repo_evidence": [
+        "src/collections/Pages.ts:69-79 \u2014 manual status select and isVisible checkbox instead of Payload versions/drafts; no versions config exists anywhere under src (grep verified)",
+        "src/collections/Pages.ts:30-35 \u2014 public read regardless of status",
+        "Consultation [MCP-live-verified]: public.pages reports 0 rows while pages_blocks_hero and pages_blocks_cta each report one row \u2014 an orphan/stale-child integrity check is required"
+      ],
+      "recommended_route": "After F013 establishes the publishing pattern: enable Payload versions with drafts on Pages (with migration), scope public read to published versions, replace the manual status/isVisible fields, wire authenticated draft preview through the existing livePreview URLs, run the orphan-child integrity check from F002's exact counts, and add tests for draft non-visibility, publish, unpublish, rollback, and history.",
+      "alternatives_rejected": [
+        "Prove publishing on Pages before the homepage \u2014 rejected: the confirmed product priority is the primary GBE homepage; Pages carries lower business value and would delay it",
+        "Custom draft flags instead of Payload versions \u2014 rejected: native versions provide rollback and draft-preview semantics without bespoke maintenance"
+      ],
+      "dependencies": [
+        "F003",
+        "F005",
+        "F013"
+      ],
+      "risk": "medium",
+      "confidence": "high",
+      "acceptance_criteria": [
+        "A draft page is invisible to anonymous readers on every public path while previewable to an authenticated editor",
+        "Publish, unpublish, and rollback each behave correctly under tests; version history is retained",
+        "The versions migration applies cleanly to staging and is reversible; existing published pages remain visible and unchanged",
+        "The pages orphan-child rows are reconciled (repaired or documented) from exact counts"
+      ],
+      "status": "review"
+    },
+    {
+      "id": "F008",
+      "title": "Tenant identity foundation (removed \u2014 single GBE site confirmed)",
+      "user_outcome": "None \u2014 the product is a single GBE platform and main website; no tenant accounts, tenant pages, domains, switching, or isolated dealership workspaces will be built.",
+      "business_value": "Removing this feature eliminates a critical-risk workstream and unblocks durable media (F009) and homepage publishing (F013) that were previously gated on tenant decisions.",
+      "current_state": "obsolete_or_duplicate",
+      "repo_evidence": [
+        "Consultation [MCP-live-verified]: no public tenant table or tenant-named column exists; the tenant/tenants schema lookup returned no tables",
+        "Repository-wide search for tenant models under src returns no matches; src/payload.config.ts:107-123 registers no tenant collection",
+        "docs/product/inputs/HUMAN_PRODUCT_DECISIONS_20260710.md \u2014 'One GBE site, not a multi-tenant dealership platform' with explicit do-not-build list",
+        "docs/product/roadmaps/gbe-platform-roadmap-20260710/BLUEPRINT.json F008 \u2014 the prior feature this disposition retires"
+      ],
+      "recommended_route": "No build. Dealerships remain location/inventory reference metadata with an approved external link (delivered in F005). Any future AGIREAL-derived rule referencing tenants must be translated to server-derived actor, role, approval, and single-GBE-site context.",
+      "alternatives_rejected": [
+        "Keep tenancy as a deferred feature \u2014 rejected: the human decision explicitly removes it and the live schema contains no trace of it; keeping it would perpetuate false dependencies on media keys and homepage publishing"
+      ],
+      "dependencies": [],
+      "risk": "low",
+      "confidence": "high",
+      "acceptance_criteria": [
+        "The roadmap contains no tenant-dependent acceptance criteria, and no tenant schema, membership, host-resolution, or dealership-site-builder work is scheduled or implemented"
+      ],
+      "status": "no_build_needed"
+    },
+    {
+      "id": "F009",
+      "title": "Durable media: Supabase Storage behind the canonical Payload Media service (unblocked)",
+      "user_outcome": "Images uploaded through the CMS survive every redeploy and restart, and every new upload lands in exactly one canonical durable location with stable single-site keys.",
+      "business_value": "Vehicle photos are the core asset; local-filesystem uploads on serverless hosting are silently lost, and the parallel service-role sync script maintains a second write path. The audit found no live incompatibility with Supabase Storage, which is the confirmed direction, and removed the former tenant-decision blocker.",
+      "current_state": "not_implemented",
+      "repo_evidence": [
+        "src/collections/Media.ts:28 \u2014 upload: true with no storage adapter; src/payload.config.ts:167 \u2014 plugins: [] confirms none is configured",
+        "scripts/sync-vehicle-images.mjs:22-24 \u2014 out-of-band path using SUPABASE_SERVICE_ROLE_KEY against bucket 'vehicle-images'; :39 gates optional direct vehicle-row updates behind ALLOW_DIRECT_VEHICLE_IMAGE_DB_UPDATE",
+        "Consultation [MCP-live-verified]: Storage reports 1 bucket row and 277 object rows with RLS enabled; bucket identity, visibility, size limits, and MIME restrictions remain unknown pending F002",
+        "@supabase/supabase-js is already a dependency (package.json:34)"
+      ],
+      "recommended_route": "After F002 captures bucket identity/visibility/restrictions: configure a Payload storage adapter targeting Supabase Storage (S3-compatible or Supabase-specific), route all new Media writes through it under a stable single-site key convention, keep Payload media relationships as canonical asset identity (never direct Storage public URLs), and prove durability on staging: upload a hashed fixture, redeploy, retrieve and hash-compare, then delete and verify lifecycle. Object changes go through the Storage API per Supabase guidance, never direct metadata-table writes.",
+      "alternatives_rejected": [
+        "Extend sync-vehicle-images.mjs as the durability mechanism \u2014 rejected: out-of-band, service-role-privileged, and perpetuates the dual source of truth",
+        "A different object-storage provider \u2014 rejected: Supabase Storage is the confirmed human decision and the audit found no live incompatibility",
+        "Wait for a tenant key-scheme decision \u2014 obsolete: tenancy is removed; single-site keys are confirmed"
+      ],
+      "dependencies": [
+        "F002",
+        "F003"
+      ],
+      "risk": "high",
+      "confidence": "high",
+      "acceptance_criteria": [
+        "A file uploaded through Payload is retrievable byte-identical (hash-compared) after a full redeploy/restart on staging",
+        "Deleting the Media document removes or tombstones the stored object per the documented lifecycle",
+        "All new vehicle imagery flows through the canonical Media relationship; no new direct imageUrl/Storage-URL writes occur",
+        "Object keys follow the documented single-site convention and bucket restrictions match the F002-captured configuration"
+      ],
+      "status": "review"
+    },
+    {
+      "id": "F010",
+      "title": "Media reconciliation and legacy image-path retirement",
+      "user_outcome": "Every existing vehicle image is accounted for: the 42 Payload media rows, 277 Storage objects, vehicle image relationships, and legacy image columns reconcile to one canonical contract, and the old paths are retired.",
+      "business_value": "Completes the single-source-of-truth media contract; until reconciliation, the storefront depends on unmanaged legacy URLs the CMS cannot govern, and the true Storage inventory (bucket contents vs Media records) remains unexplained.",
+      "current_state": "blocked_by_prerequisite",
+      "repo_evidence": [
+        "src/collections/Vehicles.ts:749-771 \u2014 legacy imageUrl/imagePath/imageFilename coexist with the canonical image relationship",
+        "Consultation [MCP-live-verified]: 277 Storage object rows vs 42 Payload media rows are not directly comparable without bucket and relationship aggregates; no orphan conclusion is justified yet",
+        "scripts/sync-vehicle-images.mjs \u2014 the legacy population mechanism whose outputs must be reconciled and whose write path must be retired",
+        "src/collections/VehicleMediaAssets.ts \u2014 approval/provenance metadata (13 live rows) that the canonical contract must preserve"
+      ],
+      "recommended_route": "Only after F009's durability proof and F002's object/relationship aggregates: enumerate all legacy image fields and Storage objects, backfill each to canonical Media documents, produce a reconciliation report (matched, migrated, orphaned, failed), cut consumer reads over to the canonical relationship, retire the legacy columns from write paths, and decommission or fence sync-vehicle-images.mjs behind the canonical service.",
+      "alternatives_rejected": [
+        "Big-bang cutover without a reconciliation report \u2014 rejected: unverifiable against live production imagery",
+        "Leave legacy URLs indefinitely beside canonical media \u2014 rejected: preserves the dual contract and the competing write path"
+      ],
+      "dependencies": [
+        "F009"
+      ],
+      "risk": "high",
+      "confidence": "high",
+      "acceptance_criteria": [
+        "A reconciliation report accounts for 100% of legacy image values and Storage objects (migrated, already-canonical, or documented-orphan)",
+        "Public and admin reads resolve imagery through canonical Media relationships only",
+        "The legacy direct-URL write path (script and columns) is removed or hard-deprecated with a guard",
+        "The backfill is idempotent with an archived rollback plan"
+      ],
+      "status": "blocked"
+    },
+    {
+      "id": "F011",
+      "title": "Numeric pricing migration and human-reviewed backfill",
+      "user_outcome": "Vehicle prices are numeric amounts with a currency: sorting and range filtering are correct, and malformed price text can no longer reach the storefront.",
+      "business_value": "Price is the primary purchase-decision datum across 1,391 live vehicles; text storage makes price sorts lexicographic and blocks price filters and facets entirely.",
+      "current_state": "not_implemented",
+      "repo_evidence": [
+        "src/collections/Vehicles.ts:604-609 \u2014 price is type 'text' explicitly accepting numbers or ranges ('398900 or 599000 - 798500')",
+        "Consultation [MCP-live-verified]: price is character varying in the live schema; null/blank/numeric/range/invalid counts are unknown pending F002's aggregate capture",
+        "src/services/publicVehicleCatalog.ts:166-169 \u2014 priceAsc/priceDesc sort on the text column today"
+      ],
+      "recommended_route": "Using F002's price-quality aggregates: add numeric priceAmount (plus priceMax for ranges) and currency fields; run a human-reviewed classification of ambiguous/range/invalid source values before an idempotent backfill migration with a reconciliation report; keep the display string derived, not authoritative; update publish gating and admin UI to the numeric fields; hand the catalog switch to F012.",
+      "alternatives_rejected": [
+        "Parse text price at query time \u2014 rejected: cannot index, sort, or facet correctly and leaves malformed data unfixed",
+        "Overwrite the text field in place \u2014 rejected: destroys range/display semantics and complicates rollback; additive migration is safer",
+        "Automatic classification of ambiguous prices \u2014 rejected: the audit requires human-reviewed classification before backfill"
+      ],
+      "dependencies": [
+        "F002",
+        "F003"
+      ],
+      "risk": "high",
+      "confidence": "high",
+      "acceptance_criteria": [
+        "Every vehicle has priceAmount/currency populated or an explicit documented-null state; the backfill reconciliation report covers all rows against F002's captured quality counts",
+        "Numeric sorts and range filters return correct order for fixtures including 99,000 vs 100,000-style cases",
+        "Publish gating requires a valid numeric price; malformed input is rejected at the API with tests",
+        "The migration is idempotent, staged-tested, reversible, and never run against production during build-plan work"
+      ],
+      "status": "review"
+    },
+    {
+      "id": "F012",
+      "title": "Complete public catalog: filters, deterministic sorts, facets, and parameterized collections",
+      "user_outcome": "Storefront shoppers can filter by price and color, sort deterministically (including true numeric price and year ascending), page through facet-counted results, and collection pages honor caller filters.",
+      "business_value": "The catalog is the storefront's engine; missing filters and silently-fallback smart sorts mean shoppers see misleading orderings today and the Storefront cannot build honest controls against the contract.",
+      "current_state": "partially_implemented",
+      "repo_evidence": [
+        "src/services/publicVehicleCatalog.ts:79-101 \u2014 typed options cover brand/model/year/mileage/body/fuel/etc. but omit price and color",
+        "src/services/publicVehicleCatalog.ts:164-181 \u2014 no yearAsc; mostViewed/mostClicked/mostLeads silently map to -createdAt",
+        "src/app/(payload)/api/public/collections/[slug]/route.ts \u2014 collection detail accepts only paging, not the catalog filter set",
+        "Consultation: smart analytics sorts remain a competing but misleading path while they silently behave like 'newest'"
+      ],
+      "recommended_route": "After F011: extend the option set with numeric priceMin/priceMax, color, and yearAsc; implement facet counts for filterable dimensions; thread the full option set through the public collection route; apply D04 (recommended: remove the smart ranks until trusted rollups from F006 exist); freeze the expanded contract with fixture tests covering every filter, sort, pagination edge, and facet count.",
+      "alternatives_rejected": [
+        "Implement Storefront UI controls here \u2014 rejected: the consumer lives in the separate Storefront repository and is verified via F017",
+        "Keep the silent smart-rank fallback \u2014 rejected: a public contract claiming analytics ordering while returning newest is misleading; D04 forces an explicit choice"
+      ],
+      "dependencies": [
+        "F004",
+        "F011"
+      ],
+      "risk": "medium",
+      "confidence": "high",
+      "acceptance_criteria": [
+        "Price range, color, and yearAsc filters/sorts are accepted and correct across list and collection endpoints, with fixture tests",
+        "Facet counts match filtered result sets for every filterable dimension",
+        "Collection detail honors the same filter/sort contract as the list endpoint",
+        "Smart ranks are removed or backed by trusted rollups per D04 \u2014 no silent fallback remains",
+        "The expanded DTO/contract snapshot is frozen in CI"
+      ],
+      "status": "review"
+    },
+    {
+      "id": "F013",
+      "title": "Primary GBE homepage publishing on site_config with legacy home retirement (unblocked, prioritized)",
+      "user_outcome": "Editors stage homepage changes as drafts, preview them, and publish deliberately with unpublish and rollback available; the homepage's content, navigation, and media come from the single site_config source of truth; the legacy home content is reconciled and retired.",
+      "business_value": "The homepage is the confirmed top product priority and the brand's front door; today every save publishes instantly to the live global, and two populated homepage models compete for truth in the live database \u2014 a real source-of-truth conflict verified by the audit.",
+      "current_state": "not_implemented",
+      "repo_evidence": [
+        "src/components/views/HomeBuilder.tsx:23-33 \u2014 saves POST directly to /api/globals/site-config; UI copy at :38 states 'Los cambios se publican al guardar'",
+        "src/globals/SiteConfig.ts:7-23 \u2014 the registered global has no versions/drafts and no update access policy; livePreview/preview point at NEXT_PUBLIC_FRONTEND_URL",
+        "src/globals/Home.ts \u2014 legacy global exists unregistered (absent from src/payload.config.ts:123) with public read",
+        "Consultation [MCP-live-verified]: both home (1 row, plus home_stats 3 and home_brands 8) and site_config (1 row, plus populated blocks/navigation child tables) contain live rows",
+        "Consultation [MCP-live-verified]: site_config navigation and hero/brands/inventory-search/trust-steps block child tables are populated, so a publishing boundary protects real content",
+        "Old flat site_config columns coexist with the newer general_* fields in the live schema (audit competing-paths list)"
+      ],
+      "recommended_route": "After F001, F003, and the homepage-relevant slice of F005: enable Payload versions/drafts on the SiteConfig global (with migration); convert HomeBuilder and the SiteConfig admin flow to save drafts and publish explicitly with authenticated preview via the existing livePreview URLs; add unpublish/rollback and optimistic-concurrency behavior with tests; reconcile legacy home content per D03, export/backup it, then retire the home/home_stats/home_brands tables and delete the unregistered src/globals/Home.ts; schedule the old flat site_config column cleanup in the same migration series. Homepage publishing precedes generic Pages publishing (F007) by design.",
+      "alternatives_rejected": [
+        "Client-side staged-save emulation in HomeBuilder \u2014 rejected: leaves the raw global endpoint publishing on save; the model, not the UI, must carry draft semantics",
+        "Register the legacy Home global and merge models \u2014 rejected: site_config is the confirmed single source of truth; resurrecting home deepens the conflict",
+        "Wait for a tenant-singleton decision \u2014 obsolete: tenancy is removed from the product"
+      ],
+      "dependencies": [
+        "F001",
+        "F003",
+        "F005"
+      ],
+      "risk": "high",
+      "confidence": "high",
+      "acceptance_criteria": [
+        "Saving homepage sections creates a draft invisible to anonymous consumers; publish is a separate explicit action gated to the D01-designated role",
+        "Authenticated preview renders the draft; unpublish and rollback restore defined prior states, each covered by tests",
+        "Concurrent homepage edits are protected: a stale write returns a conflict instead of silently overwriting",
+        "Legacy home/home_stats/home_brands content is reconciled per D03 with an archived export, the tables are retired, and src/globals/Home.ts is removed",
+        "Editor UI copy no longer claims save-equals-publish, and homepage content/navigation/media all resolve from site_config through the published boundary"
+      ],
+      "status": "review"
+    },
+    {
+      "id": "F014",
+      "title": "Versioned vehicle presentation content (separately gated product decision)",
+      "user_outcome": "Marketing content for a vehicle's landing page can be drafted, previewed, and rolled back independently of the vehicle's operational inventory state.",
+      "business_value": "Vehicle detail pages are the conversion surface; coupling content to the live inventory record means every content edit is instantly live and unversioned \u2014 but the human decisions doc explicitly states this must not block homepage work and remains an open product choice.",
+      "current_state": "requires_product_decision",
+      "repo_evidence": [
+        "src/collections/Vehicles.ts \u2014 landing/presentation fields live on the operational record; no versions config exists on the collection",
+        "src/app/(payload)/api/public/vehicles/preview/[id]/route.ts \u2014 authenticated preview of current unversioned data already works",
+        "docs/product/inputs/HUMAN_PRODUCT_DECISIONS_20260710.md \u2014 vehicle presentation versioning listed under 'Still requiring a decision'"
+      ],
+      "recommended_route": "Resolve D07 first. If approved, implement the chosen model (extraction into a versioned related collection is the safer default) reusing the publishing test pattern from F013/F007, keeping publish-completeness gating intact. If D07 declines, close this feature with the existing publish gating as the accepted behavior.",
+      "alternatives_rejected": [
+        "Versioning Vehicles without deciding the content/operations split \u2014 rejected: would version operational churn alongside content, polluting history and rollback semantics",
+        "Bundling this into the homepage milestone \u2014 rejected: explicitly decoupled by the human decision"
+      ],
+      "dependencies": [
+        "F007"
+      ],
+      "risk": "medium",
+      "confidence": "medium",
+      "acceptance_criteria": [
+        "D07 is resolved and recorded before any schema work",
+        "If approved: vehicle presentation content supports draft, authenticated preview, publish, and rollback without altering operational inventory state, with a reversible reconciled migration",
+        "Publish-completeness enforcement continues to hold for the published surface"
+      ],
+      "status": "blocked"
+    },
+    {
+      "id": "F015",
+      "title": "Optimistic concurrency for vehicle workspace and publishing flows",
+      "user_outcome": "Two editors working on the same vehicle or the homepage can no longer silently overwrite each other; the second writer gets a conflict with a recovery path.",
+      "business_value": "Client-side dirty guards protect against accidental navigation but not concurrent sessions or direct API writes \u2014 a real data-loss vector as the editing team grows.",
+      "current_state": "not_implemented",
+      "repo_evidence": [
+        "src/components/views/VehicleWorkspaceTab.tsx \u2014 dirty/publish guards are client-side checks before the request (workspace save guards commit 65ab237); saves carry no expected-version precondition",
+        "src/collections/Vehicles.ts \u2014 no server-side stale-write rejection hook exists",
+        "src/components/views/HomeBuilder.tsx:23-33 \u2014 homepage saves likewise carry no concurrency precondition (addressed for the homepage inside F013, generalized here)"
+      ],
+      "recommended_route": "Add a version/updatedAt precondition to workspace saves: the client sends the revision it loaded; a server hook rejects stale writes with a conflict response; the UI surfaces the conflict and offers reload-and-merge. Scope to the vehicle workspace first, sharing the mechanism F013 introduces for homepage publishing.",
+      "alternatives_rejected": [
+        "Rely on Payload versions as the concurrency mechanism \u2014 rejected: versions give history, not write-time conflict detection",
+        "Pessimistic locking \u2014 rejected: heavier UX and stale-lock cleanup burden for a small team"
+      ],
+      "dependencies": [
+        "F003",
+        "F013"
+      ],
+      "risk": "medium",
+      "confidence": "high",
+      "acceptance_criteria": [
+        "A two-session stale-write test returns a conflict and preserves the newer revision",
+        "Direct API writes without the precondition are rejected or explicitly exempted by documented policy",
+        "The workspace UI surfaces conflicts with a recovery path instead of silent overwrite"
+      ],
+      "status": "review"
+    },
+    {
+      "id": "F016",
+      "title": "Admin style architecture isolation (sequenced last among build features)",
+      "user_outcome": "Admin UI styling changes are safe and local: editing one view's styles cannot break another's, and visual regressions are caught automatically.",
+      "business_value": "The style guard passes today, but a multi-thousand-line global stylesheet with partial guard coverage remains a regression engine taxing every UI change; the audit sequences this after access, homepage, media, and catalog foundations.",
+      "current_state": "partially_implemented",
+      "repo_evidence": [
+        "src/app/(payload)/custom.scss \u2014 the global stylesheet (currently modified in the uncommitted working tree) imported globally for the admin",
+        "scripts/check-admin-styles.mjs \u2014 the existing selector-ownership guard wired as npm run check:admin-styles",
+        "No *.module.css/scss files exist under src (glob verified)"
+      ],
+      "recommended_route": "Treat the passing style guard as the stabilization baseline; expand guard ownership coverage; incrementally migrate view-specific styles into scoped CSS modules per component, shrinking custom.scss; add real-browser visual regression at supported breakpoints once CI (F003) can host it.",
+      "alternatives_rejected": [
+        "Big-bang rewrite of custom.scss \u2014 rejected: highest-regression-risk move on a live admin, explicitly sequenced last",
+        "Treating the passing guard as full resolution \u2014 rejected: unguarded selectors still collide silently"
+      ],
+      "dependencies": [
+        "F003"
+      ],
+      "risk": "medium",
+      "confidence": "high",
+      "acceptance_criteria": [
+        "Style guard coverage extends to all admin view selector namespaces, passing in CI",
+        "A measurable, sustained reduction of custom.scss with view styles moved to scoped modules per an agreed per-phase target",
+        "Browser visual-regression checks pass at supported breakpoints for key admin views",
+        "No new global selectors are added for new components (enforced by guard or lint rule)"
+      ],
+      "status": "review"
+    },
+    {
+      "id": "F017",
+      "title": "Storefront verification release gate at a pinned SHA",
+      "user_outcome": "The main GBE website verifiably renders the published homepage, navigation, inventory, media, approved dealership redirects, isolated previews, and deduplicated analytics exactly as the backend contracts define.",
+      "business_value": "Every storefront-facing contract in this roadmap is currently accepted only on the producer side; the repository root redirects to /admin and the real consumer lives elsewhere, so consumer mismatches would surface in production without this gate.",
+      "current_state": "blocked_by_prerequisite",
+      "repo_evidence": [
+        "src/app/(frontend)/page.tsx:4 \u2014 the repository root redirects to /admin; the main GBE website is a separate repository absent from this workspace",
+        "src/globals/SiteConfig.ts:13-23 and src/collections/Pages.ts:40-47 \u2014 livePreview/preview target NEXT_PUBLIC_FRONTEND_URL, a contract only the Storefront can honor",
+        "Consultation: catalog evidence does not prove deployed Payload routes, Storefront routes, or GraphQL/REST endpoints enforce the intended rules; Storefront verification remains mandatory"
+      ],
+      "recommended_route": "Once D05 supplies the Storefront at a pinned SHA: run its clean checks; add shared contract fixtures for every registered homepage/section block plus unknown-block behavior; verify published homepage and navigation rendering from site_config, published-inventory and media resolution through canonical contracts, approved dealership external-link redirects, preview isolation (drafts invisible anonymously), and analytics deduplication via idempotency IDs; wire these as a cross-repository CI gate required before public acceptance.",
+      "alternatives_rejected": [
+        "Accepting carried-forward Storefront claims as verified \u2014 rejected: all Storefront conclusions are explicitly unvalidated",
+        "Duplicating storefront rendering inside the Admin repo for testing \u2014 rejected: diverges from the real consumer and gives false confidence"
+      ],
+      "dependencies": [
+        "F004",
+        "F006",
+        "F012",
+        "F013"
+      ],
+      "risk": "high",
+      "confidence": "medium",
+      "acceptance_criteria": [
+        "The Storefront is captured at an exact SHA and its clean checks pass in the shared gate",
+        "The published homepage, navigation, and every registered block type render from site_config (unknown blocks degrade safely) under shared fixtures",
+        "Published inventory, canonical media, and approved dealership external links resolve correctly; drafts and previews are invisible to anonymous visitors",
+        "A storefront fixture journey produces exactly one lead and reconciled, deduplicated analytics rows",
+        "Storefront filter/URL state round-trips match the frozen catalog contract"
+      ],
+      "status": "blocked"
+    }
+  ],
+  "global_risks": [
+    "The database is live production Supabase data (project bdnvgbdmqmbzemllqngs, 1,391 vehicles); every migration in this roadmap \u2014 roles enum, price, media, homepage/legacy-home retirement \u2014 must run against staging with archived rollback evidence first and never against production during build work",
+    "The fail-open role fallback (src/access/roles.ts:38) is live now: any malformed or roleless authenticated account holds effective admin across all guarded endpoints until F001 lands",
+    "F002 remains open: exact Postgres version, policies, grants, SECURITY DEFINER functions, forced-RLS state, Storage bucket restrictions, and all exact aggregates are unknown; features consuming them (F001 mapping, F009-F011, F013 reconciliation) carry hidden risk until D06 closes the captures",
+    "The 35 RLS-enabled-without-policy tables are deny-by-default for API roles subject to unknown grants, but this is neither proof of exposure nor of safety; the policy/grant capture must settle whether the Data API surface is actually closed",
+    "Two populated homepage models (site_config and the legacy home family) compete for truth in the live database right now; any storefront or content work done before F013's reconciliation risks building on the wrong source",
+    "Raw REST and GraphQL remain mounted for all collections; any access-rule mistake anywhere becomes an immediate public exposure, which is why every access feature requires negative-path tests",
+    "Media bytes are non-durable on serverless hosting today, and the service-role sync script is an active second write path into Supabase Storage; a redeploy can silently lose newly uploaded images until F009 ships",
+    "Public lead/analytics ingestion is spoofable now; all current dashboard metrics (408 live analytics rows) are untrusted until F006 plus rollups land, and smart ranks must stay hidden per D04 until then",
+    "No CI, typecheck, or test suite exists; until F003, every acceptance criterion in this roadmap is manually asserted rather than mechanically enforced",
+    "All Storefront behavior is carried forward, not verified; contract changes in F004/F012/F013 could break the live website without F017's pinned-SHA gate",
+    "The working tree carries uncommitted changes (logo, custom.scss, vehicle-preview page, launch config) plus numerous untracked review artifacts and scripts; these should be committed or discarded deliberately before feature work begins on this branch"
+  ],
+  "verification_notes": [
+    "Live repository inspected at branch codex/admin-workflow-updates, HEAD d6d505f, on 2026-07-10; consultation evidence paths were re-verified against the live tree rather than trusted",
+    "Re-verified by direct file read this session: six-role model and fail-open fallback (src/access/roles.ts:12-40), requireCmsRole delegation (src/services/cmsRequestAuth.ts:30-44), plugins:[] and Postgres adapter and SiteConfig-only globals registry (src/payload.config.ts:107-167), Media local upload with public read (src/collections/Media.ts:7-28), SiteConfig public-read-only access without versions (src/globals/SiteConfig.ts:7-23), unregistered legacy Home global (src/globals/Home.ts), root redirect to /admin (src/app/(frontend)/page.tsx:4), text price and overlapping status/image fields (src/collections/Vehicles.ts:604-643,743-771), Pages manual status without drafts (src/collections/Pages.ts:30-79), Dealerships public read with internal fields and no external URL (src/collections/Dealerships.ts:5-65), anonymous Leads/AnalyticsEvents creation (src/collections/Leads.ts:7-12, src/collections/AnalyticsEvents.ts:5-10), admin-only role field with viewer default (src/collections/Users.ts:44-56), mounted raw REST and GraphQL (src/app/(payload)/api/[...slug]/route.ts, src/app/(payload)/api/graphql/route.ts), bounded public DTO routes (src/app/(payload)/api/public/*), catalog option/sort gaps and smart-rank fallback (src/services/publicVehicleCatalog.ts:79-181), legacy-role preview guard (src/app/(payload)/api/public/vehicles/preview/[id]/route.ts:12-16), publish-on-save HomeBuilder (src/components/views/HomeBuilder.tsx:23-38), and the service-role sync script with bucket 'vehicle-images' and direct-DB-update flag (scripts/sync-vehicle-images.mjs:22-39)",
+    "Re-verified by search/command: no versions/drafts config anywhere under src (grep matches only a 2026-05-21 migration's generated table names); no tenant model under src; no .github/workflows directory; package.json has no test or typecheck script and pins node 22.x; src/migrations holds 15 registered migration modules (17 entries including index.ts and a schema JSON), consistent with the audit's 15-vs-17 reconciliation requirement",
+    "Live-database claims ([MCP-live-verified] role enum, 93 RLS-enabled tables, 35 no-policy tables, home vs site_config rows, 277 Storage objects vs 42 media rows, migration registries, advisor findings) are accepted from the consultation's evidence ledger; they are not independently reproducible from this repository and their remaining unknowns are exactly what F002/D06 exist to close",
+    "This session performed static inspection only: no installs, builds, tests, migrations, or live-database access were executed, and no application code, configuration, or Git state was modified",
+    "Feature IDs F001-F017 preserve the numbering of the prior blueprint (docs/product/roadmaps/gbe-platform-roadmap-20260710/BLUEPRINT.json) with the consultation's revised dispositions applied: F008 removed (obsolete_or_duplicate/no_build_needed), F009 and F013 unblocked with F013 pulled ahead of F007, F001 revised to the three-role enum migration, and F002 kept open pending the D06 captures",
+    "gate_status is needs_decision because the first buildable feature (F001) is gated on the D01 permission matrix and D02 per-user mapping, and F002's closure requires the D06 capture authorization; no feature should start implementation before those decisions"
+  ]
+}
