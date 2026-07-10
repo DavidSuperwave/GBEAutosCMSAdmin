@@ -13,6 +13,7 @@ import * as migration_20260611_150000_workshop_job_style_fields from './20260611
 import * as migration_20260611_160000_workshop_job_turn_ids from './20260611_160000_workshop_job_turn_ids';
 import * as migration_20260611_170000_general_media_workspace from './20260611_170000_general_media_workspace';
 import * as migration_20260611_180000_vehicle_image_sync_columns from './20260611_180000_vehicle_image_sync_columns';
+import * as migration_20260710_150000_three_role_model from './20260710_150000_three_role_model';
 
 export const migrations = [
   {
@@ -89,5 +90,10 @@ export const migrations = [
     up: migration_20260611_180000_vehicle_image_sync_columns.up,
     down: migration_20260611_180000_vehicle_image_sync_columns.down,
     name: '20260611_180000_vehicle_image_sync_columns'
+  },
+  {
+    up: migration_20260710_150000_three_role_model.up,
+    down: migration_20260710_150000_three_role_model.down,
+    name: '20260710_150000_three_role_model'
   },
 ];

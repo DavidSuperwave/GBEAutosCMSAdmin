@@ -44,7 +44,9 @@ export const Users: CollectionConfig = {
       name: 'role',
       type: 'select',
       label: 'Rol',
-      defaultValue: 'viewer',
+      // Least-privileged of the three roles: no publishing or inventory
+      // mutation rights. Admins assign the real role after the invite.
+      defaultValue: 'sales',
       access: {
         // Only admins can change roles (prevents privilege escalation).
         create: adminFieldAccess,

@@ -279,7 +279,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'jobId or jobData is required.' }, { status: 400 })
   }
 
-  const auth = await requireCmsRole(request, ['media_editor'], 'Not allowed to use the workshop.')
+  const auth = await requireCmsRole(request, ['general'], 'Not allowed to use the workshop.')
   if (auth.response) return auth.response
   const { payload, user } = auth
 

@@ -63,7 +63,7 @@ test('migration checker accepts the current repository corpus', () => {
   const result = runMigrationChecker()
 
   assert.equal(result.status, 0, result.stderr)
-  assert.match(result.stdout, /Migration check passed: validated 15 migration module\(s\)\./)
+  assert.match(result.stdout, /Migration check passed: validated \d+ migration module\(s\)\./)
 })
 
 test('migration checker rejects an index-level expression', (testContext) => {

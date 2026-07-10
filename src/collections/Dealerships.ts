@@ -7,7 +7,7 @@ import { isAdminAccess, rolesAccess } from '../access/roles'
  * confirms it never reads these. */
 const staffOnlyRead: FieldAccess = ({ req }) => Boolean(req.user)
 
-const canEditDealerships = rolesAccess('content_editor', 'inventory_manager')
+const canEditDealerships = rolesAccess('general')
 
 export const Dealerships: CollectionConfig = {
   slug: 'dealerships',

@@ -11,7 +11,7 @@ export async function GET(request: Request, context: RouteContext) {
   const { id } = await context.params
   const auth = await requireCmsRole(
     request,
-    ['inventory_manager', 'content_editor'],
+    ['general'],
     'Sin permisos para previsualizar vehiculos.',
   )
   if (auth.response) return auth.response

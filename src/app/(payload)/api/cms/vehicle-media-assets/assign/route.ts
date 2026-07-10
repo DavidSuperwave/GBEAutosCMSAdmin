@@ -4,7 +4,7 @@ import type { Role } from '../../../../../../access/roles'
 import { requireCmsRole } from '../../../../../../services/cmsRequestAuth'
 import { assignApprovedVehicleMediaAsset } from '../../../../../../services/vehicleMediaPolicy'
 
-const ASSIGN_ROLES: Role[] = ['inventory_manager', 'media_editor']
+const ASSIGN_ROLES: Role[] = ['general']
 
 type AssignBody = {
   vehicleId?: number | string

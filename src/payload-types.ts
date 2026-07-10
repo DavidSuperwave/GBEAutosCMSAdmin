@@ -442,7 +442,7 @@ export interface User {
   /**
    * Define qué acciones puede realizar el usuario en el CMS.
    */
-  role?: ('admin' | 'inventory_manager' | 'content_editor' | 'sales_manager' | 'media_editor' | 'viewer') | null;
+  role?: ('admin' | 'general' | 'sales') | null;
   updatedAt: string;
   createdAt: string;
   email: string;

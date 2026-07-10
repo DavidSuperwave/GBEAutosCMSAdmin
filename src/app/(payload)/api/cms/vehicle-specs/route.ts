@@ -125,7 +125,7 @@ function mapTrimSpecs(raw: Json) {
 }
 
 export async function GET(request: Request) {
-  const auth = await requireCmsRole(request, ['inventory_manager'], 'Sin permisos para consultar especificaciones.')
+  const auth = await requireCmsRole(request, ['general'], 'Sin permisos para consultar especificaciones.')
   if (auth.response) return auth.response
 
   const { searchParams } = new URL(request.url)

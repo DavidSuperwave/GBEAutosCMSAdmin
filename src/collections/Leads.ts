@@ -10,7 +10,7 @@ import {
 
 /** Management fields only sales-capable staff may set; public submissions
  * cannot inject workflow state. */
-const salesFieldAccess: FieldAccess = ({ req }) => hasRole(req.user, 'admin', 'sales_manager')
+const salesFieldAccess: FieldAccess = ({ req }) => hasRole(req.user, 'admin', 'sales')
 
 export const Leads: CollectionConfig = {
   slug: 'leads',

@@ -38,7 +38,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'No hay filas para importar.' }, { status: 400 })
   }
 
-  const auth = await requireCmsRole(request, ['inventory_manager'], 'Sin permisos para importar inventario.')
+  const auth = await requireCmsRole(request, ['general'], 'Sin permisos para importar inventario.')
   if (auth.response) return auth.response
   const { payload, user } = auth
 

@@ -129,7 +129,7 @@ export default async function VehiclePreviewPage({ params }: RouteContext) {
   const payload = await getPayload({ config })
 
   const authResult = await payload.auth({ canSetHeaders: false, headers: await headers() })
-  if (!authResult.user || !hasRole(authResult.user, 'admin', 'inventory_manager', 'content_editor')) {
+  if (!authResult.user || !hasRole(authResult.user, 'admin', 'general')) {
     notFound()
   }
 

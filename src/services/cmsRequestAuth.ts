@@ -23,7 +23,7 @@ type CmsAuthFailure = {
  * pass. On failure, `response` holds the ready 401/403 JSON to return.
  *
  * Usage:
- *   const auth = await requireCmsRole(request, ['inventory_manager'], 'Sin permisos…')
+ *   const auth = await requireCmsRole(request, ['general'], 'Sin permisos…')
  *   if (auth.response) return auth.response
  *   const { payload, user } = auth
  */

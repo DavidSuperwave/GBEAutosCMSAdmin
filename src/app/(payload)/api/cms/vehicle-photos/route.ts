@@ -125,7 +125,7 @@ async function isReachable(url: string): Promise<boolean> {
   }
 }
 
-const MEDIA_ROLES: Role[] = ['media_editor', 'inventory_manager', 'content_editor']
+const MEDIA_ROLES: Role[] = ['general']
 
 type Candidate = {
   link: string

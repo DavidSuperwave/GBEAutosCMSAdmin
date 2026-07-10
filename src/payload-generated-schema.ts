@@ -337,14 +337,7 @@ export const enum_analytics_events_device_type = pgEnum('enum_analytics_events_d
   'tablet',
   'desktop',
 ])
-export const enum_users_role = pgEnum('enum_users_role', [
-  'admin',
-  'inventory_manager',
-  'content_editor',
-  'sales_manager',
-  'media_editor',
-  'viewer',
-])
+export const enum_users_role = pgEnum('enum_users_role', ['admin', 'general', 'sales'])
 export const enum_site_config_navigation_main_links_type = pgEnum(
   'enum_site_config_navigation_main_links_type',
   ['page', 'collection', 'brand', 'inventory', 'custom'],
@@ -1992,7 +1985,7 @@ export const users = pgTable(
   {
     id: serial('id').primaryKey(),
     name: varchar('name'),
-    role: enum_users_role('role').default('viewer'),
+    role: enum_users_role('role').default('sales'),
     updatedAt: timestamp('updated_at', { mode: 'string', withTimezone: true, precision: 3 })
       .defaultNow()
       .notNull(),

@@ -46,10 +46,14 @@ test('getRoles fails closed for unrecognized role values', () => {
 })
 
 test('getRoles keeps valid roles and drops invalid ones from mixed input', () => {
-  assert.deepEqual(getRoles({ role: 'viewer', roles: ['bogus'] as unknown as Role[] }), ['viewer'])
-  assert.deepEqual(getRoles({ roles: ['sales_manager', 'bogus'] as unknown as Role[] }), [
-    'sales_manager',
-  ])
+  assert.deepEqual(getRoles({ role: 'sales', roles: ['bogus'] as unknown as Role[] }), ['sales'])
+  assert.deepEqual(getRoles({ roles: ['general', 'bogus'] as unknown as Role[] }), ['general'])
+})
+
+test('getRoles fails closed for retired legacy role values', () => {
+  for (const legacy of ['inventory_manager', 'content_editor', 'media_editor', 'sales_manager', 'viewer']) {
+    assert.deepEqual(getRoles({ role: legacy as Role }), [])
+  }
 })
 
 test('getRoles resolves every cataloged role', () => {
@@ -81,16 +85,12 @@ test('isAdmin is true only for a valid admin role', () => {
 
 const accessMatrix: { name: string; fn: (args: never) => unknown; allowed: Role[] }[] = [
   { name: 'isAdminAccess', fn: isAdminAccess, allowed: ['admin'] },
-  { name: 'canManageInventory', fn: canManageInventory, allowed: ['admin', 'inventory_manager'] },
-  { name: 'canManageContent', fn: canManageContent, allowed: ['admin', 'content_editor'] },
-  {
-    name: 'canManageMedia',
-    fn: canManageMedia,
-    allowed: ['admin', 'media_editor', 'inventory_manager', 'content_editor'],
-  },
-  { name: 'canManageLeads', fn: canManageLeads, allowed: ['admin', 'sales_manager'] },
+  { name: 'canManageInventory', fn: canManageInventory, allowed: ['admin', 'general'] },
+  { name: 'canManageContent', fn: canManageContent, allowed: ['admin', 'general'] },
+  { name: 'canManageMedia', fn: canManageMedia, allowed: ['admin', 'general'] },
+  { name: 'canManageLeads', fn: canManageLeads, allowed: ['admin', 'sales'] },
   { name: 'adminFieldAccess', fn: adminFieldAccess, allowed: ['admin'] },
-  { name: 'rolesAccess(sales_manager)', fn: rolesAccess('sales_manager'), allowed: ['admin', 'sales_manager'] },
+  { name: 'rolesAccess(sales)', fn: rolesAccess('sales'), allowed: ['admin', 'sales'] },
 ]
 
 test('every role-gated access helper denies anonymous, roleless, and invalid-role users', () => {
@@ -120,8 +120,8 @@ test('isAuthenticated requires a user but no role', () => {
 
 // ---- Media review roles ----------------------------------------------------
 
-test('isMediaReviewer allows only admin and media_editor', () => {
-  const allowed: Role[] = ['admin', 'media_editor']
+test('isMediaReviewer allows only admin and general', () => {
+  const allowed: Role[] = ['admin', 'general']
   for (const role of ALL_ROLES) {
     assert.equal(isMediaReviewer({ role }), allowed.includes(role))
   }
