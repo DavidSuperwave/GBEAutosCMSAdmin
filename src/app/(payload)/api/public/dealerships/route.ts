@@ -8,6 +8,17 @@ import type { Dealership } from '../../../../../payload-types'
 const text = (value: unknown): string | null =>
   typeof value === 'string' && value.trim() !== '' ? value : null
 
+const publicUrl = (value: unknown): string | null => {
+  const candidate = text(value)
+  if (!candidate) return null
+  try {
+    const url = new URL(candidate)
+    return url.protocol === 'http:' || url.protocol === 'https:' ? url.toString() : null
+  } catch {
+    return null
+  }
+}
+
 function toPublicDealership(doc: Dealership): PublicDealership {
   return {
     id: doc.id,
@@ -20,6 +31,8 @@ function toPublicDealership(doc: Dealership): PublicDealership {
     whatsapp: text(doc.whatsapp),
     email: text(doc.email),
     hours: text(doc.hours),
+    websiteUrl: publicUrl(doc.websiteUrl),
+    mapUrl: publicUrl(doc.mapUrl),
     defaultForCity: Boolean(doc.defaultForCity),
   }
 }

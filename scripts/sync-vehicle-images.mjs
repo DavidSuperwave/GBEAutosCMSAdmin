@@ -7,8 +7,12 @@ import path from 'node:path'
 import process from 'node:process'
 import { createClient } from '@supabase/supabase-js'
 
+import { resolveVehicleImageSyncMode } from './vehicle-image-sync-mode.mjs'
+
 const flags = new Set(process.argv.slice(2))
-const dryRun = flags.has('--dry-run') || envBool('DRY_RUN', false)
+const { apply, dryRun } = resolveVehicleImageSyncMode([...flags], {
+  environmentDryRun: envBool('DRY_RUN', false),
+})
 const verifyOnly = flags.has('--verify-only')
 const uploadOnly = flags.has('--upload-only')
 const dbOnly = flags.has('--db-only')
@@ -50,6 +54,7 @@ main().catch((error) => {
 async function main() {
   console.log('Vehicle image sync starting')
   console.log({
+    apply,
     dryRun,
     verifyOnly,
     uploadOnly,

@@ -13,6 +13,16 @@ export type PublicVehicleCard = {
   id: string
   slug: string
   title: string
+  /** Stable brand + model-family key for grouped new-vehicle listings. */
+  listingKey?: string
+  /** Number of matching physical inventory records represented by this card. */
+  inventoryCount?: number
+  /** Oldest and newest model years represented by a grouped listing. */
+  yearRange?: { min: number; max: number }
+  /** Number of distinct trims/models represented by a grouped listing. */
+  variantCount?: number
+  /** Distinct cities with matching physical inventory. */
+  cities?: string[]
   condition: 'new' | 'used'
   inventoryStatus: 'available' | 'reserved' | 'sold'
   brand: string

@@ -21,7 +21,7 @@ export const ROLES: { label: string; value: Role }[] = [
   { label: 'Ventas', value: 'sales' },
 ]
 
-type UserLike = { role?: Role | null; roles?: Role[] | null } | null | undefined
+export type UserLike = { role?: Role | null; roles?: Role[] | null } | null | undefined
 
 const ROLE_VALUES: ReadonlySet<string> = new Set(ROLES.map((r) => r.value))
 

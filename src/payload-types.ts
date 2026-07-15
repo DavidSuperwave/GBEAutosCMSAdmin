@@ -401,6 +401,18 @@ export interface Dealership {
   whatsapp?: string | null;
   email?: string | null;
   hours?: string | null;
+  /**
+   * URL publica de la agencia o distribuidor oficial.
+   */
+  websiteUrl?: string | null;
+  /**
+   * Enlace publico de Google Maps confirmado para esta agencia.
+   */
+  mapUrl?: string | null;
+  /**
+   * Un nombre exacto por linea. Se usa para enlazar NOM_CONCESIONARIO sin modificar el dato fuente.
+   */
+  sourceAliases?: string | null;
   coordinates?: {
     lat?: number | null;
     lng?: number | null;
@@ -468,6 +480,7 @@ export interface User {
  */
 export interface Media {
   id: number;
+  prefix?: string | null;
   alt: string;
   updatedAt: string;
   createdAt: string;
@@ -1864,6 +1877,7 @@ export interface PagesSelect<T extends boolean = true> {
  * via the `definition` "media_select".
  */
 export interface MediaSelect<T extends boolean = true> {
+  prefix?: T;
   alt?: T;
   updatedAt?: T;
   createdAt?: T;
@@ -1945,6 +1959,9 @@ export interface DealershipsSelect<T extends boolean = true> {
   whatsapp?: T;
   email?: T;
   hours?: T;
+  websiteUrl?: T;
+  mapUrl?: T;
+  sourceAliases?: T;
   coordinates?:
     | T
     | {

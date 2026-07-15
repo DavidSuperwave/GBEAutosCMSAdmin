@@ -1,12 +1,14 @@
 import { postgresAdapter } from '@payloadcms/db-postgres'
 import { nodemailerAdapter } from '@payloadcms/email-nodemailer'
 import { lexicalEditor } from '@payloadcms/richtext-lexical'
+import { s3Storage } from '@payloadcms/storage-s3'
 import path from 'path'
 import { buildConfig } from 'payload'
 import { es } from 'payload/i18n/es'
 import { fileURLToPath } from 'url'
 import sharp from 'sharp'
 
+import type { UserLike } from './access/roles'
 import { Users } from './collections/Users'
 import { Media } from './collections/Media'
 import { Vehicles } from './collections/Vehicles'
@@ -22,17 +24,17 @@ import { ImageTemplates } from './collections/ImageTemplates'
 import { VehicleTags } from './collections/VehicleTags'
 import { VehicleCollections } from './collections/VehicleCollections'
 import { SiteConfig } from './globals/SiteConfig'
+import {
+  buildSupabasePublicMediaUrl,
+  canUseSupabaseMediaClientUploads,
+  readSupabaseS3StorageConfig,
+} from './services/supabaseS3Storage'
+import { isSmtpReady } from './services/userInvite'
 
 const filename = fileURLToPath(import.meta.url)
 const dirname = path.dirname(filename)
 const smtpPort = Number(process.env.SMTP_PORT || 587)
-const hasSMTPConfig = Boolean(
-  process.env.SMTP_HOST &&
-  process.env.SMTP_FROM_EMAIL &&
-  process.env.SMTP_PASS &&
-  process.env.SMTP_USER &&
-  Number.isFinite(smtpPort),
-)
+const hasSMTPConfig = isSmtpReady(process.env)
 
 function readPositiveInt(name: string, fallback: number) {
   const value = Number(process.env[name])
@@ -42,6 +44,13 @@ function readPositiveInt(name: string, fallback: number) {
 const defaultPoolMax = process.env.NODE_ENV === 'production' ? 1 : 3
 const configuredPoolMax = readPositiveInt('POSTGRES_POOL_MAX', defaultPoolMax)
 const poolMax = process.env.NODE_ENV === 'production' ? Math.min(configuredPoolMax, 1) : configuredPoolMax
+const supabaseS3 = readSupabaseS3StorageConfig(process.env)
+const supabaseS3Required = process.env.SUPABASE_S3_REQUIRED === 'true'
+
+if (supabaseS3Required && !supabaseS3.configured) {
+  const details = [...supabaseS3.missing, ...supabaseS3.errors].join('; ')
+  throw new Error(`Supabase S3 storage is required but unavailable: ${details}`)
+}
 
 export default buildConfig({
   admin: {
@@ -164,5 +173,32 @@ export default buildConfig({
     push: false,
   }),
   sharp,
-  plugins: [],
+  plugins: supabaseS3.configured
+    ? [
+        s3Storage({
+          bucket: supabaseS3.config.bucket,
+          clientUploads: {
+            access: ({ collectionSlug, req }) =>
+              canUseSupabaseMediaClientUploads(collectionSlug, req.user as UserLike),
+          },
+          collections: {
+            media: {
+              generateFileURL: ({ filename, prefix }) =>
+                buildSupabasePublicMediaUrl(supabaseS3.config, filename, prefix),
+              prefix: supabaseS3.config.prefix,
+            },
+          },
+          config: {
+            credentials: {
+              accessKeyId: supabaseS3.config.accessKeyId,
+              secretAccessKey: supabaseS3.config.secretAccessKey,
+            },
+            endpoint: supabaseS3.config.endpoint,
+            forcePathStyle: true,
+            region: supabaseS3.config.region,
+          },
+          useCompositePrefixes: true,
+        }),
+      ]
+    : [],
 })

@@ -19,11 +19,19 @@ export const Media: CollectionConfig = {
   },
   fields: [
     {
+      name: 'prefix',
+      type: 'text',
+      defaultValue: '',
+      admin: { hidden: true, readOnly: true },
+    },
+    {
       name: 'alt',
       type: 'text',
       required: true,
       label: 'Texto alternativo',
     },
   ],
-  upload: true,
+  upload: {
+    mimeTypes: ['image/jpeg', 'image/png', 'image/webp', 'image/avif'],
+  },
 }

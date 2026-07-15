@@ -47,6 +47,32 @@ export const Dealerships: CollectionConfig = {
     { name: 'email', type: 'email', label: 'Correo de ventas' },
     { name: 'hours', type: 'textarea', label: 'Horario' },
     {
+      name: 'websiteUrl',
+      type: 'text',
+      label: 'Sitio web oficial',
+      admin: {
+        description: 'URL publica de la agencia o distribuidor oficial.',
+      },
+    },
+    {
+      name: 'mapUrl',
+      type: 'text',
+      label: 'Mapa / como llegar',
+      admin: {
+        description: 'Enlace publico de Google Maps confirmado para esta agencia.',
+      },
+    },
+    {
+      name: 'sourceAliases',
+      type: 'textarea',
+      label: 'Alias internos de inventario',
+      access: { read: staffOnlyRead },
+      admin: {
+        description:
+          'Un nombre exacto por linea. Se usa para enlazar NOM_CONCESIONARIO sin modificar el dato fuente.',
+      },
+    },
+    {
       name: 'coordinates',
       type: 'group',
       label: 'Coordenadas',

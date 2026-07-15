@@ -20,12 +20,12 @@ For deployed HTTP API checks, set `E2E_BASE_URL` to the CMS base URL before runn
 - Confirm all Payload migrations listed in `src/migrations/index.ts` are applied to the target database.
 - Confirm `site_config_navigation_footer_links.id` and `site_config_navigation_legal_links.id` are `varchar`.
 - Confirm required env vars are set: `DATABASE_URI`, `PAYLOAD_SECRET`, `NEXT_PUBLIC_SERVER_URL`, `NEXT_PUBLIC_FRONTEND_URL`.
-- Confirm SMTP vars are set before testing invites/password reset: `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS`, `SMTP_FROM_EMAIL`.
+- Test both invite delivery modes: complete `SMTP_*` configuration sends email; without SMTP an admin receives a private one-time setup link. Self-service forgot-password email still requires SMTP.
 
 ## Admin Walkthrough
 
 - Auth: create first admin on a fresh DB, log in/out, request forgot-password, reset password, and invite a user.
-- Roles: verify admin, inventory manager, content editor, sales manager, media editor, and viewer permissions against the collections they should and should not mutate.
+- Roles: verify the fail-closed `admin`, `general`, and `sales` matrix, including roleless and invalid-role denial.
 - Shell: open `/admin`, check dashboard metrics, analytics widgets, sidebar links, brand/home links, logout link, and light-theme consistency.
 - Inventory: open `/admin/inventory`, test search, filters, tabs, pagination, status badges, deep links, create vehicle, edit workspace, and default vehicle-list redirect.
 - Vehicle workspace: test summary, specs, images, listing page, review/publish, activity, publish blockers, review metadata, publish metadata, stable slugs, completeness score, status derivation, and price formatting.

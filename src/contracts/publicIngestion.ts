@@ -9,7 +9,8 @@
 import type { AnalyticsEventType } from './analytics'
 
 /** Safe public projection of a dealership: routing/contact data only.
- * Internal fields (sales rep, internal notes, coordinates) never appear. */
+ * Internal fields (source aliases, sales rep, internal notes, coordinates)
+ * never appear. */
 export type PublicDealership = {
   id: number | string
   brandName: string
@@ -21,6 +22,8 @@ export type PublicDealership = {
   whatsapp: string | null
   email: string | null
   hours: string | null
+  websiteUrl: string | null
+  mapUrl: string | null
   defaultForCity: boolean
 }
 

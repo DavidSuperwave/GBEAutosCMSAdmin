@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 
 import { requireCmsRole } from '../../../../../../services/cmsRequestAuth'
+import { matchDealershipForImport } from '../../../../../../services/dealershipMatching'
 import { normalizeImportRow } from '../../../../../../services/importNormalize'
 
 /**
@@ -46,31 +47,20 @@ export async function POST(request: Request) {
 
   // Dealership matching is best-effort. Imports stay as drafts when no
   // dealership matches; operators assign the correct agency during review.
-  const dealershipsResult = await payload.find({ collection: 'dealerships', depth: 0, limit: 200 })
+  const dealershipsResult = await payload.find({
+    collection: 'dealerships',
+    depth: 0,
+    limit: 200,
+    overrideAccess: true,
+    req: reqContext,
+  })
   const dealerships = dealershipsResult.docs as Array<{
     id: number | string
     brandName?: string
     displayName?: string
     city?: string
+    sourceAliases?: string | null
   }>
-
-  const alnum = (v?: string) =>
-    String(v ?? '')
-      .normalize('NFD')
-      .replace(/[\u0300-\u036f]/g, '')
-      .toLowerCase()
-      .replace(/[^a-z0-9]/g, '')
-
-  function matchDealership(brand?: string, dealerName?: string) {
-    const dealerKey = alnum(dealerName)
-    const byName = dealerKey
-      ? dealerships.find((d) => alnum(d.displayName).includes(dealerKey))
-      : undefined
-    if (byName) return byName.id
-    const brandKey = alnum(brand)
-    const byBrand = brandKey ? dealerships.find((d) => alnum(d.brandName) === brandKey) : undefined
-    return byBrand?.id
-  }
 
   // Create the import job first so created vehicles can reference it.
   const job = await payload.create({
@@ -120,8 +110,20 @@ export async function POST(request: Request) {
         existing = found.docs[0] as { id: number | string } | undefined
       }
 
-      const dealership = matchDealership(draft.brand, draft.sourceDealerName)
-      if (!dealership) rowWarnings.push('No se encontro una agencia coincidente; asignar antes de publicar')
+      const dealershipMatch = matchDealershipForImport(
+        dealerships,
+        draft.brand,
+        draft.sourceDealerName,
+      )
+      const dealership = dealershipMatch.dealership?.id
+      if (!dealership) {
+        const ambiguous = dealershipMatch.strategy.startsWith('ambiguous')
+        rowWarnings.push(
+          ambiguous
+            ? 'La agencia de origen coincide con varias agencias; revisar los alias antes de publicar'
+            : 'No se encontro una agencia coincidente; asignar antes de publicar',
+        )
+      }
       if (!(draft as Record<string, unknown>).price) rowWarnings.push('Falta precio; revisar antes de publicar')
 
       if (rowWarnings.length > 0) {
