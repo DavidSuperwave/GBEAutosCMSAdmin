@@ -29,6 +29,7 @@ import {
   canUseSupabaseMediaClientUploads,
   readSupabaseS3StorageConfig,
 } from './services/supabaseS3Storage'
+import { resolvePostgresPoolMax } from './services/postgresPoolConfig'
 import { isSmtpReady } from './services/userInvite'
 
 const filename = fileURLToPath(import.meta.url)
@@ -41,9 +42,7 @@ function readPositiveInt(name: string, fallback: number) {
   return Number.isInteger(value) && value > 0 ? value : fallback
 }
 
-const defaultPoolMax = process.env.NODE_ENV === 'production' ? 1 : 3
-const configuredPoolMax = readPositiveInt('POSTGRES_POOL_MAX', defaultPoolMax)
-const poolMax = process.env.NODE_ENV === 'production' ? Math.min(configuredPoolMax, 1) : configuredPoolMax
+const poolMax = resolvePostgresPoolMax(process.env)
 const supabaseS3 = readSupabaseS3StorageConfig(process.env)
 const supabaseS3Required = process.env.SUPABASE_S3_REQUIRED === 'true'
 
