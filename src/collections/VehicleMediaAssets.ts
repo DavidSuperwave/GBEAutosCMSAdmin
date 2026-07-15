@@ -1,6 +1,9 @@
 import type { CollectionConfig } from 'payload'
 
-import { canManageMedia } from '../access/roles'
+import { canManageMedia, isAuthenticated, isMediaReviewer } from '../access/roles'
+
+const canApproveVehicleMedia = ({ req }: { req: { user?: unknown } }) =>
+  isMediaReviewer(req.user as Parameters<typeof isMediaReviewer>[0])
 
 /**
  * Vehicle media assets give images a lifecycle (source, approval, match
@@ -10,7 +13,7 @@ import { canManageMedia } from '../access/roles'
 export const VehicleMediaAssets: CollectionConfig = {
   slug: 'vehicle-media-assets',
   access: {
-    read: () => true,
+    read: isAuthenticated,
     create: canManageMedia,
     update: canManageMedia,
     delete: canManageMedia,
@@ -68,6 +71,10 @@ export const VehicleMediaAssets: CollectionConfig = {
       type: 'select',
       label: 'Aprobación',
       defaultValue: 'draft',
+      access: {
+        create: canApproveVehicleMedia,
+        update: canApproveVehicleMedia,
+      },
       options: [
         { label: 'Borrador', value: 'draft' },
         { label: 'En revisión', value: 'needs_review' },
@@ -96,6 +103,10 @@ export const VehicleMediaAssets: CollectionConfig = {
       type: 'select',
       label: 'Derechos de uso',
       defaultValue: 'unknown',
+      access: {
+        create: canApproveVehicleMedia,
+        update: canApproveVehicleMedia,
+      },
       options: [
         { label: 'Propios', value: 'owned' },
         { label: 'Con licencia', value: 'licensed' },

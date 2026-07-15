@@ -198,7 +198,7 @@ export default function LandingBuilder() {
         if (fresh.ok) setMeta((await fresh.json()) as PageDoc)
         setMetaError(success)
       } catch (err) {
-        setMetaError(err instanceof Error ? err.message : 'No se pudo actualizar la pagina.')
+        setMetaError(err instanceof Error ? err.message : 'No se pudo actualizar la página.')
       } finally {
         setSavingMeta(false)
       }

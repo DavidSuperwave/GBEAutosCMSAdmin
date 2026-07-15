@@ -1,78 +1,29 @@
 import type { Payload, Where } from 'payload'
 
+import type {
+  PublicLandingBlock,
+  PublicVehicleCard,
+  PublicVehicleDetail,
+  PublicVehicleListOptions,
+  PublicVehicleListResult,
+} from '../contracts/publicCatalog'
+import { approvedVehicleMediaMap } from './vehicleMediaPolicy'
+import { relationId, relationIds } from './relations'
+import { SPEC_KEYS } from './vehicleWorkflow'
+
+// The DTO shapes live in src/contracts (F038); re-export for existing consumers.
+export type {
+  PublicLandingBlock,
+  PublicVehicleCard,
+  PublicVehicleDetail,
+  PublicVehicleListOptions,
+} from '../contracts/publicCatalog'
+
 type JsonRecord = Record<string, unknown>
 type RelationValue = string | number | JsonRecord | null | undefined
 
-export type PublicVehicleCard = {
-  id: string
-  slug: string
-  title: string
-  condition: 'new' | 'used'
-  inventoryStatus: 'available' | 'reserved' | 'sold'
-  brand: string
-  model: string
-  modelFamily?: string
-  trim?: string
-  year?: number
-  priceLabel?: string
-  mileage?: number
-  city?: string
-  agencyName?: string
-  exteriorColor?: string
-  bodyType?: string
-  segment?: string
-  fuel?: string
-  transmission?: string
-  tags: string[]
-  image?: { url: string; alt?: string }
-  stats?: {
-    views?: number
-    leads?: number
-  }
-}
-
-export type PublicVehicleDetail = PublicVehicleCard & {
-  description?: string
-  features: string[]
-  gallery: Array<{ url: string; alt?: string }>
-  landing: unknown[]
-  specs?: Record<string, unknown>
-  sourceMeta?: Record<string, unknown>
-  templateOverrides?: Record<string, unknown>
-}
-
-export type PublicVehicleListOptions = {
-  page?: number
-  limit?: number
-  sort?: string
-  keyword?: string
-  brand?: string
-  model?: string
-  modelFamily?: string
-  city?: string
-  agency?: string
-  yearMin?: number
-  yearMax?: number
-  mileageMin?: number
-  mileageMax?: number
-  bodyType?: string
-  segment?: string
-  vehicleType?: string
-  fuel?: string
-  transmission?: string
-  condition?: string
-  inventoryStatus?: string
-  tags?: string[]
-}
-
-type PublicVehicleListResult = {
-  docs: PublicVehicleCard[]
-  totalDocs: number
-  totalPages: number
-  page: number
-  limit: number
-  hasNextPage: boolean
-  hasPrevPage: boolean
+type PublicSerializationOptions = {
+  approvedMediaIds?: Set<string>
 }
 
 function text(value: unknown): string {
@@ -84,22 +35,147 @@ function numberValue(value: unknown): number | undefined {
   return Number.isFinite(numeric) ? numeric : undefined
 }
 
-function relationId(value: RelationValue): string | number | undefined {
-  if (typeof value === 'string' || typeof value === 'number') return value
-  if (value && typeof value === 'object') {
-    const id = value.id
-    if (typeof id === 'string' || typeof id === 'number') return id
+function normalizedListingPart(value: unknown): string {
+  return text(value)
+    .normalize('NFKD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLocaleLowerCase('es-MX')
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+}
+
+function modelFamilyForCard(card: PublicVehicleCard): string {
+  return text(card.modelFamily) || text(card.model)
+}
+
+function modelFamilyWithoutBrand(card: PublicVehicleCard): string {
+  const brandWords = text(card.brand).split(/\s+/).filter(Boolean)
+  const familyWords = modelFamilyForCard(card).split(/\s+/).filter(Boolean)
+  const startsWithBrand =
+    brandWords.length > 0 &&
+    familyWords.length >= brandWords.length &&
+    brandWords.every(
+      (word, index) => normalizedListingPart(word) === normalizedListingPart(familyWords[index]),
+    )
+
+  return startsWithBrand
+    ? familyWords.slice(brandWords.length).join(' ') || text(card.brand)
+    : familyWords.join(' ')
+}
+
+function listingKeyForCard(card: PublicVehicleCard): string {
+  const brand = normalizedListingPart(card.brand)
+  const family = normalizedListingPart(modelFamilyWithoutBrand(card))
+  return [brand, family].filter(Boolean).join('--')
+}
+
+function uniqueDisplayValues(values: Array<string | undefined>): string[] {
+  const byNormalizedValue = new Map<string, string>()
+  for (const value of values) {
+    const displayValue = text(value)
+    const normalizedValue = normalizedListingPart(displayValue)
+    if (displayValue && normalizedValue && !byNormalizedValue.has(normalizedValue)) {
+      byNormalizedValue.set(normalizedValue, displayValue)
+    }
   }
-  return undefined
+  return [...byNormalizedValue.values()].sort((left, right) =>
+    left.localeCompare(right, 'es-MX', { sensitivity: 'base' }),
+  )
+}
+
+function isSuppressedPublicVehicle(card: PublicVehicleCard): boolean {
+  return [card.model, card.modelFamily, card.trim, card.title].some((value) =>
+    normalizedListingPart(value).includes('no-usar'),
+  )
+}
+
+/**
+ * Collapse new physical inventory into one public listing per normalized brand
+ * and model family. Used inventory remains one card per physical unit.
+ *
+ * Input order is preserved for both listing order and representative choice,
+ * so Payload's requested sort determines which physical unit owns the public
+ * slug. A grouped card intentionally omits representative-only details (trim,
+ * price, colour, agency, and specs) that would misdescribe the whole family.
+ */
+export function groupPublicVehicleCards(cards: PublicVehicleCard[]): PublicVehicleCard[] {
+  const groupedNew = new Map<string, PublicVehicleCard[]>()
+  const output: Array<PublicVehicleCard | { groupKey: string }> = []
+
+  for (const card of cards) {
+    if (isSuppressedPublicVehicle(card)) continue
+
+    if (card.condition === 'used') {
+      output.push(card)
+      continue
+    }
+
+    const groupKey = listingKeyForCard(card)
+    const group = groupedNew.get(groupKey)
+    if (group) {
+      group.push(card)
+    } else {
+      groupedNew.set(groupKey, [card])
+      output.push({ groupKey })
+    }
+  }
+
+  return output.map((entry) => {
+    if (!('groupKey' in entry)) return entry
+    const group = groupedNew.get(entry.groupKey) || []
+    const representative = group[0]
+    const years = group
+      .map((card) => card.year)
+      .filter((year): year is number => year !== undefined && Number.isFinite(year))
+    const variants = uniqueDisplayValues(group.map((card) => card.trim || card.model))
+    const cities = uniqueDisplayValues(group.map((card) => card.city))
+    const family = modelFamilyWithoutBrand(representative)
+
+    return {
+      id: representative.id,
+      slug: representative.slug,
+      title: [text(representative.brand), family].filter(Boolean).join(' '),
+      listingKey: entry.groupKey,
+      inventoryCount: group.length,
+      yearRange: years.length ? { min: Math.min(...years), max: Math.max(...years) } : undefined,
+      variantCount: variants.length,
+      cities,
+      condition: 'new',
+      inventoryStatus: representative.inventoryStatus,
+      brand: text(representative.brand),
+      model: family,
+      modelFamily: family || undefined,
+      tags: [],
+      image: representative.image,
+    }
+  })
+}
+
+/** Paginate already grouped cards so counts describe public listings, not units. */
+export function paginatePublicVehicleCards(
+  cards: PublicVehicleCard[],
+  requestedPage: number,
+  requestedLimit: number,
+): PublicVehicleListResult {
+  const page = Math.max(1, Number(requestedPage) || 1)
+  const limit = Math.min(100, Math.max(1, Number(requestedLimit) || 24))
+  const totalDocs = cards.length
+  const totalPages = totalDocs === 0 ? 0 : Math.ceil(totalDocs / limit)
+  const start = (page - 1) * limit
+
+  return {
+    docs: cards.slice(start, start + limit),
+    totalDocs,
+    totalPages,
+    page,
+    limit,
+    hasNextPage: page < totalPages,
+    hasPrevPage: page > 1 && totalPages > 0,
+  }
 }
 
 function relationDoc(value: unknown): JsonRecord | undefined {
   return value && typeof value === 'object' ? (value as JsonRecord) : undefined
-}
-
-function relationIds(values: unknown): Array<string | number> {
-  if (!Array.isArray(values)) return []
-  return values.map((value) => relationId(value as RelationValue)).filter(Boolean) as Array<string | number>
 }
 
 export function toPublicImage(value: unknown): PublicVehicleCard['image'] {
@@ -236,13 +312,19 @@ async function buildVehicleWhere(payload: Payload, options: PublicVehicleListOpt
   return (and.length === 1 ? and[0] : { and }) as Where
 }
 
-export function toPublicVehicleCard(vehicle: JsonRecord): PublicVehicleCard {
+export function toPublicVehicleCard(
+  vehicle: JsonRecord,
+  options: PublicSerializationOptions = {},
+): PublicVehicleCard {
   const dealership = relationDoc(vehicle.dealership)
   const condition = vehicle.condition === 'used' ? 'used' : 'new'
   const inventoryStatus =
     vehicle.inventoryStatus === 'reserved' || vehicle.inventoryStatus === 'sold'
       ? vehicle.inventoryStatus
       : 'available'
+  const heroMediaId = relationId(vehicle.image)
+  const approvedHero =
+    heroMediaId !== undefined && Boolean(options.approvedMediaIds?.has(String(heroMediaId)))
 
   return {
     id: String(vehicle.id),
@@ -265,7 +347,10 @@ export function toPublicVehicleCard(vehicle: JsonRecord): PublicVehicleCard {
     fuel: text(vehicle.fuel) || undefined,
     transmission: text(vehicle.transmission) || undefined,
     tags: tagLabels(vehicle),
-    image: toPublicImage(vehicle.image as RelationValue),
+    image:
+      vehicle.imageStatus === 'approved' && approvedHero
+        ? toPublicImage(vehicle.image as RelationValue)
+        : undefined,
   }
 }
 
@@ -277,25 +362,325 @@ function featureLabels(vehicle: JsonRecord): string[] {
     : []
 }
 
-function galleryImages(vehicle: JsonRecord): PublicVehicleDetail['gallery'] {
+function galleryImages(
+  vehicle: JsonRecord,
+  options: PublicSerializationOptions = {},
+): PublicVehicleDetail['gallery'] {
   return Array.isArray(vehicle.gallery)
     ? vehicle.gallery
-        .map((item) => (item && typeof item === 'object' ? toPublicImage((item as JsonRecord).image) : undefined))
+        .map((item) => {
+          if (!item || typeof item !== 'object') return undefined
+          const mediaId = relationId((item as JsonRecord).image)
+          if (mediaId === undefined || !options.approvedMediaIds?.has(String(mediaId))) return undefined
+          return toPublicImage((item as JsonRecord).image)
+        })
         .filter((item): item is { url: string; alt?: string } => Boolean(item?.url))
     : []
 }
 
-export function toPublicVehicleDetail(vehicle: JsonRecord): PublicVehicleDetail {
+function approvedPublicImage(
+  value: unknown,
+  options: PublicSerializationOptions = {},
+): PublicVehicleCard['image'] {
+  const mediaId = relationId(value)
+  if (mediaId === undefined || !options.approvedMediaIds?.has(String(mediaId))) return undefined
+  return toPublicImage(value)
+}
+
+function stringItems(values: unknown, key: string): string[] {
+  if (!Array.isArray(values)) return []
+  return values
+    .map((value) => (value && typeof value === 'object' ? text((value as JsonRecord)[key]) : text(value)))
+    .filter(Boolean)
+}
+
+export function serializePublicLandingBlocks(
+  landing: unknown,
+  options: PublicSerializationOptions = {},
+): PublicLandingBlock[] {
+  if (!Array.isArray(landing)) return []
+
+  return landing
+    .map((block): PublicLandingBlock | undefined => {
+      if (!block || typeof block !== 'object') return undefined
+      const record = block as JsonRecord
+      const blockType = text(record.blockType)
+      const heading = text(record.heading)
+      const body = text(record.body)
+
+      if (blockType === 'imageText') {
+        if (!heading) return undefined
+        const image = approvedPublicImage(record.image, options)
+        return {
+          blockType: 'imageText',
+          eyebrow: text(record.eyebrow) || undefined,
+          heading,
+          body: body || undefined,
+          image,
+          imagePosition: record.imagePosition === 'right' ? 'right' : 'left',
+        }
+      }
+
+      if (blockType === 'gallery') {
+        const images = Array.isArray(record.images)
+          ? record.images
+              .map((item) => {
+                if (!item || typeof item !== 'object') return undefined
+                const itemRecord = item as JsonRecord
+                const image = approvedPublicImage(itemRecord.image, options)
+                if (!image) return undefined
+                const alt = text(itemRecord.alt) || image.alt || undefined
+                return {
+                  image,
+                  ...(alt ? { alt } : {}),
+                }
+              })
+              .filter((item): item is { image: { url: string; alt?: string }; alt?: string } => Boolean(item))
+          : []
+        return images.length ? { blockType: 'gallery', heading: heading || undefined, images } : undefined
+      }
+
+      if (blockType === 'highlightList') {
+        const items = Array.isArray(record.items)
+          ? record.items
+              .map((item) => {
+                const itemRecord = relationDoc(item) || {}
+                const label = text(itemRecord.label)
+                const description = text(itemRecord.description) || undefined
+                return label
+                  ? {
+                      label,
+                      ...(description ? { description } : {}),
+                    }
+                  : undefined
+              })
+              .filter((item): item is { label: string; description?: string } => Boolean(item))
+          : []
+        return heading || body || items.length
+          ? { blockType: 'highlightList', heading: heading || 'Puntos clave', body: body || undefined, items }
+          : undefined
+      }
+
+      if (blockType === 'featureGrid') {
+        const items = stringItems(record.items, 'feature')
+        return heading || items.length
+          ? { blockType: 'featureGrid', heading: heading || 'Beneficios', items }
+          : undefined
+      }
+
+      if (blockType === 'cta') {
+        return heading
+          ? {
+              blockType: 'cta',
+              heading,
+              body: body || undefined,
+              buttonLabel: text(record.buttonLabel) || undefined,
+            }
+          : undefined
+      }
+
+      return undefined
+    })
+    .filter((block): block is PublicLandingBlock => Boolean(block))
+}
+
+function publicSpecs(value: unknown): Record<string, unknown> | undefined {
+  const specs = relationDoc(value)
+  if (!specs) return undefined
+  const result = Object.fromEntries(SPEC_KEYS.map((key) => [key, specs[key]]).filter(([, value]) => text(value)))
+  return Object.keys(result).length ? result : undefined
+}
+
+function publicTemplateOverrides(value: unknown): Record<string, unknown> | undefined {
+  const overrides = relationDoc(value)
+  if (!overrides) return undefined
+  const allowed = [
+    'gallery',
+    'purchaseCard',
+    'quickSpecs',
+    'description',
+    'features',
+    'similarVehicles',
+    'mobileCta',
+  ]
+  const result = Object.fromEntries(
+    allowed
+      .map((key) => [key, overrides[key]])
+      .filter(([, value]) => value === 'inherit' || value === 'show' || value === 'hide'),
+  )
+  return Object.keys(result).length ? result : undefined
+}
+
+export async function toPublicVehicleDetail(
+  payload: Payload,
+  vehicle: JsonRecord,
+): Promise<PublicVehicleDetail> {
+  const approved = await approvedVehicleMediaMap(payload, [
+    {
+      id: relationId(vehicle.id),
+      image: vehicle.image as RelationValue,
+      gallery: vehicle.gallery,
+      landing: vehicle.landing,
+    },
+  ])
+  const options = { approvedMediaIds: approved.get(String(relationId(vehicle.id))) }
+
   return {
-    ...toPublicVehicleCard(vehicle),
+    ...toPublicVehicleCard(vehicle, options),
     description: text(vehicle.description) || undefined,
     features: featureLabels(vehicle),
-    gallery: galleryImages(vehicle),
-    landing: Array.isArray(vehicle.landing) ? vehicle.landing : [],
-    specs: relationDoc(vehicle.specs),
-    sourceMeta: relationDoc(vehicle.sourceMeta),
-    templateOverrides: relationDoc(vehicle.templateOverrides),
+    gallery: galleryImages(vehicle, options),
+    landing: serializePublicLandingBlocks(vehicle.landing, options),
+    specs: publicSpecs(vehicle.specs),
+    templateOverrides: publicTemplateOverrides(vehicle.templateOverrides),
   }
+}
+
+/**
+ * Fetch one publicly-visible vehicle by slug, applying the same base
+ * visibility rules as the public list (published, not sold). Returns the
+ * fully serialized public detail or null when not visible.
+ */
+export async function findPublicVehicleBySlug(
+  payload: Payload,
+  slug: string,
+): Promise<PublicVehicleDetail | null> {
+  const visibility = await buildVehicleWhere(payload, {})
+  const result = await payload.find({
+    collection: 'vehicles',
+    depth: 2,
+    limit: 1,
+    overrideAccess: true,
+    where: { and: [{ slug: { equals: slug } }, visibility] } as Where,
+  })
+
+  const vehicle = result.docs[0] as unknown as JsonRecord | undefined
+  if (!vehicle) return null
+  return toPublicVehicleDetail(payload, vehicle)
+}
+
+const PUBLIC_VEHICLE_GROUP_SELECT = {
+  id: true,
+  slug: true,
+  condition: true,
+  inventoryStatus: true,
+  brand: true,
+  model: true,
+  modelFamily: true,
+  trim: true,
+  year: true,
+  city: true,
+  dealership: true,
+} as const
+
+const PUBLIC_VEHICLE_CARD_SELECT = {
+  id: true,
+  slug: true,
+  condition: true,
+  inventoryStatus: true,
+  brand: true,
+  model: true,
+  modelFamily: true,
+  trim: true,
+  year: true,
+  price: true,
+  mileage: true,
+  city: true,
+  dealership: true,
+  exteriorColor: true,
+  bodyType: true,
+  segment: true,
+  fuel: true,
+  transmission: true,
+  tags: true,
+  badges: true,
+  image: true,
+  imageStatus: true,
+} as const
+
+async function attachDealershipSummaries(payload: Payload, vehicles: JsonRecord[]): Promise<JsonRecord[]> {
+  const dealershipIDs = [
+    ...new Set(
+      vehicles
+        .map((vehicle) => relationId(vehicle.dealership as RelationValue))
+        .filter((id): id is string | number => id !== undefined)
+        .map(String),
+    ),
+  ]
+  if (dealershipIDs.length === 0) return vehicles
+
+  const result = await payload.find({
+    collection: 'dealerships',
+    depth: 0,
+    limit: dealershipIDs.length,
+    overrideAccess: true,
+    select: {
+      id: true,
+      brandName: true,
+      displayName: true,
+      city: true,
+    },
+    where: { id: { in: dealershipIDs } },
+  })
+  const byID = new Map(
+    (result.docs as unknown as JsonRecord[]).map((dealership) => [String(dealership.id), dealership]),
+  )
+
+  return vehicles.map((vehicle) => {
+    const dealershipID = relationId(vehicle.dealership as RelationValue)
+    const dealership = dealershipID === undefined ? undefined : byID.get(String(dealershipID))
+    return dealership ? { ...vehicle, dealership } : vehicle
+  })
+}
+
+async function serializeHydratedPage(
+  payload: Payload,
+  pageCards: PublicVehicleCard[],
+  hydratedVehicles: JsonRecord[],
+): Promise<PublicVehicleCard[]> {
+  const byID = new Map(hydratedVehicles.map((vehicle) => [String(vehicle.id), vehicle]))
+  const pageVehicles = pageCards
+    .map((card) => byID.get(card.id))
+    .filter((vehicle): vehicle is JsonRecord => Boolean(vehicle))
+  const approved = await approvedVehicleMediaMap(
+    payload,
+    pageVehicles.map((vehicle) => ({
+      id: relationId(vehicle.id),
+      image: vehicle.image as RelationValue,
+    })),
+  )
+
+  return pageCards.map((card) => {
+    const vehicle = byID.get(card.id)
+    if (!vehicle) return card
+    const hydratedCard = toPublicVehicleCard(vehicle, {
+      approvedMediaIds: approved.get(String(relationId(vehicle.id))),
+    })
+
+    // Used listings still describe one physical unit, so retain their full
+    // card. Grouped new listings borrow only the approved representative
+    // image; all model/price/spec metadata remains aggregate-safe.
+    return card.condition === 'used' ? hydratedCard : { ...card, image: hydratedCard.image }
+  })
+}
+
+async function hydrateRepresentativeCards(
+  payload: Payload,
+  pageCards: PublicVehicleCard[],
+): Promise<PublicVehicleCard[]> {
+  const ids = [...new Set(pageCards.map((card) => card.id))]
+  if (ids.length === 0) return pageCards
+
+  const result = await payload.find({
+    collection: 'vehicles',
+    depth: 2,
+    limit: ids.length,
+    overrideAccess: true,
+    select: PUBLIC_VEHICLE_CARD_SELECT,
+    where: { id: { in: ids } },
+  })
+
+  return serializeHydratedPage(payload, pageCards, result.docs as unknown as JsonRecord[])
 }
 
 export async function findPublicVehicles(
@@ -308,21 +693,20 @@ export async function findPublicVehicles(
 
   const result = await payload.find({
     collection: 'vehicles',
-    depth: 2,
-    limit,
-    page,
+    depth: 0,
+    overrideAccess: true,
+    pagination: false,
+    select: PUBLIC_VEHICLE_GROUP_SELECT,
     sort: sortToPayload(options.sort),
     where,
   })
+  const vehicles = await attachDealershipSummaries(payload, result.docs as unknown as JsonRecord[])
+  const cards = vehicles.map((doc) => toPublicVehicleCard(doc))
+  const paginated = paginatePublicVehicleCards(groupPublicVehicleCards(cards), page, limit)
 
   return {
-    docs: result.docs.map((doc) => toPublicVehicleCard(doc as unknown as JsonRecord)),
-    totalDocs: result.totalDocs,
-    totalPages: result.totalPages,
-    page: result.page || page,
-    limit: result.limit || limit,
-    hasNextPage: Boolean(result.hasNextPage),
-    hasPrevPage: Boolean(result.hasPrevPage),
+    ...paginated,
+    docs: await hydrateRepresentativeCards(payload, paginated.docs),
   }
 }
 
@@ -361,6 +745,7 @@ export async function resolveVehicleCollection(
     collection: 'vehicle-collections',
     depth: 2,
     limit: 1,
+    overrideAccess: true,
     where: {
       and: [{ or: collectionLookup }, { isVisible: { equals: true } }],
     },
@@ -374,18 +759,17 @@ export async function resolveVehicleCollection(
     const docs = vehicles
       .filter((vehicle): vehicle is JsonRecord => Boolean(vehicle && typeof vehicle === 'object'))
       .filter((vehicle) => vehicle.publishStatus === 'published' && vehicle.inventoryStatus !== 'sold')
-      .slice(0, options.limit || numberValue(collection.limit) || 12)
-      .map(toPublicVehicleCard)
+    const cards = groupPublicVehicleCards(docs.map((vehicle) => toPublicVehicleCard(vehicle)))
+    const paginated = paginatePublicVehicleCards(
+      cards,
+      options.page || 1,
+      options.limit || numberValue(collection.limit) || 12,
+    )
 
     return {
       collection: publicCollectionMeta(collection),
-      docs,
-      totalDocs: docs.length,
-      totalPages: 1,
-      page: 1,
-      limit: docs.length,
-      hasNextPage: false,
-      hasPrevPage: false,
+      ...paginated,
+      docs: await serializeHydratedPage(payload, paginated.docs, docs),
     }
   }
 
@@ -411,6 +795,7 @@ export async function findPublicCollections(
     collection: 'vehicle-collections',
     depth: 2,
     limit,
+    overrideAccess: true,
     page,
     sort: 'name',
     where: {

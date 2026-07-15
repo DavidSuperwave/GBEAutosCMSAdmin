@@ -1,0 +1,65 @@
+name: CI
+
+on:
+  push:
+    branches: ['**']
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  # The baseline slice never touches a real database. Payload only needs
+  # syntactically valid values to load its config during `next build`.
+  DATABASE_URI: postgres://ci:ci@127.0.0.1:5432/ci_dummy
+  PAYLOAD_SECRET: ci-dummy-secret
+
+jobs:
+  baseline:
+    name: Baseline (Node 22)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install (clean, locked)
+        run: npm ci
+
+      - name: Admin style guard
+        run: npm run check:admin-styles
+
+      - name: Migration static checks
+        run: npm run check:migrations
+
+      - name: Storefront contract drift check
+        run: npm run check:contracts
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Tests
+        run: npm test
+
+      - name: Production build
+        run: npm run build
+
+      - name: Retain build artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: next-build-meta
+          path: |
+            .next/build-manifest.json
+            .next/app-build-manifest.json
+            .next/BUILD_ID
+          if-no-files-found: ignore
+          retention-days: 14

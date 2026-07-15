@@ -1,0 +1,239 @@
+{
+  "$comment": "F020 Storefront consumption baseline. Captured from the Storefront repository (DavidSuperwave/GBEautos) at pinned SHA d0e8fd019aefba8ef3a760e93bd09ca67a3d72ae on 2026-07-10. Every entry is something the Storefront consumes from this Admin backend; scripts/check-storefront-contract.mjs fails CI when an Admin contract source stops declaring one of these. See docs/product/baselines/F020_STOREFRONT_BASELINE_CAPTURE.md for evidence and consumer file citations.",
+  "pinnedStorefront": {
+    "repository": "https://github.com/DavidSuperwave/GBEautos.git",
+    "sha": "d0e8fd019aefba8ef3a760e93bd09ca67a3d72ae",
+    "capturedAt": "2026-07-10"
+  },
+  "routeFiles": [
+    "src/app/(payload)/api/public/vehicles/route.ts",
+    "src/app/(payload)/api/public/vehicles/[slug]/route.ts",
+    "src/app/(payload)/api/public/vehicles/preview/[id]/route.ts",
+    "src/app/(payload)/api/public/collections/route.ts",
+    "src/app/(payload)/api/public/collections/[slug]/route.ts",
+    "src/app/(payload)/api/[...slug]/route.ts"
+  ],
+  "dtoTypes": {
+    "src/contracts/publicCatalog.ts": {
+      "PublicVehicleCard": [
+        "id",
+        "slug",
+        "title",
+        "condition",
+        "inventoryStatus",
+        "brand",
+        "model",
+        "modelFamily",
+        "trim",
+        "year",
+        "priceLabel",
+        "mileage",
+        "city",
+        "agencyName",
+        "exteriorColor",
+        "bodyType",
+        "segment",
+        "fuel",
+        "transmission",
+        "tags",
+        "image",
+        "stats"
+      ],
+      "PublicVehicleDetail": [
+        "description",
+        "features",
+        "gallery",
+        "landing",
+        "specs",
+        "templateOverrides"
+      ],
+      "PublicVehicleListOptions": [
+        "page",
+        "limit",
+        "sort",
+        "keyword",
+        "brand",
+        "model",
+        "city",
+        "bodyType",
+        "fuel",
+        "transmission",
+        "yearMin",
+        "yearMax",
+        "mileageMax",
+        "condition",
+        "inventoryStatus"
+      ]
+    }
+  },
+  "landingBlockTypes": {
+    "src/contracts/publicCatalog.ts": [
+      "imageText",
+      "gallery",
+      "highlightList",
+      "featureGrid",
+      "cta"
+    ],
+    "src/services/publicVehicleCatalog.ts": [
+      "imageText",
+      "gallery",
+      "highlightList",
+      "featureGrid",
+      "cta"
+    ]
+  },
+  "siteSectionBlockSlugs": {
+    "src/blocks/SiteSections.ts": [
+      "hero",
+      "promoStrip",
+      "featuredVehicles",
+      "inventoryCollection",
+      "inventorySearch",
+      "cityInventory",
+      "promoBanner",
+      "trustSteps",
+      "testimonials",
+      "videoTips",
+      "brands",
+      "agencies",
+      "mediaText",
+      "cta"
+    ]
+  },
+  "collectionSlugs": {
+    "src/collections/Leads.ts": "leads",
+    "src/collections/AnalyticsEvents.ts": "analytics-events",
+    "src/collections/Dealerships.ts": "dealerships",
+    "src/collections/Pages.ts": "pages"
+  },
+  "globalSlugs": {
+    "src/globals/SiteConfig.ts": "site-config"
+  },
+  "collectionFields": {
+    "src/collections/Leads.ts": [
+      "firstName",
+      "lastName",
+      "email",
+      "phone",
+      "city",
+      "agency",
+      "vehicle",
+      "vehicleLabel",
+      "whatsappNumber",
+      "whatsappOpenedAt",
+      "source",
+      "leadSource",
+      "sourcePage",
+      "sourceSection",
+      "message",
+      "stage"
+    ],
+    "src/collections/AnalyticsEvents.ts": [
+      "eventType",
+      "pagePath",
+      "pageTitle",
+      "targetLabel",
+      "vehicle",
+      "vehicleLabel",
+      "agency",
+      "city",
+      "brand",
+      "condition",
+      "collectionId",
+      "leadId",
+      "sourceSection",
+      "durationSeconds",
+      "sessionId",
+      "visitorId"
+    ],
+    "src/collections/Dealerships.ts": [
+      "brandName",
+      "displayName",
+      "city",
+      "state",
+      "address",
+      "phone",
+      "whatsapp",
+      "email",
+      "hours",
+      "defaultForCity",
+      "isActive"
+    ],
+    "src/collections/Pages.ts": [
+      "title",
+      "slug",
+      "status",
+      "isVisible",
+      "showInNavigation",
+      "navLabel",
+      "navParent",
+      "seo",
+      "sections"
+    ]
+  },
+  "globalFields": {
+    "src/globals/SiteConfig.ts": [
+      "general",
+      "siteName",
+      "companyName",
+      "slogan",
+      "logo",
+      "phone",
+      "whatsapp",
+      "email",
+      "address",
+      "socialLinks",
+      "facebook",
+      "instagram",
+      "whatsappUrl",
+      "navigation",
+      "mainLinks",
+      "footerLinks",
+      "legalLinks",
+      "cta",
+      "home",
+      "sections",
+      "templates",
+      "seminuevos",
+      "vehicleDetail"
+    ]
+  },
+  "analyticsEventTypes": {
+    "src/contracts/analytics.ts": [
+      "page_view",
+      "vehicle_view",
+      "vehicle_click",
+      "whatsapp_form_open",
+      "whatsapp_form_submit",
+      "whatsapp_open",
+      "collection_view",
+      "filter_used",
+      "cta_click",
+      "page_duration"
+    ]
+  },
+  "stringLiterals": {
+    "src/services/publicVehicleCatalog.ts": [
+      "newest",
+      "priceAsc",
+      "priceDesc",
+      "yearDesc",
+      "mileageAsc",
+      "page",
+      "limit",
+      "sort",
+      "keyword",
+      "brand",
+      "model",
+      "city",
+      "bodyType",
+      "fuel",
+      "transmission",
+      "yearMin",
+      "yearMax",
+      "mileageMax",
+      "condition",
+      "inventoryStatus"
+    ]
+  }
+}

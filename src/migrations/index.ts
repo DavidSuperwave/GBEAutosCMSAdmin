@@ -13,6 +13,10 @@ import * as migration_20260611_150000_workshop_job_style_fields from './20260611
 import * as migration_20260611_160000_workshop_job_turn_ids from './20260611_160000_workshop_job_turn_ids';
 import * as migration_20260611_170000_general_media_workspace from './20260611_170000_general_media_workspace';
 import * as migration_20260611_180000_vehicle_image_sync_columns from './20260611_180000_vehicle_image_sync_columns';
+import * as migration_20260710_150000_three_role_model from './20260710_150000_three_role_model';
+import * as migration_20260715_220000_lock_down_supabase_data_api from './20260715_220000_lock_down_supabase_data_api';
+import * as migration_20260715_230000_dealership_links_and_aliases from './20260715_230000_dealership_links_and_aliases';
+import * as migration_20260715_240000_media_storage_prefix from './20260715_240000_media_storage_prefix';
 
 export const migrations = [
   {
@@ -89,5 +93,25 @@ export const migrations = [
     up: migration_20260611_180000_vehicle_image_sync_columns.up,
     down: migration_20260611_180000_vehicle_image_sync_columns.down,
     name: '20260611_180000_vehicle_image_sync_columns'
+  },
+  {
+    up: migration_20260710_150000_three_role_model.up,
+    down: migration_20260710_150000_three_role_model.down,
+    name: '20260710_150000_three_role_model'
+  },
+  {
+    up: migration_20260715_220000_lock_down_supabase_data_api.up,
+    down: migration_20260715_220000_lock_down_supabase_data_api.down,
+    name: '20260715_220000_lock_down_supabase_data_api'
+  },
+  {
+    up: migration_20260715_230000_dealership_links_and_aliases.up,
+    down: migration_20260715_230000_dealership_links_and_aliases.down,
+    name: '20260715_230000_dealership_links_and_aliases'
+  },
+  {
+    up: migration_20260715_240000_media_storage_prefix.up,
+    down: migration_20260715_240000_media_storage_prefix.down,
+    name: '20260715_240000_media_storage_prefix'
   },
 ];

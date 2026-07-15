@@ -1,8 +1,12 @@
 import React from 'react'
+import { headers } from 'next/headers'
 import { notFound } from 'next/navigation'
 import { getPayload } from 'payload'
 
 import config from '@payload-config'
+import { hasRole } from '../../../../access/roles'
+import { toPublicVehicleDetail } from '../../../../services/publicVehicleCatalog'
+import { formatMileage } from '../../../../utils/formatMileage'
 
 type RouteContext = {
   params: Promise<{ id: string }>
@@ -30,7 +34,7 @@ function relationDoc(value: unknown): JsonRecord {
 }
 
 function titleFor(vehicle: JsonRecord): string {
-  return [vehicle.year, vehicle.brand, vehicle.model, vehicle.trim].map(text).filter(Boolean).join(' ')
+  return text(vehicle.title) || [vehicle.year, vehicle.brand, vehicle.model, vehicle.trim].map(text).filter(Boolean).join(' ')
 }
 
 function renderBlock(block: JsonRecord, index: number) {
@@ -40,9 +44,10 @@ function renderBlock(block: JsonRecord, index: number) {
 
   if (blockType === 'imageText') {
     const image = mediaUrl(block.image)
+    const imageAlt = text(relationDoc(block.image).alt) || heading
     return (
       <section className="vehicle-preview__section vehicle-preview__split" key={text(block.id) || index}>
-        {image ? <img alt={text(block.imageAlt || heading)} src={image} /> : null}
+        {image ? <img alt={imageAlt} src={image} /> : null}
         <div>
           {text(block.eyebrow) ? <p className="vehicle-preview__eyebrow">{text(block.eyebrow)}</p> : null}
           {heading ? <h2>{heading}</h2> : null}
@@ -92,15 +97,15 @@ function renderBlock(block: JsonRecord, index: number) {
   }
 
   if (blockType === 'featureGrid') {
-    const items = Array.isArray(block.items) ? block.items : []
+    // Serialized featureGrid items are plain strings (see serializePublicLandingBlocks).
+    const items = Array.isArray(block.items) ? block.items.map(text).filter(Boolean) : []
     return (
       <section className="vehicle-preview__section" key={text(block.id) || index}>
         {heading ? <h2>{heading}</h2> : null}
         <div className="vehicle-preview__features">
-          {items.map((item, itemIndex) => {
-            const itemRecord = relationDoc(item)
-            return <span key={`${text(itemRecord.feature)}-${itemIndex}`}>{text(itemRecord.feature)}</span>
-          })}
+          {items.map((item, itemIndex) => (
+            <span key={`${item}-${itemIndex}`}>{item}</span>
+          ))}
         </div>
       </section>
     )
@@ -122,17 +127,23 @@ function renderBlock(block: JsonRecord, index: number) {
 export default async function VehiclePreviewPage({ params }: RouteContext) {
   const { id } = await params
   const payload = await getPayload({ config })
-  const vehicle = (await payload
-    .findByID({ collection: 'vehicles', id, depth: 2 })
+
+  const authResult = await payload.auth({ canSetHeaders: false, headers: await headers() })
+  if (!authResult.user || !hasRole(authResult.user, 'admin', 'general')) {
+    notFound()
+  }
+
+  const rawVehicle = (await payload
+    .findByID({ collection: 'vehicles', id, depth: 2, overrideAccess: true })
     .catch(() => null)) as JsonRecord | null
 
-  if (!vehicle) notFound()
+  if (!rawVehicle) notFound()
 
-  const dealership = relationDoc(vehicle.dealership)
+  const vehicle = (await toPublicVehicleDetail(payload, rawVehicle)) as JsonRecord
   const title = titleFor(vehicle)
   const image = mediaUrl(vehicle.image)
   const landing = Array.isArray(vehicle.landing) ? (vehicle.landing as JsonRecord[]) : []
-  const gallery = Array.isArray(vehicle.gallery) ? vehicle.gallery : []
+  const gallery = Array.isArray(vehicle.gallery) ? (vehicle.gallery as JsonRecord[]) : []
   const features = Array.isArray(vehicle.features) ? vehicle.features : []
   const mileage = numberValue(vehicle.mileage)
 
@@ -141,21 +152,21 @@ export default async function VehiclePreviewPage({ params }: RouteContext) {
       <section className="vehicle-preview__hero">
         <div>
           <p className="vehicle-preview__eyebrow">
-            {vehicle.condition === 'used' ? 'Seminuevo' : 'Nuevo'} / {text(vehicle.city || dealership.city) || 'Sin ciudad'}
+            {vehicle.condition === 'used' ? 'Seminuevo' : 'Nuevo'} / {text(vehicle.city) || 'Sin ciudad'}
           </p>
           <h1>{title || 'Vehiculo'}</h1>
           <dl>
             <div>
               <dt>Precio</dt>
-              <dd>{text(vehicle.price) || 'Precio a consultar'}</dd>
+              <dd>{text(vehicle.priceLabel) || 'Precio a consultar'}</dd>
             </div>
             <div>
               <dt>Agencia</dt>
-              <dd>{text(dealership.displayName || dealership.brandName) || 'Sin agencia'}</dd>
+              <dd>{text(vehicle.agencyName) || 'Sin agencia'}</dd>
             </div>
             <div>
               <dt>Kilometraje</dt>
-              <dd>{mileage ? `${mileage.toLocaleString('es-MX')} km` : 'Por confirmar'}</dd>
+              <dd>{formatMileage(mileage)}</dd>
             </div>
           </dl>
         </div>
@@ -174,8 +185,7 @@ export default async function VehiclePreviewPage({ params }: RouteContext) {
           <h2>Caracteristicas</h2>
           <div className="vehicle-preview__features">
             {features.map((item, index) => {
-              const itemRecord = relationDoc(item)
-              return <span key={`${text(itemRecord.feature)}-${index}`}>{text(itemRecord.feature)}</span>
+              return <span key={`${text(item)}-${index}`}>{text(item)}</span>
             })}
           </div>
         </section>
@@ -187,7 +197,7 @@ export default async function VehiclePreviewPage({ params }: RouteContext) {
           <div className="vehicle-preview__gallery">
             {gallery.map((item, index) => {
               const itemRecord = relationDoc(item)
-              const url = mediaUrl(itemRecord.image)
+              const url = text(itemRecord.url) || mediaUrl(itemRecord.image)
               return url ? <img alt={text(itemRecord.alt || title)} key={`${url}-${index}`} src={url} /> : null
             })}
           </div>

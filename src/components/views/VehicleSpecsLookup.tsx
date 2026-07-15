@@ -21,7 +21,7 @@ export default function VehicleSpecsLookup({
   onApply,
 }: Props) {
   const [open, setOpen] = useState(false)
-  const [status, setStatus] = useState('Listo para buscar en catalogo.')
+  const [status, setStatus] = useState('Listo para buscar en catálogo.')
 
   function applySpecs(data: AppliedVehicleSpecs) {
     onApply(data)
@@ -34,7 +34,7 @@ export default function VehicleSpecsLookup({
         <div>
           <h3>Autocompletar specs</h3>
           <p>
-            Opcional. Completa datos tecnicos desde el catalogo cuando quieras acelerar la captura.
+            Opcional. Completa datos técnicos desde el catálogo cuando quieras acelerar la captura.
           </p>
         </div>
         <ActionButton onClick={() => setOpen(true)} variant="secondary">

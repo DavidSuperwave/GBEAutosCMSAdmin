@@ -1,6 +1,6 @@
 import type { CollectionConfig } from 'payload'
 
-import { canManageInventory } from '../access/roles'
+import { canManageInventory, isAuthenticated } from '../access/roles'
 
 function slugify(value: string | null | undefined) {
   return String(value ?? '')
@@ -52,7 +52,7 @@ const fuelOptions = [
 export const VehicleCollections: CollectionConfig = {
   slug: 'vehicle-collections',
   access: {
-    read: () => true,
+    read: isAuthenticated,
     create: canManageInventory,
     update: canManageInventory,
     delete: canManageInventory,

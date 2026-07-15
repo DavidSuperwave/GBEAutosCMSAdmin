@@ -1,9 +1,21 @@
-import type { CollectionConfig } from 'payload'
+import type { CollectionConfig, FieldAccess } from 'payload'
+
+import { isAdminAccess, rolesAccess } from '../access/roles'
+
+/** Internal-only fields: hidden from the anonymous storefront reads. The
+ * Storefront consumption contract (contracts/storefront-consumption.json)
+ * confirms it never reads these. */
+const staffOnlyRead: FieldAccess = ({ req }) => Boolean(req.user)
+
+const canEditDealerships = rolesAccess('general')
 
 export const Dealerships: CollectionConfig = {
   slug: 'dealerships',
   access: {
     read: () => true,
+    create: canEditDealerships,
+    update: canEditDealerships,
+    delete: isAdminAccess,
   },
   admin: {
     group: false,
@@ -35,6 +47,32 @@ export const Dealerships: CollectionConfig = {
     { name: 'email', type: 'email', label: 'Correo de ventas' },
     { name: 'hours', type: 'textarea', label: 'Horario' },
     {
+      name: 'websiteUrl',
+      type: 'text',
+      label: 'Sitio web oficial',
+      admin: {
+        description: 'URL publica de la agencia o distribuidor oficial.',
+      },
+    },
+    {
+      name: 'mapUrl',
+      type: 'text',
+      label: 'Mapa / como llegar',
+      admin: {
+        description: 'Enlace publico de Google Maps confirmado para esta agencia.',
+      },
+    },
+    {
+      name: 'sourceAliases',
+      type: 'textarea',
+      label: 'Alias internos de inventario',
+      access: { read: staffOnlyRead },
+      admin: {
+        description:
+          'Un nombre exacto por linea. Se usa para enlazar NOM_CONCESIONARIO sin modificar el dato fuente.',
+      },
+    },
+    {
       name: 'coordinates',
       type: 'group',
       label: 'Coordenadas',
@@ -52,11 +90,17 @@ export const Dealerships: CollectionConfig = {
         description: 'Se usa si no hay una agencia exacta para la marca seleccionada.',
       },
     },
-    { name: 'salesRepName', type: 'text', label: 'Asesor principal' },
+    {
+      name: 'salesRepName',
+      type: 'text',
+      label: 'Asesor principal',
+      access: { read: staffOnlyRead },
+    },
     {
       name: 'internalNotes',
       type: 'textarea',
       label: 'Notas internas',
+      access: { read: staffOnlyRead },
       admin: {
         position: 'sidebar',
       },

@@ -1,9 +1,12 @@
 import type { GlobalConfig } from 'payload'
 
+import { canManageContent } from '../access/roles'
+
 export const Home: GlobalConfig = {
   slug: 'home',
   access: {
     read: () => true,
+    update: canManageContent,
   },
   fields: [
     {

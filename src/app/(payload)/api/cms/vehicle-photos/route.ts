@@ -1,9 +1,11 @@
 import { NextResponse } from 'next/server'
-import config from '@payload-config'
-import { getPayload } from 'payload'
-import type { PayloadRequest } from 'payload'
+import type { Payload, PayloadRequest } from 'payload'
+import { lookup } from 'node:dns/promises'
+import net from 'node:net'
 
-import { hasRole } from '../../../../../access/roles'
+import type { Role } from '../../../../../access/roles'
+import { requireCmsRole } from '../../../../../services/cmsRequestAuth'
+import { relationId } from '../../../../../services/relations'
 import {
   buildVehicleImageMatchKey,
   hasUsableVehicleImageIdentity,
@@ -43,6 +45,7 @@ const CACHE_TTL_MS = 7 * 24 * 60 * 60 * 1000 // 7 days
 const MIN_WIDTH = 500
 const MAX_CANDIDATES = 16
 const MAX_IMPORT_BYTES = 12 * 1024 * 1024 // 12 MB
+const MAX_IMPORT_REDIRECTS = 5
 const PROBE_TIMEOUT_MS = 6000
 const DOWNLOAD_TIMEOUT_MS = 12000
 const KNOWN_VEHICLE_MAKES = [
@@ -87,7 +90,7 @@ const KNOWN_VEHICLE_MAKES = [
 const BROWSER_HEADERS: Record<string, string> = {
   'User-Agent':
     'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
-  Accept: 'image/avif,image/webp,image/png,image/svg+xml,image/*,*/*;q=0.8',
+  Accept: 'image/avif,image/webp,image/png,image/jpeg,image/*,*/*;q=0.8',
 }
 
 async function fetchWithTimeout(url: string, init: RequestInit, timeoutMs: number): Promise<Response> {
@@ -122,7 +125,7 @@ async function isReachable(url: string): Promise<boolean> {
   }
 }
 
-const MEDIA_ROLES = ['admin', 'media_editor', 'inventory_manager', 'content_editor'] as const
+const MEDIA_ROLES: Role[] = ['general']
 
 type Candidate = {
   link: string
@@ -157,6 +160,132 @@ function str(value: unknown): string {
   return String(value).trim()
 }
 
+function isPrivateIPv4(address: string): boolean {
+  const parts = address.split('.').map((part) => Number(part))
+  if (parts.length !== 4 || parts.some((part) => !Number.isInteger(part) || part < 0 || part > 255)) {
+    return true
+  }
+  const [a, b] = parts
+  return (
+    a === 10 ||
+    a === 127 ||
+    a === 0 ||
+    (a === 169 && b === 254) ||
+    (a === 172 && b >= 16 && b <= 31) ||
+    (a === 192 && b === 168)
+  )
+}
+
+function isPrivateIPv6(address: string): boolean {
+  const normalized = address.toLowerCase()
+  return (
+    normalized === '::1' ||
+    normalized === '::' ||
+    normalized.startsWith('fc') ||
+    normalized.startsWith('fd') ||
+    normalized.startsWith('fe80:')
+  )
+}
+
+function isPrivateAddress(address: string): boolean {
+  const family = net.isIP(address)
+  if (family === 4) return isPrivateIPv4(address)
+  if (family === 6) return isPrivateIPv6(address)
+  return true
+}
+
+function isAllowedImageMime(mime: string) {
+  const normalized = mime.toLowerCase()
+  return normalized.startsWith('image/') && normalized !== 'image/svg+xml' && !normalized.includes('svg')
+}
+
+async function assertImportUrlAllowed(rawUrl: string): Promise<URL> {
+  let parsed: URL
+  try {
+    parsed = new URL(rawUrl)
+  } catch {
+    throw new Error('La URL de la imagen no es valida.')
+  }
+
+  if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
+    throw new Error('Solo se permiten imagenes http/https.')
+  }
+
+  const hostname = parsed.hostname.toLowerCase()
+  if (!hostname || hostname === 'localhost' || hostname.endsWith('.localhost')) {
+    throw new Error('La fuente de imagen no esta permitida.')
+  }
+
+  const addresses = net.isIP(hostname) ? [{ address: hostname }] : await lookup(hostname, { all: true })
+  if (addresses.length === 0 || addresses.some(({ address }) => isPrivateAddress(address))) {
+    throw new Error('La fuente de imagen no esta permitida.')
+  }
+  return parsed
+}
+
+async function readResponseBufferCapped(res: Response, maxBytes: number): Promise<Buffer> {
+  const length = Number(res.headers.get('content-length') || 0)
+  if (Number.isFinite(length) && length > maxBytes) {
+    throw new Error('La imagen excede el tamaño máximo permitido (12 MB).')
+  }
+
+  if (!res.body) {
+    const arrayBuffer = await res.arrayBuffer()
+    if (arrayBuffer.byteLength > maxBytes) {
+      throw new Error('La imagen excede el tamaño máximo permitido (12 MB).')
+    }
+    if (arrayBuffer.byteLength === 0) {
+      throw new Error('La fuente no devolvió ninguna imagen.')
+    }
+    return Buffer.from(arrayBuffer)
+  }
+
+  const reader = res.body.getReader()
+  const chunks: Uint8Array[] = []
+  let total = 0
+  while (true) {
+    const { done, value } = await reader.read()
+    if (done) break
+    if (!value) continue
+    total += value.byteLength
+    if (total > maxBytes) {
+      await reader.cancel().catch(() => {})
+      throw new Error('La imagen excede el tamaño máximo permitido (12 MB).')
+    }
+    chunks.push(value)
+  }
+
+  if (total === 0) {
+    throw new Error('La fuente no devolvió ninguna imagen.')
+  }
+
+  return Buffer.concat(chunks.map((chunk) => Buffer.from(chunk)))
+}
+
+async function fetchAllowedImage(rawUrl: string): Promise<{ res: Response; finalUrl: string }> {
+  let current = (await assertImportUrlAllowed(rawUrl)).toString()
+
+  for (let redirects = 0; redirects <= MAX_IMPORT_REDIRECTS; redirects += 1) {
+    const res = await fetchWithTimeout(
+      current,
+      { headers: BROWSER_HEADERS, cache: 'no-store', redirect: 'manual' },
+      DOWNLOAD_TIMEOUT_MS,
+    )
+
+    if (res.status >= 300 && res.status < 400) {
+      const location = res.headers.get('location')
+      res.body?.cancel().catch(() => {})
+      if (!location) throw new Error('La fuente redirigio sin URL valida.')
+      current = (await assertImportUrlAllowed(new URL(location, current).toString())).toString()
+      continue
+    }
+
+    return { res, finalUrl: current }
+  }
+
+  throw new Error('La fuente redirigio demasiadas veces.')
+}
+
 function extFromMime(mime: string): string {
   if (mime.includes('png')) return 'png'
   if (mime.includes('webp')) return 'webp'
@@ -164,17 +293,8 @@ function extFromMime(mime: string): string {
   return 'jpg'
 }
 
-function relationId(value: unknown): string | number | undefined {
-  if (typeof value === 'string' || typeof value === 'number') return value
-  if (value && typeof value === 'object') {
-    const id = (value as { id?: unknown }).id
-    if (typeof id === 'string' || typeof id === 'number') return id
-  }
-  return undefined
-}
-
 async function findExistingVehicleSourceAsset(
-  payload: Awaited<ReturnType<typeof getPayload>>,
+  payload: Payload,
   vehicleId: string,
   sourceUrl: string,
 ): Promise<{ assetId: string | number; mediaId: string | number; mediaUrl?: string } | null> {
@@ -232,7 +352,7 @@ function candidateLooksRelevant(candidate: Candidate, make: string): boolean {
 }
 
 async function getVehicleIdentity(
-  payload: Awaited<ReturnType<typeof getPayload>>,
+  payload: Payload,
   vehicleId: string,
 ): Promise<Partial<VehicleImageIdentity>> {
   if (!vehicleId) return {}
@@ -250,7 +370,7 @@ async function getVehicleIdentity(
 }
 
 async function findLocalMatches(
-  payload: Awaited<ReturnType<typeof getPayload>>,
+  payload: Payload,
   matchKey: string,
 ): Promise<LocalMatch[]> {
   if (!matchKey) return []
@@ -265,7 +385,7 @@ async function findLocalMatches(
 }
 
 async function readPersistentCache(
-  payload: Awaited<ReturnType<typeof getPayload>>,
+  payload: Payload,
   matchKey: string,
 ): Promise<{ id: number | string; candidates: Candidate[] } | null> {
   if (!matchKey) return null
@@ -287,7 +407,7 @@ async function readPersistentCache(
 }
 
 async function writePersistentCache(
-  payload: Awaited<ReturnType<typeof getPayload>>,
+  payload: Payload,
   reqContext: Partial<PayloadRequest>,
   matchKey: string,
   query: Record<string, string>,
@@ -392,14 +512,9 @@ async function _legacyGET(request: Request) {
     )
   }
 
-  const payload = await getPayload({ config })
-  const authResult = await payload.auth({ canSetHeaders: false, headers: request.headers })
-  if (!authResult.user) {
-    return NextResponse.json({ error: 'Sesión inválida.' }, { status: 401 })
-  }
-  if (!hasRole(authResult.user, ...MEDIA_ROLES)) {
-    return NextResponse.json({ error: 'Sin permisos para buscar fotos.' }, { status: 403 })
-  }
+  const auth = await requireCmsRole(request, MEDIA_ROLES, 'Sin permisos para buscar fotos.')
+  if (auth.response) return auth.response
+  const { payload } = auth
 
   let make = str(searchParams.get('make'))
   let model = str(searchParams.get('model'))
@@ -462,14 +577,9 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: 'Accion no soportada.' }, { status: 400 })
   }
 
-  const payload = await getPayload({ config })
-  const authResult = await payload.auth({ canSetHeaders: false, headers: request.headers })
-  if (!authResult.user) {
-    return NextResponse.json({ error: 'Sesion invalida.' }, { status: 401 })
-  }
-  if (!hasRole(authResult.user, ...MEDIA_ROLES)) {
-    return NextResponse.json({ error: 'Sin permisos para buscar fotos.' }, { status: 403 })
-  }
+  const auth = await requireCmsRole(request, MEDIA_ROLES, 'Sin permisos para buscar fotos.')
+  if (auth.response) return auth.response
+  const { payload } = auth
 
   let make = str(searchParams.get('make'))
   let model = str(searchParams.get('model'))
@@ -558,7 +668,7 @@ export async function GET(request: Request) {
     )
   }
 
-  const reqContext = { user: authResult.user }
+  const reqContext = { user: auth.user }
 
   try {
     const found = await searchCarsXE(make, model, year, color)
@@ -617,17 +727,22 @@ export async function POST(request: Request) {
   if (!url) {
     return NextResponse.json({ error: 'Falta la URL de la imagen.' }, { status: 400 })
   }
-
-  const payload = await getPayload({ config })
-  const authResult = await payload.auth({ canSetHeaders: false, headers: request.headers })
-  if (!authResult.user) {
-    return NextResponse.json({ error: 'Sesión inválida.' }, { status: 401 })
-  }
-  if (!hasRole(authResult.user, ...MEDIA_ROLES)) {
-    return NextResponse.json({ error: 'Sin permisos para guardar fotos.' }, { status: 403 })
+  if (!body.vehicleId) {
+    return NextResponse.json({ error: 'Falta el vehiculo para asociar la imagen.' }, { status: 400 })
   }
 
-  const reqContext = { user: authResult.user }
+  const auth = await requireCmsRole(request, MEDIA_ROLES, 'Sin permisos para guardar fotos.')
+  if (auth.response) return auth.response
+  const { payload } = auth
+
+  const reqContext = { user: auth.user }
+  try {
+    await assertImportUrlAllowed(url)
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'La fuente de imagen no esta permitida.'
+    return NextResponse.json({ error: message }, { status: 400 })
+  }
+
   const vehicleIdentity = await getVehicleIdentity(payload, str(body.vehicleId))
   const make = str(body.make) || str(vehicleIdentity.brand)
   const model = normalizeVehicleModel(make, str(body.model) || str(vehicleIdentity.model))
@@ -639,8 +754,9 @@ export async function POST(request: Request) {
   const sourceUrl = str(body.contextLink) || url
   const sourceProvider = str(body.sourceProvider) || 'carsxe'
   const sourceType = str(body.sourceType) || 'api_candidate'
-  const approvalStatus = str(body.approvalStatus) || 'needs_review'
-  const rightsStatus = str(body.rightsStatus) || 'unknown'
+  // Generic remote imports are never trusted as public-ready from client input.
+  const approvalStatus = 'needs_review'
+  const rightsStatus = 'unknown'
   const alt = str(body.alt) || 'Foto de vehiculo'
   const requestedFileName = str(body.fileName).replace(/[^\w.-]+/g, '-').replace(/^-+|-+$/g, '')
 
@@ -659,19 +775,17 @@ export async function POST(request: Request) {
   // their rights are unknown — we keep our own approved copy).
   let buffer: Buffer
   let mime: string
+  let downloadedSourceUrl = sourceUrl
   try {
-    const res = await fetchWithTimeout(url, { headers: BROWSER_HEADERS, cache: 'no-store' }, DOWNLOAD_TIMEOUT_MS)
+    const { res, finalUrl } = await fetchAllowedImage(url)
+    downloadedSourceUrl = finalUrl
     if (!res.ok) throw new Error(`La fuente respondió ${res.status}`)
-    const contentType = (res.headers.get('content-type') || '').split(';')[0].trim()
-    mime = contentType.startsWith('image/') ? contentType : 'image/jpeg'
-    const arrayBuffer = await res.arrayBuffer()
-    if (arrayBuffer.byteLength > MAX_IMPORT_BYTES) {
-      throw new Error('La imagen excede el tamaño máximo permitido (12 MB).')
+    const contentType = (res.headers.get('content-type') || '').split(';')[0].trim().toLowerCase()
+    if (!isAllowedImageMime(contentType)) {
+      throw new Error('La fuente no devolvio una imagen valida.')
     }
-    if (arrayBuffer.byteLength === 0) {
-      throw new Error('La fuente no devolvió ninguna imagen.')
-    }
-    buffer = Buffer.from(arrayBuffer)
+    mime = contentType
+    buffer = await readResponseBufferCapped(res, MAX_IMPORT_BYTES)
   } catch (error) {
     const isAbort = error instanceof Error && error.name === 'AbortError'
     const message = isAbort
@@ -699,7 +813,7 @@ export async function POST(request: Request) {
         media: media.id,
         sourceType,
         sourceProvider,
-        sourceUrl,
+        sourceUrl: downloadedSourceUrl,
         matchKey,
         make,
         model,

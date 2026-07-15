@@ -1,8 +1,7 @@
 import { NextResponse } from 'next/server'
-import config from '@payload-config'
-import { getPayload } from 'payload'
 
-import { hasRole } from '../../../../../../access/roles'
+import { requireCmsRole } from '../../../../../../services/cmsRequestAuth'
+import { matchDealershipForImport } from '../../../../../../services/dealershipMatching'
 import { normalizeImportRow } from '../../../../../../services/importNormalize'
 
 /**
@@ -40,60 +39,28 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'No hay filas para importar.' }, { status: 400 })
   }
 
-  const payload = await getPayload({ config })
-  const authResult = await payload.auth({ canSetHeaders: false, headers: request.headers })
+  const auth = await requireCmsRole(request, ['general'], 'Sin permisos para importar inventario.')
+  if (auth.response) return auth.response
+  const { payload, user } = auth
 
-  if (!authResult.user) {
-    return NextResponse.json({ error: 'Sesión inválida.' }, { status: 401 })
-  }
-  if (!hasRole(authResult.user, 'admin', 'inventory_manager')) {
-    return NextResponse.json({ error: 'Sin permisos para importar inventario.' }, { status: 403 })
-  }
+  const reqContext = { headers: request.headers, user }
 
-  const reqContext = { headers: request.headers, user: authResult.user }
-
-  // Fallback dealership for rows we can't match by brand/city.
-  const dealershipsResult = await payload.find({ collection: 'dealerships', depth: 0, limit: 200 })
+  // Dealership matching is best-effort. Imports stay as drafts when no
+  // dealership matches; operators assign the correct agency during review.
+  const dealershipsResult = await payload.find({
+    collection: 'dealerships',
+    depth: 0,
+    limit: 200,
+    overrideAccess: true,
+    req: reqContext,
+  })
   const dealerships = dealershipsResult.docs as Array<{
     id: number | string
     brandName?: string
     displayName?: string
     city?: string
+    sourceAliases?: string | null
   }>
-
-  // The `dealership` relationship is required on vehicles. Imports must never
-  // depend on the external specs API, so we guarantee a fallback agency: if
-  // none exist yet we provision a single "sin asignar" placeholder so every
-  // imported row can be created and reassigned later from the workspace.
-  let fallbackDealershipId = dealerships[0]?.id
-  if (!fallbackDealershipId) {
-    const placeholder = await payload.create({
-      collection: 'dealerships',
-      data: { brandName: 'GBE', displayName: 'Inventario sin asignar', city: 'Sin asignar', isActive: false },
-      overrideAccess: true,
-      req: reqContext,
-    })
-    fallbackDealershipId = placeholder.id
-    dealerships.push({ id: placeholder.id, brandName: 'GBE', displayName: 'Inventario sin asignar', city: 'Sin asignar' })
-  }
-
-  const alnum = (v?: string) =>
-    String(v ?? '')
-      .normalize('NFD')
-      .replace(/[\u0300-\u036f]/g, '')
-      .toLowerCase()
-      .replace(/[^a-z0-9]/g, '')
-
-  function matchDealership(brand?: string, dealerName?: string) {
-    const dealerKey = alnum(dealerName)
-    const byName = dealerKey
-      ? dealerships.find((d) => alnum(d.displayName).includes(dealerKey))
-      : undefined
-    if (byName) return byName.id
-    const brandKey = alnum(brand)
-    const byBrand = brandKey ? dealerships.find((d) => alnum(d.brandName) === brandKey) : undefined
-    return byBrand?.id ?? fallbackDealershipId
-  }
 
   // Create the import job first so created vehicles can reference it.
   const job = await payload.create({
@@ -114,12 +81,14 @@ export async function POST(request: Request) {
   let skippedCount = 0
   let reviewCount = 0
   const errors: Array<{ row: number; message: string }> = []
+  const warnings: Array<{ row: number; message: string }> = []
   const createdVehicleIds: Array<number | string> = []
 
   for (let i = 0; i < rows.length; i += 1) {
     const rowNumber = i + 1
     const { draft, issues } = normalizeImportRow(rows[i], mapping)
     const blocking = issues.filter((issue) => issue.severity === 'error')
+    const rowWarnings = issues.filter((issue) => issue.severity === 'warning').map((issue) => issue.message)
 
     if (blocking.length > 0) {
       errors.push({ row: rowNumber, message: blocking.map((b) => b.message).join(', ') })
@@ -141,10 +110,30 @@ export async function POST(request: Request) {
         existing = found.docs[0] as { id: number | string } | undefined
       }
 
+      const dealershipMatch = matchDealershipForImport(
+        dealerships,
+        draft.brand,
+        draft.sourceDealerName,
+      )
+      const dealership = dealershipMatch.dealership?.id
+      if (!dealership) {
+        const ambiguous = dealershipMatch.strategy.startsWith('ambiguous')
+        rowWarnings.push(
+          ambiguous
+            ? 'La agencia de origen coincide con varias agencias; revisar los alias antes de publicar'
+            : 'No se encontro una agencia coincidente; asignar antes de publicar',
+        )
+      }
+      if (!(draft as Record<string, unknown>).price) rowWarnings.push('Falta precio; revisar antes de publicar')
+
+      if (rowWarnings.length > 0) {
+        warnings.push({ row: rowNumber, message: rowWarnings.join(', ') })
+      }
+
       const data: Record<string, unknown> = {
         ...draft,
         sourceImportId: String(job.id),
-        dealership: matchDealership(draft.brand, draft.sourceDealerName),
+        dealership,
         inventoryStatus: 'available',
         publishStatus: 'draft',
       }
@@ -170,7 +159,7 @@ export async function POST(request: Request) {
         })
         createdCount += 1
         createdVehicleIds.push(created.id)
-        if (issues.length > 0) reviewCount += 1
+        if (rowWarnings.length > 0) reviewCount += 1
       }
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Error al crear vehículo'
@@ -184,6 +173,7 @@ export async function POST(request: Request) {
     `${updatedCount} actualizados`,
     `${skippedCount} duplicados omitidos`,
     `${reviewCount} requieren revisión`,
+    `${warnings.length} con advertencias`,
     `${errors.length} con error`,
   ].join('\n')
 
@@ -212,7 +202,9 @@ export async function POST(request: Request) {
     updatedCount,
     skippedCount,
     reviewCount,
+    warningCount: warnings.length,
     errorCount: errors.length,
+    warnings,
     errors,
     summary,
   })

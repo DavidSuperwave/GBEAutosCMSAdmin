@@ -26,7 +26,7 @@ type Templates = {
 type VehicleDetailVisibilityKey = Exclude<keyof VehicleDetailTemplate, 'ctaHeading' | 'ctaBody'>
 
 const DETAIL_VISIBILITY_FIELDS: Array<{ key: VehicleDetailVisibilityKey; label: string }> = [
-  { key: 'showGallery', label: 'Mostrar galeria principal' },
+  { key: 'showGallery', label: 'Mostrar galería principal' },
   { key: 'showPurchaseCard', label: 'Mostrar tarjeta de contacto' },
   { key: 'showQuickSpecs', label: 'Mostrar resumen de specs' },
   { key: 'showDescription', label: 'Mostrar descripcion' },

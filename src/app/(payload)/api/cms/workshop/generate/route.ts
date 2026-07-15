@@ -1,8 +1,6 @@
 import { NextResponse } from 'next/server'
-import config from '@payload-config'
-import { getPayload } from 'payload'
 
-import { hasRole } from '../../../../../../access/roles'
+import { requireCmsRole } from '../../../../../../services/cmsRequestAuth'
 
 /**
  * AI Workshop generation endpoint.
@@ -13,6 +11,8 @@ import { hasRole } from '../../../../../../access/roles'
  */
 
 const AI_IMAGE_API_KEY = process.env.OPENROUTER_API_KEY || process.env.AI_IMAGE_API_KEY || ''
+const AI_IMAGE_WIZARD_SERVER_ENABLED =
+  process.env.ENABLE_AI_IMAGE_WIZARD === 'true' || process.env.NEXT_PUBLIC_ENABLE_AI_IMAGE_WIZARD === 'true'
 const OPENROUTER_MODEL = process.env.AI_IMAGE_MODEL || 'x-ai/grok-imagine-image-quality'
 const OPENROUTER_URL = process.env.AI_IMAGE_API_URL || 'https://openrouter.ai/api/v1/chat/completions'
 const OPENROUTER_REFERER = process.env.NEXT_PUBLIC_SERVER_URL || 'http://localhost:3001'
@@ -279,17 +279,23 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'jobId or jobData is required.' }, { status: 400 })
   }
 
-  const payload = await getPayload({ config })
-  const authResult = await payload.auth({ canSetHeaders: false, headers: request.headers })
+  const auth = await requireCmsRole(request, ['general'], 'Not allowed to use the workshop.')
+  if (auth.response) return auth.response
+  const { payload, user } = auth
 
-  if (!authResult.user) {
-    return NextResponse.json({ error: 'Invalid session.' }, { status: 401 })
-  }
-  if (!hasRole(authResult.user, 'admin', 'media_editor', 'inventory_manager', 'content_editor')) {
-    return NextResponse.json({ error: 'Not allowed to use the workshop.' }, { status: 403 })
+  if (!AI_IMAGE_WIZARD_SERVER_ENABLED) {
+    return NextResponse.json(
+      {
+        ok: false,
+        configured: false,
+        error:
+          'AI image generation is paused for production v1. Enable ENABLE_AI_IMAGE_WIZARD=true on the server for beta testing.',
+      },
+      { status: 403 },
+    )
   }
 
-  const reqContext = { headers: request.headers, user: authResult.user }
+  const reqContext = { headers: request.headers, user }
   if (jobData) {
     try {
       if (jobId) {

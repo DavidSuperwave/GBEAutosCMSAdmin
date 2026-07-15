@@ -1,5 +1,7 @@
 import type { PayloadRequest } from 'payload'
 
+import { readPositiveInt, runLimited, withTimeout } from './dashboardQueryUtils'
+
 type AnalyticsEvent = {
   agency?: { displayName?: string; brandName?: string; city?: string } | string | number | null
   brand?: string
@@ -98,28 +100,6 @@ function getInventoryStatus(vehicle: Vehicle) {
   return vehicle.inventoryStatus || vehicle.status || 'available'
 }
 
-function readPositiveInt(name: string, fallback: number) {
-  const value = Number(process.env[name])
-  return Number.isInteger(value) && value > 0 ? value : fallback
-}
-
-async function runLimited<T>(tasks: Array<() => Promise<T>>, concurrency: number) {
-  const results: T[] = []
-  let index = 0
-
-  async function worker() {
-    while (index < tasks.length) {
-      const current = index
-      index += 1
-      results[current] = await tasks[current]()
-    }
-  }
-
-  await Promise.all(Array.from({ length: Math.min(concurrency, tasks.length) }, () => worker()))
-
-  return results
-}
-
 function emptyResult<T>(): PayloadFindResult<T> {
   return { docs: [], unavailable: true }
 }
@@ -128,10 +108,12 @@ export default async function AnalyticsDashboard({ req }: Props) {
   const now = new Date()
   const currentStart = new Date(now)
   currentStart.setDate(now.getDate() - 30)
+  const queryLimit = readPositiveInt('ADMIN_DASHBOARD_QUERY_LIMIT', 300)
+  const queryTimeoutMs = readPositiveInt('ADMIN_DASHBOARD_QUERY_TIMEOUT_MS', 3500)
 
   async function safeFind<T>(label: string, task: () => Promise<PayloadFindResult<T>>) {
     try {
-      return await task()
+      return await withTimeout(label, task, queryTimeoutMs)
     } catch (error) {
       console.error(`Analytics dashboard query failed: ${label}`, error)
       return emptyResult<T>()
@@ -145,21 +127,21 @@ export default async function AnalyticsDashboard({ req }: Props) {
           req.payload.find({
             collection: 'analytics-events',
             depth: 1,
-            limit: 2000,
+            limit: queryLimit,
             sort: '-createdAt',
             where: { createdAt: { greater_than_equal: currentStart.toISOString() } },
           }),
         ),
       () =>
         safeFind('vehicles', () =>
-          req.payload.find({ collection: 'vehicles', depth: 1, limit: 2000, sort: '-createdAt' }),
+          req.payload.find({ collection: 'vehicles', depth: 0, limit: queryLimit, sort: '-createdAt' }),
         ),
       () =>
         safeFind('leads', () =>
           req.payload.find({
             collection: 'leads',
             depth: 1,
-            limit: 2000,
+            limit: queryLimit,
             sort: '-createdAt',
             where: { createdAt: { greater_than_equal: currentStart.toISOString() } },
           }),

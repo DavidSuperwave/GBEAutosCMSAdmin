@@ -1,7 +1,6 @@
 import { NextResponse } from 'next/server'
-import { getPayload } from 'payload'
 
-import config from '@payload-config'
+import { requireCmsRole } from '../../../../../../../services/cmsRequestAuth'
 import { toPublicVehicleDetail } from '../../../../../../../services/publicVehicleCatalog'
 
 type RouteContext = {
@@ -10,21 +9,20 @@ type RouteContext = {
 
 export async function GET(request: Request, context: RouteContext) {
   const { id } = await context.params
-  const payload = await getPayload({ config })
-  const authResult =
-    process.env.NODE_ENV === 'production'
-      ? await payload.auth({ canSetHeaders: false, headers: request.headers })
-      : { user: true }
-
-  if (!authResult.user) {
-    return NextResponse.json({ error: 'Sesion invalida.' }, { status: 401 })
-  }
+  const auth = await requireCmsRole(
+    request,
+    ['general'],
+    'Sin permisos para previsualizar vehiculos.',
+  )
+  if (auth.response) return auth.response
+  const { payload } = auth
 
   const vehicle = await payload
     .findByID({
       collection: 'vehicles',
       depth: 2,
       id,
+      overrideAccess: true,
     })
     .catch(() => null)
 
@@ -32,5 +30,5 @@ export async function GET(request: Request, context: RouteContext) {
     return NextResponse.json({ error: 'Vehiculo no encontrado' }, { status: 404 })
   }
 
-  return NextResponse.json(toPublicVehicleDetail(vehicle as unknown as Record<string, unknown>))
+  return NextResponse.json(await toPublicVehicleDetail(payload, vehicle as unknown as Record<string, unknown>))
 }

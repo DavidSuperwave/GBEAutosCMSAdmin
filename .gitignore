@@ -46,6 +46,13 @@ next-env.d.ts
 /.agents/
 /skills-lock.json
 
+# local orchestration/runtime state (durable outputs belong under docs/)
+/.fable-5/
+/.oracle/
+
+# machine-specific pointers emitted by the local Fable renderer
+/docs/product/roadmaps/**/RUN_PATH.txt
+
 # local vehicle image sync inputs/secrets
 vehicle_images_full.zip
 inventory_with_images.csv

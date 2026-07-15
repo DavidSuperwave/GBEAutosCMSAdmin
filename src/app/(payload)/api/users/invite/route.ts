@@ -1,6 +1,11 @@
 import { NextResponse } from "next/server"
-import config from "@payload-config"
-import { getPayload } from "payload"
+
+import { requireCmsRole } from "../../../../../services/cmsRequestAuth"
+import {
+  buildAdminResetUrl,
+  isSmtpReady,
+  parseInviteRole,
+} from "../../../../../services/userInvite"
 
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 
@@ -31,11 +36,24 @@ function createTemporaryPassword() {
 }
 
 export async function POST(request: Request) {
+  // Authenticate before parsing the request body so anonymous or unauthorized
+  // callers receive a consistent 401/403 without making the server consume an
+  // arbitrary JSON payload first.
+  const auth = await requireCmsRole(request, [], "Solo administradores pueden invitar usuarios.")
+  if (auth.response) return auth.response
+  const { payload, user } = auth
+
   let email = ""
+  let role: "admin" | "general" | "sales" = "sales"
 
   try {
-    const body = (await request.json()) as { email?: unknown }
+    const body = (await request.json()) as { email?: unknown; role?: unknown }
     email = typeof body.email === "string" ? body.email.trim().toLowerCase() : ""
+    const parsedRole = parseInviteRole(body.role)
+    if (!parsedRole.ok) {
+      return NextResponse.json({ error: "Selecciona un rol de usuario valido." }, { status: 400 })
+    }
+    role = parsedRole.role
   } catch {
     return NextResponse.json({ error: "Solicitud invalida." }, { status: 400 })
   }
@@ -44,25 +62,26 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Ingresa un correo electronico valido." }, { status: 400 })
   }
 
-  const payload = await getPayload({ config })
-  const authResult = await payload.auth({
-    canSetHeaders: false,
-    headers: request.headers,
-  })
+  const smtpReady = isSmtpReady(process.env)
 
-  if (!authResult.user) {
-    return NextResponse.json({ error: "Sesion invalida. Inicia sesion de nuevo." }, { status: 401 })
+  // Fail before creating an account if neither delivery path can produce a
+  // usable invitation. This response is visible only after the admin guard.
+  if (!smtpReady && !buildAdminResetUrl(process.env.NEXT_PUBLIC_SERVER_URL, "preflight")) {
+    return NextResponse.json(
+      { error: "Configura NEXT_PUBLIC_SERVER_URL para generar enlaces de acceso manuales." },
+      { status: 500 },
+    )
   }
 
   let created = true
   try {
     await payload.create({
       collection: "users",
-      data: { email, password: createTemporaryPassword() },
+      data: { email, password: createTemporaryPassword(), role },
       overrideAccess: true,
       req: {
         headers: request.headers,
-        user: authResult.user,
+        user,
       },
     })
   } catch (error) {
@@ -73,25 +92,50 @@ export async function POST(request: Request) {
     created = false
   }
 
+  let setupUrl: string | undefined
   try {
-    await payload.forgotPassword({
+    const resetToken = await payload.forgotPassword({
       collection: "users",
       data: { email },
+      disableEmail: !smtpReady,
       overrideAccess: true,
       req: {
         headers: request.headers,
-        user: authResult.user,
+        user,
       },
     })
+
+    if (!smtpReady) {
+      setupUrl = buildAdminResetUrl(process.env.NEXT_PUBLIC_SERVER_URL, resetToken) ?? undefined
+      if (!setupUrl) {
+        return NextResponse.json(
+          { error: "No se pudo generar el enlace de acceso manual." },
+          { status: 500 },
+        )
+      }
+    }
   } catch (error) {
-    return NextResponse.json({ error: getUnknownErrorMessage(error, "No se pudo enviar el correo de invitacion.") }, { status: 400 })
+    const fallback = smtpReady
+      ? "No se pudo enviar el correo de invitacion."
+      : "No se pudo generar el enlace de acceso manual."
+    return NextResponse.json({ error: getUnknownErrorMessage(error, fallback) }, { status: 400 })
   }
 
-  return NextResponse.json({
-    created,
-    message: created
-      ? "Invitacion enviada. El usuario recibira un correo para crear su contrasena."
-      : "El usuario ya existia. Se envio nuevamente el correo para establecer contrasena.",
-    ok: true,
-  })
+  return NextResponse.json(
+    {
+      created,
+      message: smtpReady
+        ? created
+          ? "Invitacion enviada. El usuario recibira un correo para crear su contrasena."
+          : "El usuario ya existia. Se reenvio el correo para establecer su contrasena; su rol actual no cambio."
+        : created
+          ? "Cuenta creada. SMTP no esta configurado; copia el enlace de acceso y compartelo manualmente con el usuario."
+          : "El usuario ya existia y su rol actual no cambio. SMTP no esta configurado; copia el nuevo enlace de acceso y compartelo manualmente.",
+      ok: true,
+      role: created ? role : undefined,
+      roleUnchanged: !created,
+      setupUrl,
+    },
+    { headers: { "Cache-Control": "private, no-store" } },
+  )
 }

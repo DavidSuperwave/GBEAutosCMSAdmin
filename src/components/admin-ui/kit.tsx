@@ -1,6 +1,7 @@
 'use client'
 
 import React from 'react'
+import { createPortal } from 'react-dom'
 
 /**
  * Shared admin UI kit.
@@ -104,6 +105,7 @@ type ActionButtonProps = {
   onClick?: React.MouseEventHandler<HTMLButtonElement>
   size?: ButtonSize
   target?: React.HTMLAttributeAnchorTarget
+  title?: string
   type?: 'button' | 'submit'
   variant?: ButtonVariant
 }
@@ -117,6 +119,7 @@ export function ActionButton({
   onClick,
   size = 'md',
   target,
+  title,
   type = 'button',
   variant = 'secondary',
 }: ActionButtonProps) {
@@ -129,13 +132,14 @@ export function ActionButton({
         href={disabled ? undefined : href}
         rel={rel}
         target={target}
+        title={title}
       >
         {children}
       </a>
     )
   }
   return (
-    <button className={buttonClassName} disabled={disabled} onClick={onClick} type={type}>
+    <button className={buttonClassName} disabled={disabled} onClick={onClick} title={title} type={type}>
       {children}
     </button>
   )
@@ -146,11 +150,66 @@ export function ActionButton({
 export function StatusBadge({
   children,
   tone = 'neutral',
+  title,
 }: {
   children: React.ReactNode
   tone?: Tone
+  title?: string
 }) {
-  return <span className={`admin-kit-badge admin-kit-badge--${tone}`}>{children}</span>
+  return (
+    <span className={`admin-kit-badge admin-kit-badge--${tone}`} title={title}>
+      {children}
+    </span>
+  )
+}
+
+// ---- Confirm dialog -------------------------------------------------------
+
+export function ConfirmDialog({
+  open,
+  title,
+  message,
+  confirmLabel = 'Confirmar',
+  cancelLabel = 'Cancelar',
+  tone = 'primary',
+  busy = false,
+  onConfirm,
+  onCancel,
+}: {
+  open: boolean
+  title: string
+  message?: string
+  confirmLabel?: string
+  cancelLabel?: string
+  tone?: 'primary' | 'danger'
+  busy?: boolean
+  onConfirm: () => void
+  onCancel: () => void
+}) {
+  if (!open || typeof document === 'undefined') return null
+  return createPortal(
+    <div className="admin-kit-confirm__overlay" role="presentation" onClick={onCancel}>
+      <div
+        aria-label={title}
+        aria-modal="true"
+        className="admin-kit-confirm"
+        onClick={(event) => event.stopPropagation()}
+        role="alertdialog"
+      >
+        <h3>{title}</h3>
+        {message ? <p>{message}</p> : null}
+        <div className="admin-kit-confirm__actions">
+          <ActionButton disabled={busy} onClick={onCancel} variant="secondary">
+            {cancelLabel}
+          </ActionButton>
+          <ActionButton disabled={busy} onClick={onConfirm} variant={tone}>
+            {busy ? '…' : confirmLabel}
+          </ActionButton>
+        </div>
+      </div>
+    </div>,
+    document.body,
+  )
 }
 
 // ---- Tabs / segmented controls -----------------------------------------
@@ -319,7 +378,12 @@ export function StepWizard({ steps, current }: { steps: string[]; current: numbe
   )
 }
 
-export type ChecklistItem = { label: string; status: 'ok' | 'warn' | 'bad' }
+export type ChecklistItem = {
+  label: string
+  status: 'ok' | 'warn' | 'bad'
+  /** When present, the item renders as a link-style button (e.g. jump to the tab that fixes it). */
+  onClick?: () => void
+}
 
 export function CompletionChecklist({ items }: { items: ChecklistItem[] }) {
   const icon = { ok: 'OK', warn: '!', bad: 'x' }
@@ -330,7 +394,13 @@ export function CompletionChecklist({ items }: { items: ChecklistItem[] }) {
           <span className={`admin-kit-checklist__icon admin-kit-checklist__icon--${item.status}`}>
             {icon[item.status]}
           </span>
-          {item.label}
+          {item.onClick ? (
+            <button className="admin-kit-checklist__link" onClick={item.onClick} type="button">
+              {item.label}
+            </button>
+          ) : (
+            item.label
+          )}
         </li>
       ))}
     </ul>
